@@ -1,0 +1,23 @@
+services:
+  palworld-panel:
+    build:
+      context: ..
+    image: palworld-panel:latest
+    container_name: palworld-panel
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PANEL_TOKEN: "${PANEL_TOKEN:-change-me-now}"
+      PAL_PANEL_CONFIG: /data/config.json
+    volumes:
+      - panel-data:/data
+      - palworld-backups:/backups
+      - ./palworld:/palworld
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  panel-data:
+  palworld-backups:

@@ -25,6 +25,9 @@ const defaultConfig = {
     saveDir: "/opt/palworld/server/Pal/Saved",
     backupDir: "/opt/palworld/backups",
     steamcmdPath: "/opt/steamcmd/steamcmd.sh",
+    containerName: "",
+    imageName: "",
+    composeProjectDir: "",
     rconHost: "127.0.0.1",
     rconPort: 25575,
     restHost: "127.0.0.1",
@@ -258,8 +261,17 @@ async function firstRest(config, endpoints) {
 
 async function serviceStatus(config) {
   if (config.server.mode === "docker") {
+    if (config.server.containerName) {
+      const running = await exec("docker", ["inspect", "-f", "{{.State.Running}}", config.server.containerName]);
+      return {
+        manager: "docker",
+        running: running.stdout === "true",
+        detail: running.stdout || running.stderr || "No docker container status returned."
+      };
+    }
+
     const result = await exec("docker", ["compose", "ps", "--format", "json"], {
-      cwd: config.server.installDir
+      cwd: config.server.composeProjectDir || config.server.installDir
     });
     return {
       manager: "docker compose",
@@ -291,6 +303,24 @@ async function liveServerData(config) {
 async function runAction(action, config) {
   const service = config.server.serviceName;
   if (config.server.mode === "docker") {
+    if (config.server.containerName) {
+      const dockerActions = {
+        start: ["start", config.server.containerName],
+        stop: ["stop", config.server.containerName],
+        restart: ["restart", config.server.containerName]
+      };
+      if (action === "update") {
+        if (!config.server.imageName) {
+          return { ok: false, stdout: "", stderr: "server.imageName is required for Docker image updates." };
+        }
+        const pull = await exec("docker", ["pull", config.server.imageName]);
+        if (!pull.ok) return pull;
+        return exec("docker", ["restart", config.server.containerName]);
+      }
+      if (!dockerActions[action]) throw new Error("Unsupported action.");
+      return exec("docker", dockerActions[action]);
+    }
+
     const dockerActions = {
       start: ["compose", "up", "-d"],
       stop: ["compose", "down"],
@@ -298,7 +328,7 @@ async function runAction(action, config) {
       update: ["compose", "pull"]
     };
     if (!dockerActions[action]) throw new Error("Unsupported action.");
-    return exec("docker", dockerActions[action], { cwd: config.server.installDir });
+    return exec("docker", dockerActions[action], { cwd: config.server.composeProjectDir || config.server.installDir });
   }
 
   const systemdActions = {

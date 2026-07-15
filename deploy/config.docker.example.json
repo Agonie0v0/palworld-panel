@@ -2,22 +2,22 @@
   "panel": {
     "host": "0.0.0.0",
     "port": 8080,
-    "token": "change-me"
+    "token": "change-me-now"
   },
   "server": {
-    "mode": "systemd",
+    "mode": "docker",
     "serviceName": "palworld",
-    "installDir": "/opt/palworld/server",
-    "settingsPath": "/opt/palworld/server/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini",
-    "saveDir": "/opt/palworld/server/Pal/Saved",
-    "backupDir": "/opt/palworld/backups",
+    "installDir": "/palworld",
+    "settingsPath": "/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini",
+    "saveDir": "/palworld/Pal/Saved",
+    "backupDir": "/backups",
     "steamcmdPath": "/opt/steamcmd/steamcmd.sh",
-    "containerName": "",
+    "containerName": "palworld",
     "imageName": "",
     "composeProjectDir": "",
-    "rconHost": "127.0.0.1",
+    "rconHost": "host.docker.internal",
     "rconPort": 25575,
-    "restHost": "127.0.0.1",
+    "restHost": "host.docker.internal",
     "restPort": 8212,
     "restUser": "admin",
     "restPassword": "",
@@ -31,8 +31,8 @@
     "keepBackups": 20
   },
   "settings": {
-    "ServerName": "Palworld 1.0 Oracle ARM",
-    "ServerDescription": "Managed by palworld-oneclick-panel",
+    "ServerName": "Palworld 1.0 Docker",
+    "ServerDescription": "Managed by palworld-panel",
     "AdminPassword": "change-admin-password",
     "ServerPassword": "",
     "PublicPort": 8211,
