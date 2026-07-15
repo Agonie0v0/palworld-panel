@@ -65,6 +65,14 @@ sudo -u "$APP_USER" box64 "$STEAMCMD_DIR/steamcmd.sh" \
   +app_update 2394010 validate \
   +quit
 
+SETTINGS_DIR="$SERVER_DIR/Pal/Saved/Config/LinuxServer"
+mkdir -p "$SETTINGS_DIR"
+cat >"$SETTINGS_DIR/PalWorldSettings.ini" <<EOF
+[/Script/Pal.PalGameWorldSettings]
+OptionSettings=(ServerName="Palworld 1.0 Oracle ARM",ServerDescription="Managed by palworld-panel",AdminPassword="change-admin-password",ServerPassword="",PublicPort=8211,RCONEnabled=True,RCONPort=25575,RESTAPIEnabled=True,RESTAPIPort=8212,Difficulty="None",DayTimeSpeedRate=1,NightTimeSpeedRate=1,ExpRate=1,PalCaptureRate=1,DeathPenalty="All")
+EOF
+chown -R "$APP_USER:$APP_USER" "$SERVER_DIR/Pal"
+
 cat >/etc/systemd/system/palworld.service <<EOF
 [Unit]
 Description=Palworld Dedicated Server
@@ -103,6 +111,9 @@ cat >"$PANEL_DIR/data/config.json" <<EOF
     "saveDir": "$SERVER_DIR/Pal/Saved",
     "backupDir": "$APP_ROOT/backups",
     "steamcmdPath": "$STEAMCMD_DIR/steamcmd.sh",
+    "containerName": "",
+    "imageName": "",
+    "composeProjectDir": "",
     "rconHost": "127.0.0.1",
     "rconPort": 25575,
     "restHost": "127.0.0.1",
@@ -170,6 +181,7 @@ cat <<EOF
 Installed.
 Panel URL: http://SERVER_PUBLIC_IP:$PANEL_PORT
 Panel token: $PANEL_TOKEN
+Default admin password: change-admin-password
 
 Open Oracle security list / NSG and local firewall ports:
 - TCP $PANEL_PORT for this panel
@@ -178,6 +190,11 @@ Open Oracle security list / NSG and local firewall ports:
 - TCP 25575 only if you expose RCON
 
 Start game server:
+  Open the panel, then click Start.
+
+Or start from shell:
   sudo systemctl start palworld
+
+Change AdminPassword in the panel before inviting players.
 
 EOF

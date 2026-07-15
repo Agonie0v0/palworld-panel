@@ -4,6 +4,38 @@
 
 参考项目：[zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)
 
+## 不想看文档，直接 ARM 开服
+
+在 Oracle Cloud ARM / Ubuntu 服务器上执行：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+git clone https://github.com/Agonie0v0/palworld-panel.git
+cd palworld-panel
+sudo PANEL_PORT=8080 bash scripts/install-oci-arm.sh
+```
+
+然后浏览器打开：
+
+```text
+http://你的服务器IP:8080
+```
+
+输入脚本输出的 `Panel token`，进入面板后点：
+
+```text
+总览 -> 启动
+```
+
+参数管理：
+
+```text
+参数 -> 修改 -> 保存并写入 -> 总览 -> 重启
+```
+
+更短的说明见 [QUICKSTART_ARM.md](./QUICKSTART_ARM.md)。
+
 ## 功能完成度
 
 已经内置并可直接使用：
