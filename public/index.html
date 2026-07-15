@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Palworld Full Panel</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Palworld 1.0 Full Panel</p>
+          <h1>幻兽帕鲁服务器管理面板</h1>
+        </div>
+        <div class="status-pill" id="statusPill">读取中</div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab active" data-tab="overview">总览</button>
+        <button class="tab" data-tab="players">玩家</button>
+        <button class="tab" data-tab="rcon">RCON</button>
+        <button class="tab" data-tab="backups">备份</button>
+        <button class="tab" data-tab="settings">参数</button>
+        <button class="tab" data-tab="saves">存档数据</button>
+        <button class="tab" data-tab="automation">自动化</button>
+      </nav>
+
+      <section class="view active" id="overview">
+        <div class="grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <h2>运行控制</h2>
+              <button id="refreshBtn" class="icon-button" title="刷新">↻</button>
+            </div>
+            <div class="actions">
+              <button data-action="start">启动</button>
+              <button data-action="restart">重启</button>
+              <button data-action="stop" class="danger">停止</button>
+              <button data-action="update">更新</button>
+              <button data-action="backup">备份</button>
+            </div>
+            <pre id="actionLog" class="log">等待操作...</pre>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading"><h2>服务器信息</h2></div>
+            <dl class="facts">
+              <div><dt>管理方式</dt><dd id="manager">-</dd></div>
+              <div><dt>端口</dt><dd id="publicPort">-</dd></div>
+              <div><dt>架构</dt><dd id="arch">-</dd></div>
+              <div><dt>内存</dt><dd id="memory">-</dd></div>
+            </dl>
+          </article>
+        </div>
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>REST API 数据</h2>
+            <button id="loadLiveBtn">读取</button>
+          </div>
+          <pre id="liveOutput" class="log tall">尚未读取</pre>
+        </article>
+      </section>
+
+      <section class="view" id="players">
+        <div class="grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <h2>在线玩家</h2>
+              <button id="reloadPlayersBtn">刷新</button>
+            </div>
+            <div id="playersList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><h2>玩家操作</h2></div>
+            <form id="playerActionForm" class="stack">
+              <label><span>玩家 ID / Steam ID</span><input name="playerId" /></label>
+              <label><span>公告或关服消息</span><input name="message" /></label>
+              <label><span>关服倒计时秒数</span><input name="seconds" type="number" value="30" /></label>
+              <div class="actions compact">
+                <button data-player-action="kick" type="button">踢出</button>
+                <button data-player-action="ban" type="button" class="danger">封禁</button>
+                <button data-player-action="broadcast" type="button">广播</button>
+                <button data-player-action="save" type="button">保存</button>
+                <button data-player-action="shutdown" type="button" class="danger">平滑关服</button>
+              </div>
+            </form>
+          </article>
+        </div>
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>白名单</h2>
+            <button id="saveWhitelistBtn">保存</button>
+          </div>
+          <textarea id="whitelistText" rows="8" placeholder="每行一个玩家 ID"></textarea>
+        </article>
+      </section>
+
+      <section class="view" id="rcon">
+        <article class="panel">
+          <div class="panel-heading"><h2>RCON 控制台</h2><button id="sendRconBtn">发送</button></div>
+          <textarea id="rconCommand" rows="4" placeholder="例如：ShowPlayers"></textarea>
+          <pre id="rconOutput" class="log tall">等待命令...</pre>
+        </article>
+      </section>
+
+      <section class="view" id="backups">
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>备份管理</h2>
+            <div class="inline-actions">
+              <button data-action="backup">立即备份</button>
+              <button id="reloadBackupsBtn">刷新</button>
+            </div>
+          </div>
+          <div id="backupList" class="list"></div>
+        </article>
+      </section>
+
+      <section class="view" id="settings">
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>服务器参数</h2>
+            <button id="saveSettingsBtn">保存并写入</button>
+          </div>
+          <form id="settingsForm" class="settings-form"></form>
+        </article>
+      </section>
+
+      <section class="view" id="saves">
+        <div class="grid">
+          <article class="panel">
+            <div class="panel-heading"><h2>玩家 / 公会 / 帕鲁 / 背包</h2><button id="loadSaveBtn">读取</button></div>
+            <pre id="saveOutput" class="log tall">需要配置 saveParserCommand 后读取 Level.sav。</pre>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><h2>地图</h2></div>
+            <div id="mapBox" class="map-box">等待存档解析器输出地图数据</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="automation">
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>自动任务</h2>
+            <button id="saveAutomationBtn">保存</button>
+          </div>
+          <form id="automationForm" class="settings-form">
+            <label><span>自动备份间隔分钟，0 为关闭</span><input name="backupIntervalMinutes" type="number" min="0" /></label>
+            <label><span>保留备份数量</span><input name="keepBackups" type="number" min="1" /></label>
+            <label><span>自动广播间隔分钟，0 为关闭</span><input name="broadcastIntervalMinutes" type="number" min="0" /></label>
+            <label class="wide"><span>自动广播内容</span><input name="broadcastMessage" /></label>
+          </form>
+        </article>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

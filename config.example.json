@@ -1,0 +1,47 @@
+{
+  "panel": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "token": "change-me"
+  },
+  "server": {
+    "mode": "systemd",
+    "serviceName": "palworld",
+    "installDir": "/opt/palworld/server",
+    "settingsPath": "/opt/palworld/server/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini",
+    "saveDir": "/opt/palworld/server/Pal/Saved",
+    "backupDir": "/opt/palworld/backups",
+    "steamcmdPath": "/opt/steamcmd/steamcmd.sh",
+    "rconHost": "127.0.0.1",
+    "rconPort": 25575,
+    "restHost": "127.0.0.1",
+    "restPort": 8212,
+    "restUser": "admin",
+    "restPassword": "",
+    "publicPort": 8211,
+    "saveParserCommand": ""
+  },
+  "automation": {
+    "backupIntervalMinutes": 0,
+    "broadcastIntervalMinutes": 0,
+    "broadcastMessage": "",
+    "keepBackups": 20
+  },
+  "settings": {
+    "ServerName": "Palworld 1.0 Oracle ARM",
+    "ServerDescription": "Managed by palworld-oneclick-panel",
+    "AdminPassword": "change-admin-password",
+    "ServerPassword": "",
+    "PublicPort": 8211,
+    "RCONEnabled": true,
+    "RCONPort": 25575,
+    "RESTAPIEnabled": true,
+    "RESTAPIPort": 8212,
+    "Difficulty": "None",
+    "DayTimeSpeedRate": 1,
+    "NightTimeSpeedRate": 1,
+    "ExpRate": 1,
+    "PalCaptureRate": 1,
+    "DeathPenalty": "All"
+  }
+}

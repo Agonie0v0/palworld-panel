@@ -1,0 +1,16 @@
+[Unit]
+Description=Palworld Dedicated Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=palworld
+WorkingDirectory=/opt/palworld/server
+ExecStart=/usr/bin/box64 /opt/palworld/server/PalServer.sh -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS
+Restart=always
+RestartSec=10
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target
