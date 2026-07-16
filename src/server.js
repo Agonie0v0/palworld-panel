@@ -18,7 +18,7 @@ const agentRuntime = process.env.AGENT_MODE === "1";
 const defaultConfig = {
   panel: {
     host: process.env.HOST || "0.0.0.0",
-    port: Number(process.env.PORT || 8080),
+    port: Number(process.env.PORT || 19090),
     token: process.env.PANEL_TOKEN || "change-me",
     adminInitialized: false,
     adminUser: "",
@@ -133,6 +133,8 @@ async function loadConfig() {
   await ensureConfig();
   const raw = await fsp.readFile(configPath, "utf8");
   const merged = mergeConfig(defaultConfig, JSON.parse(raw));
+  if (process.env.HOST) merged.panel.host = process.env.HOST;
+  if (process.env.PORT) merged.panel.port = Number(process.env.PORT);
   if (process.env.SAVE_PARSER_COMMAND) merged.server.saveParserCommand = process.env.SAVE_PARSER_COMMAND;
   return merged;
 }

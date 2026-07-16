@@ -27,11 +27,11 @@ RUN python3 -m venv /app/parsers/sav_cli/.venv \
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=8080 \
+    PORT=19090 \
     PAL_PANEL_CONFIG=/data/config.json \
     SAVE_PARSER_COMMAND=/app/parsers/sav_cli/run-save-parser
 
-EXPOSE 8080
+EXPOSE 19090
 VOLUME ["/data", "/backups", "/palworld"]
 
 CMD ["node", "src/server.js"]

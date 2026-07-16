@@ -15,13 +15,13 @@ sudo apt-get update
 sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
-sudo PANEL_PORT=8080 bash scripts/install-panel.sh
+sudo PANEL_PORT=19090 bash scripts/install-panel.sh
 ```
 
 安装完成后会显示：
 
 ```text
-Panel URL: http://SERVER_PUBLIC_IP:8080
+Panel URL: http://SERVER_PUBLIC_IP:19090
 Panel token: 一串随机字符
 ```
 
@@ -31,7 +31,7 @@ Oracle Cloud 控制台放行：
 
 | 端口 | 协议 | 用途 |
 | --- | --- | --- |
-| 8080 | TCP | 面板 |
+| 19090 | TCP | 面板 |
 | 8211 | UDP | 玩家进服 |
 
 服务器本机执行：
@@ -45,7 +45,7 @@ sudo bash scripts/firewall-ubuntu.sh
 浏览器访问：
 
 ```text
-http://你的服务器IP:8080
+http://你的服务器IP:19090
 ```
 
 第一次打开先创建管理员账号和密码。安装脚本输出的 `Panel token` 可以作为备用登录方式。

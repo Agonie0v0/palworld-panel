@@ -44,20 +44,20 @@ sudo apt-get update
 sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
-sudo PANEL_PORT=8080 bash scripts/install-panel.sh
+sudo PANEL_PORT=19090 bash scripts/install-panel.sh
 ```
 
 安装结束后会显示面板地址和备用 Token：
 
 ```text
-Panel URL: http://SERVER_PUBLIC_IP:8080
+Panel URL: http://SERVER_PUBLIC_IP:19090
 Panel token: 一串随机字符
 ```
 
 浏览器打开：
 
 ```text
-http://你的服务器IP:8080
+http://你的服务器IP:19090
 ```
 
 第一次打开时：
@@ -93,7 +93,7 @@ docker compose up -d --build
 面板地址：
 
 ```text
-http://面板服务器IP:8080
+http://面板服务器IP:19090
 ```
 
 ### 2. 在游戏服务器安装 Agent
@@ -136,7 +136,7 @@ Agent Token：安装脚本输出的 Token
 
 | 端口 | 协议 | 用途 | 是否需要公网开放 |
 | --- | --- | --- | --- |
-| 8080 | TCP | Web 面板 | 只开放给管理员更安全 |
+| 19090 | TCP | Web 面板 | 只开放给管理员更安全 |
 | 8211 | UDP | 玩家连接 | 需要 |
 | 8212 | TCP | Palworld REST API | 不建议直接公网开放 |
 | 25575 | TCP | RCON | 不建议直接公网开放 |
@@ -226,7 +226,7 @@ Docker 面板配置保存在 `panel-data` volume 中，重建容器不会丢失�
 暂时跳过解析器：
 
 ```bash
-sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-panel.sh
+sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=19090 bash scripts/install-panel.sh
 ```
 
 之后单独安装：

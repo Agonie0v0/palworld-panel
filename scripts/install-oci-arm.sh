@@ -6,7 +6,7 @@ APP_ROOT="${APP_ROOT:-/opt/palworld}"
 SERVER_DIR="${SERVER_DIR:-$APP_ROOT/server}"
 STEAMCMD_DIR="${STEAMCMD_DIR:-/opt/steamcmd}"
 PANEL_DIR="${PANEL_DIR:-/opt/palworld-panel}"
-PANEL_PORT="${PANEL_PORT:-8080}"
+PANEL_PORT="${PANEL_PORT:-19090}"
 PANEL_TOKEN="${PANEL_TOKEN:-$(openssl rand -hex 24)}"
 INSTALL_SAVE_PARSER="${INSTALL_SAVE_PARSER:-1}"
 

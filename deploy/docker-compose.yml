@@ -6,7 +6,7 @@ services:
     container_name: palworld-panel
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "19090:19090"
     environment:
       PANEL_TOKEN: "${PANEL_TOKEN:-change-me-now}"
       PAL_PANEL_CONFIG: /data/config.json
