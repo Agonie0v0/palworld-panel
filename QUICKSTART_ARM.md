@@ -1,6 +1,6 @@
 # ARM 服务器快速部署
 
-这是给 Oracle Cloud 圣何塞 ARM / Ampere A1 用的最短步骤。
+适合 Oracle Cloud ARM / Ampere A1 / Ubuntu。
 
 ## 1. 登录服务器
 
@@ -8,31 +8,14 @@
 ssh ubuntu@你的服务器IP
 ```
 
-## 2. 安装项目
-
-如果服务器已经有这个项目目录：
-
-```bash
-cd palworld-panel
-sudo PANEL_PORT=8080 bash scripts/install-oci-arm.sh
-```
-
-这个命令默认会一起安装存档解析器。第一次安装会编译 Python 原生依赖，时间会比普通脚本长一些。
-
-如果你只想先快速开服，不需要玩家/公会/帕鲁/背包解析，可以执行：
-
-```bash
-sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-oci-arm.sh
-```
-
-如果服务器还没有项目，先克隆：
+## 2. 安装面板
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
-sudo PANEL_PORT=8080 bash scripts/install-oci-arm.sh
+sudo PANEL_PORT=8080 bash scripts/install-panel.sh
 ```
 
 安装完成后会显示：
@@ -40,19 +23,18 @@ sudo PANEL_PORT=8080 bash scripts/install-oci-arm.sh
 ```text
 Panel URL: http://SERVER_PUBLIC_IP:8080
 Panel token: 一串随机字符
-Default admin password: change-admin-password
 ```
 
 ## 3. 放行端口
 
-Oracle Cloud 控制台的安全规则里放行：
+Oracle Cloud 控制台放行：
 
 | 端口 | 协议 | 用途 |
 | --- | --- | --- |
 | 8080 | TCP | 面板 |
 | 8211 | UDP | 玩家进服 |
 
-服务器本机防火墙执行：
+服务器本机执行：
 
 ```bash
 sudo bash scripts/firewall-ubuntu.sh
@@ -68,7 +50,17 @@ http://你的服务器IP:8080
 
 输入安装脚本输出的 `Panel token`。
 
-## 5. 一键开服
+## 5. 一键部署服务端
+
+在面板里点：
+
+```text
+部署 -> 检测 -> 部署 Palworld 服务端
+```
+
+ARM 机器会自动安装 `box64`，然后部署 Palworld 官方服务端。
+
+## 6. 启动服务器
 
 在面板里点：
 
@@ -76,10 +68,14 @@ http://你的服务器IP:8080
 总览 -> 启动
 ```
 
-改参数：
+如果部署时勾选了“部署完成后自动启动”，这一步可以跳过。
+
+## 7. 修改参数
+
+在面板里点：
 
 ```text
-参数 -> 修改服务器名称、管理员密码、倍率等 -> 保存并写入 -> 总览 -> 重启
+参数 -> 修改服务器名、管理员密码、倍率等 -> 保存并写入 -> 总览 -> 重启
 ```
 
 第一次一定要把 `AdminPassword` 从：

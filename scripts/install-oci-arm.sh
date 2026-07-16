@@ -94,9 +94,9 @@ WantedBy=multi-user.target
 EOF
 
 mkdir -p "$PANEL_DIR"
-cp -R package.json src public config.example.json parsers "$PANEL_DIR/"
+cp -R package.json src public config.example.json parsers scripts "$PANEL_DIR/"
 mkdir -p "$PANEL_DIR/data"
-chmod +x "$PANEL_DIR/parsers/sav_cli/run-save-parser"
+chmod +x "$PANEL_DIR/scripts/"*.sh "$PANEL_DIR/parsers/sav_cli/run-save-parser"
 
 if [[ "$INSTALL_SAVE_PARSER" == "1" ]]; then
   PARSER_DIR="$PANEL_DIR/parsers/sav_cli" bash scripts/install-sav-parser.sh

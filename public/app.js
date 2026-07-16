@@ -7,6 +7,7 @@ const statusPill = document.querySelector("#statusPill");
 const actionLog = document.querySelector("#actionLog");
 const settingsForm = document.querySelector("#settingsForm");
 const automationForm = document.querySelector("#automationForm");
+const deployForm = document.querySelector("#deployForm");
 
 const settingFields = [
   ["ServerName", "服务器名称", "text"],
@@ -117,6 +118,34 @@ async function loadLive() {
   renderPlayers(Array.isArray(players) ? players : players?.players || []);
 }
 
+async function loadDeployPlan() {
+  const data = await api("/api/deploy/plan");
+  const profile = data.profile || {};
+  document.querySelector("#deployPlatform").textContent = profile.platform || "-";
+  document.querySelector("#deployArch").textContent = profile.arch || "-";
+  document.querySelector("#deployRunner").textContent = profile.runner || "-";
+  document.querySelector("#deploySupported").textContent = profile.supported ? "支持" : (profile.inContainer ? "Docker 面板不支持宿主机 systemd 部署" : "当前只支持 Linux");
+  fillForm(deployForm, data.defaults || {});
+  document.querySelector("#deployLog").textContent = profile.supported
+    ? "可以部署。本机 AMD 会原生运行，ARM 会自动安装 box64。"
+    : (profile.inContainer
+      ? "当前面板运行在 Docker 容器里，不能直接给宿主机安装 systemd 服务。请用 scripts/install-panel.sh 把面板装到宿主机，或管理已有 Palworld Docker 容器。"
+      : "当前机器不是 Linux，只能用来开发或管理已有远程服务。");
+}
+
+async function deployServer() {
+  const body = readForm(deployForm);
+  const deployLog = document.querySelector("#deployLog");
+  deployLog.textContent = "正在部署，这一步可能需要 10-30 分钟...";
+  const data = await api("/api/deploy/server", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+  const result = data.result || {};
+  deployLog.textContent = [result.stdout, result.stderr].filter(Boolean).join("\n") || "部署完成";
+  await refresh();
+}
+
 function renderPlayers(players) {
   const box = document.querySelector("#playersList");
   if (!players.length) {
@@ -219,6 +248,8 @@ document.body.addEventListener("click", async (event) => {
 
 document.querySelector("#refreshBtn").addEventListener("click", refresh);
 document.querySelector("#loadLiveBtn").addEventListener("click", loadLive);
+document.querySelector("#loadDeployPlanBtn").addEventListener("click", loadDeployPlan);
+document.querySelector("#deployServerBtn").addEventListener("click", deployServer);
 document.querySelector("#reloadPlayersBtn").addEventListener("click", loadLive);
 document.querySelector("#reloadBackupsBtn").addEventListener("click", loadBackups);
 document.querySelector("#sendRconBtn").addEventListener("click", () => sendRcon(document.querySelector("#rconCommand").value));
@@ -248,7 +279,7 @@ document.querySelector("#loadSaveBtn").addEventListener("click", async () => {
 });
 
 renderSettingsForm();
-refresh().catch((error) => {
+refresh().then(() => loadDeployPlan()).catch((error) => {
   statusPill.textContent = "连接失败";
   statusPill.classList.add("offline");
   actionLog.textContent = error.message;

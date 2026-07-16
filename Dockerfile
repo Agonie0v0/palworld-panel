@@ -12,6 +12,7 @@ COPY config.example.json ./
 COPY src ./src
 COPY public ./public
 COPY parsers ./parsers
+COPY scripts ./scripts
 
 ARG PST_TOOLS_REF=8cb429ae3b1460a6a6a0c31c9964ca8cedb65cc5
 RUN python3 -m venv /app/parsers/sav_cli/.venv \

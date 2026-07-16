@@ -1,238 +1,164 @@
 # Palworld Panel
 
-面向《幻兽帕鲁》1.0 的服务器 Web 管理面板，目标是对标 `zaigie/palworld-server-tool` 的管理体验，并支持 Oracle Cloud ARM 机器部署。
+这是一个《幻兽帕鲁》服务器管理面板。
+
+目标流程很简单：
+
+1. 先在 AMD64 或 ARM64 Linux 机器上部署 Web 面板。
+2. 打开面板，在“部署”页一键安装 Palworld 服务端。
+3. 之后在面板里管理开服、停服、参数、玩家、备份、RCON、REST API 和存档数据。
 
 参考项目：[zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)
 
-## 不想看文档，直接 ARM 开服
+## 最快部署
 
-在 Oracle Cloud ARM / Ubuntu 服务器上执行：
+Ubuntu / Debian 服务器执行：
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
-sudo PANEL_PORT=8080 bash scripts/install-oci-arm.sh
+sudo PANEL_PORT=8080 bash scripts/install-panel.sh
 ```
 
-然后浏览器打开：
+安装完成后会显示：
+
+```text
+Panel URL: http://SERVER_PUBLIC_IP:8080
+Panel token: 一串随机字符
+```
+
+浏览器打开：
 
 ```text
 http://你的服务器IP:8080
 ```
 
-输入脚本输出的 `Panel token`，进入面板后点：
+进入面板后：
 
 ```text
+部署 -> 检测 -> 部署 Palworld 服务端
 总览 -> 启动
 ```
 
-参数管理：
+修改参数：
 
 ```text
 参数 -> 修改 -> 保存并写入 -> 总览 -> 重启
 ```
 
-更短的说明见 [QUICKSTART_ARM.md](./QUICKSTART_ARM.md)。
+AMD64 和 ARM64 都用同一个面板安装脚本：
 
-## 功能完成度
+- AMD64：服务端原生运行
+- ARM64：部署服务端时自动安装 box64
 
-已经内置并可直接使用：
+## 当前功能
 
-- WebUI 启动、停止、重启、更新服务器
-- WebUI 手动备份
-- 备份列表、删除、恢复
-- 常用 `PalWorldSettings.ini` 参数编辑
-- Palworld REST API 数据读取入口
+已经实现：
+
+- 面板可部署在 AMD64 / ARM64 Linux
+- 面板里一键部署 Palworld 服务端
+- 启动、停止、重启、更新服务器
+- 修改常用 `PalWorldSettings.ini` 参数
+- 手动备份
+- 备份列表
+- 删除备份
+- 恢复备份
+- 自动备份
+- 自动广播
 - RCON 控制台
-- 玩家操作：广播、踢出、封禁、保存、平滑关服
+- 广播、踢人、封禁、保存、平滑关服
+- 读取 Palworld REST API 数据
 - 白名单记录管理
-- 自动备份、自动广播、备份保留数量
-- Docker 模式：通过 Docker socket 管理同机 Palworld 容器
-- systemd 模式：适合直接装在云服务器
-- Oracle ARM 安装脚本：通过 `box64` 运行官方 x86_64 服务端
 - 内置参考项目同源 `sav_cli` 存档解析器
-- 解析 `Level.sav` 和 `Players/` 玩家存档
-- 存档页展示玩家、公会、帕鲁、背包摘要
+- 解析 `Level.sav` 和 `Players/`
+- 展示玩家、公会、帕鲁、背包摘要
+- Docker 部署面板
+- Docker 模式管理已有 Palworld 容器
 
-还需要继续补齐到参考项目同等体验的部分：
+还需要继续补齐到参考项目同等体验：
 
-- 地图数据
-- 更完整的玩家/公会/帕鲁详情页
-- 参考项目级别的移动端细节体验
+- 首次管理员初始化流程
+- 玩家详情页
+- 公会详情页
+- 帕鲁详情页
+- 地图瓦片和玩家/基地标记
+- RCON 命令模板库
+- 定时 RCON 任务完整管理
+- 备份下载
+- 更完整的移动端体验
+- 面板和服务器分离部署的 Agent 模式
 
-存档解析器来自参考项目的 `sav_cli` 思路，依赖 PalworldSaveTools 的 `palsav-flex/palooz`。ARM 一键安装默认会安装解析器依赖；如果只想先开服，可以跳过：
+## 面板部署方式
+
+推荐方式是直接装到宿主机：
 
 ```bash
-sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-oci-arm.sh
+sudo PANEL_PORT=8080 bash scripts/install-panel.sh
 ```
 
-项目仍保留 `server.saveParserCommand` 接口。你也可以替换成自己的解析器，只要接收存档路径并输出 JSON。
+这样面板可以调用系统命令，在“部署”页安装 Palworld 服务端和 systemd 服务。
 
-推荐解析器输出：
-
-```json
-{
-  "players": [],
-  "guilds": [],
-  "pals": [],
-  "inventory": [],
-  "map": {}
-}
-```
-
-## Docker 部署
-
-进入 `deploy` 目录：
+Docker 方式也支持：
 
 ```bash
 cd deploy
-```
-
-设置面板令牌：
-
-```bash
 export PANEL_TOKEN="change-this-to-a-long-random-token"
-```
-
-启动面板：
-
-```bash
 docker compose up -d --build
 ```
 
-访问：
+但 Docker 面板不能直接给宿主机安装 systemd 服务端。Docker 面板更适合管理已经存在的 Palworld Docker 容器。
 
-```text
-http://服务器IP:8080
+## 存档解析
+
+项目内置了参考项目同源的 `sav_cli` 解析器。
+
+ARM/AMD 面板安装脚本默认会安装解析器依赖。第一次安装会编译 Python 原生依赖，可能需要一些时间。
+
+如果你只想先快速开服，可以跳过解析器：
+
+```bash
+sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-panel.sh
 ```
 
-第一次启动后，面板会在 Docker volume 中创建 `/data/config.json`。如果你想使用示例配置，可以把 `deploy/config.docker.example.json` 复制成容器内的 `/data/config.json`，或直接在面板里调整。
+之后也可以单独安装：
 
-### Docker 模式如何管理 Palworld
-
-面板容器默认挂载：
-
-```yaml
-/var/run/docker.sock:/var/run/docker.sock
+```bash
+sudo PARSER_DIR=/opt/palworld-panel/parsers/sav_cli bash /opt/palworld-panel/scripts/install-sav-parser.sh
 ```
 
-所以它可以管理同一台机器上的 Palworld 容器。
+## 端口
 
-在 `data/config.json` 里设置：
-
-```json
-{
-  "server": {
-    "mode": "docker",
-    "containerName": "palworld",
-    "rconHost": "host.docker.internal",
-    "restHost": "host.docker.internal",
-    "saveDir": "/palworld/Pal/Saved",
-    "backupDir": "/backups"
-  }
-}
-```
-
-如果你的 Palworld 服务端也在 Docker 里，建议：
-
-- Palworld 容器名固定为 `palworld`
-- 开启 RCON：`25575/tcp`
-- 开启 REST API：`8212/tcp`
-- 开启玩家端口：`8211/udp`
-- 把存档目录挂载到宿主机，再给面板容器挂载到 `/palworld`
-
-### Docker 端口
+常用端口：
 
 | 端口 | 协议 | 用途 |
 | --- | --- | --- |
-| 8080 | TCP | WebUI 面板 |
-| 8211 | UDP | Palworld 玩家连接 |
+| 8080 | TCP | Web 面板 |
+| 8211 | UDP | 玩家连接 |
 | 8212 | TCP | Palworld REST API |
 | 25575 | TCP | RCON |
 
-公网部署时，不建议把 RCON 和 REST API 直接开放给所有 IP。
+Oracle Cloud 需要在安全列表或 NSG 里放行端口。
 
-## 本地运行
+Ubuntu 本机防火墙可以执行：
 
 ```bash
-npm start
+sudo bash scripts/firewall-ubuntu.sh
 ```
 
-打开：
-
-```text
-http://127.0.0.1:8080
-```
-
-检查语法：
+## 本地开发检查
 
 ```bash
 npm run check
 node --check public/app.js
+docker compose -f deploy/docker-compose.yml config
 ```
-
-## Oracle Cloud ARM 直接安装
-
-推荐系统：Ubuntu 22.04 或 24.04 ARM64。
-
-在项目目录执行：
-
-```bash
-sudo PANEL_PORT=8080 bash scripts/install-oci-arm.sh
-```
-
-安装完成后启动服务端：
-
-```bash
-sudo systemctl start palworld
-```
-
-查看服务：
-
-```bash
-sudo systemctl status palworld
-sudo systemctl status palworld-panel
-```
-
-Oracle Cloud Ampere A1 是 ARM64，Palworld 官方 Linux dedicated server 通常按 x86_64 发布。本项目的安装脚本使用 `box64` 兼容运行。个人服和测试服可以尝试，高在线人数建议使用 x86_64 云主机。
-
-## 配置文件
-
-默认配置：
-
-```text
-data/config.json
-```
-
-Docker 内配置：
-
-```text
-/data/config.json
-```
-
-关键字段：
-
-- `panel.port`：面板端口
-- `panel.token`：面板访问令牌
-- `server.mode`：`systemd` 或 `docker`
-- `server.containerName`：Docker 模式下 Palworld 容器名
-- `server.imageName`：Docker 模式下更新镜像使用
-- `server.settingsPath`：`PalWorldSettings.ini` 路径
-- `server.saveDir`：存档目录
-- `server.backupDir`：备份目录
-- `server.restHost` / `server.restPort`：Palworld REST API 地址
-- `server.rconHost` / `server.rconPort`：RCON 地址
-- `server.saveParserCommand`：外部存档解析器命令
-- `automation.backupIntervalMinutes`：自动备份间隔
-- `automation.broadcastIntervalMinutes`：自动广播间隔
 
 ## 安全建议
 
-- `panel.token` 必须改成强随机字符串
+- 面板 token 必须改成强随机字符串
 - 面板端口最好只允许你的 IP 访问
-- RCON 和 REST API 尽量只允许本机或可信 IP 访问
-- Docker 部署挂载 Docker socket 后，面板拥有管理 Docker 的能力，请只部署在可信机器上
-- 第一次开服后先修改管理员密码
+- RCON 和 REST API 不建议直接开放给所有公网 IP
+- 第一次开服后立刻修改管理员密码
 - 定期备份存档

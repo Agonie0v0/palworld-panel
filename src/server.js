@@ -10,6 +10,7 @@ const rootDir = path.resolve(__dirname, "..");
 const dataDir = path.join(rootDir, "data");
 const configPath = process.env.PAL_PANEL_CONFIG || path.join(dataDir, "config.json");
 const publicDir = path.join(rootDir, "public");
+const deployScriptPath = path.join(rootDir, "scripts", "deploy-palworld-server.sh");
 
 const defaultConfig = {
   panel: {
@@ -61,6 +62,20 @@ const defaultConfig = {
     DeathPenalty: "All"
   }
 };
+
+function hostProfile() {
+  const arch = os.arch();
+  const platform = os.platform();
+  const inContainer = fs.existsSync("/.dockerenv");
+  return {
+    platform,
+    arch,
+    inContainer,
+    supported: platform === "linux" && !inContainer,
+    runner: arch === "arm64" || arch === "aarch64" ? "box64" : "native",
+    recommendedMode: inContainer ? "docker-existing-server" : "systemd"
+  };
+}
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -154,6 +169,73 @@ function exec(command, args, options = {}) {
         stderr: String(stderr || "").trim()
       });
     });
+  });
+}
+
+async function deployServer(config, body = {}) {
+  const profile = hostProfile();
+  if (!profile.supported) {
+    return {
+      ok: false,
+      stdout: "",
+      stderr: profile.inContainer
+        ? "One-click systemd deployment is disabled inside Docker. Install the panel on the host with scripts/install-panel.sh, or manage an existing Palworld Docker container."
+        : "One-click server deployment currently runs on Linux hosts only."
+    };
+  }
+
+  const nextSettings = {
+    ...config.settings,
+    ServerName: body.serverName || config.settings.ServerName,
+    ServerDescription: body.serverDescription || config.settings.ServerDescription,
+    AdminPassword: body.adminPassword || config.settings.AdminPassword,
+    ServerPassword: body.serverPassword ?? config.settings.ServerPassword,
+    PublicPort: Number(body.publicPort || config.settings.PublicPort || 8211),
+    RCONEnabled: true,
+    RCONPort: Number(body.rconPort || config.settings.RCONPort || 25575),
+    RESTAPIEnabled: true,
+    RESTAPIPort: Number(body.restPort || config.settings.RESTAPIPort || 8212)
+  };
+  const installDir = body.installDir || config.server.installDir;
+  const appRoot = path.dirname(installDir);
+  const nextConfig = await saveConfig({
+    ...config,
+    server: {
+      ...config.server,
+      mode: "systemd",
+      serviceName: body.serviceName || config.server.serviceName || "palworld",
+      installDir,
+      settingsPath: path.join(installDir, "Pal", "Saved", "Config", "LinuxServer", "PalWorldSettings.ini"),
+      saveDir: path.join(installDir, "Pal", "Saved"),
+      backupDir: body.backupDir || path.join(appRoot, "backups"),
+      steamcmdPath: body.steamcmdPath || config.server.steamcmdPath || "/opt/steamcmd/steamcmd.sh",
+      rconHost: "127.0.0.1",
+      rconPort: nextSettings.RCONPort,
+      restHost: "127.0.0.1",
+      restPort: nextSettings.RESTAPIPort,
+      publicPort: nextSettings.PublicPort
+    },
+    settings: nextSettings
+  });
+
+  return exec("bash", [deployScriptPath], {
+    timeout: 30 * 60 * 1000,
+    env: {
+      ...process.env,
+      APP_ROOT: appRoot,
+      SERVER_DIR: nextConfig.server.installDir,
+      BACKUP_DIR: nextConfig.server.backupDir,
+      STEAMCMD_DIR: path.dirname(nextConfig.server.steamcmdPath),
+      SERVICE_NAME: nextConfig.server.serviceName,
+      SERVER_NAME: nextSettings.ServerName,
+      SERVER_DESCRIPTION: nextSettings.ServerDescription,
+      ADMIN_PASSWORD: nextSettings.AdminPassword,
+      SERVER_PASSWORD: nextSettings.ServerPassword,
+      PUBLIC_PORT: String(nextSettings.PublicPort),
+      RCON_PORT: String(nextSettings.RCONPort),
+      REST_PORT: String(nextSettings.RESTAPIPort),
+      AUTO_START: body.autoStart ? "1" : "0"
+    }
   });
 }
 
@@ -503,11 +585,34 @@ async function handleApi(req, res, config) {
       host: {
         platform: os.platform(),
         arch: os.arch(),
+        profile: hostProfile(),
         uptime: os.uptime(),
         freeMemory: os.freemem(),
         totalMemory: os.totalmem()
       }
     });
+  }
+
+  if (req.method === "GET" && req.url === "/api/deploy/plan") {
+    return sendJson(res, 200, {
+      ok: true,
+      profile: hostProfile(),
+      defaults: {
+        installDir: config.server.installDir,
+        serviceName: config.server.serviceName,
+        publicPort: config.settings.PublicPort,
+        rconPort: config.settings.RCONPort,
+        restPort: config.settings.RESTAPIPort,
+        serverName: config.settings.ServerName,
+        adminPassword: config.settings.AdminPassword
+      }
+    });
+  }
+
+  if (req.method === "POST" && req.url === "/api/deploy/server") {
+    const body = await readBody(req);
+    const result = await deployServer(config, body);
+    return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
   }
 
   if (req.method === "GET" && req.url === "/api/live") {
