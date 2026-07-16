@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "check": "node --check src/server.js && node --check src/upstream-compat.js",
+    "test": "node --test test/*.test.js",
     "build:web": "pnpm --dir upstream-web build",
     "test:web": "pnpm --dir upstream-web test"
   },

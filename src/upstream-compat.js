@@ -43,9 +43,16 @@ function responsePayload(result) {
   return result;
 }
 
+function playerUidFromId(playerId) {
+  const value = String(playerId || "");
+  if (value.length < 8) return "";
+  const parsed = Number.parseInt(value.slice(0, 8), 16);
+  return Number.isFinite(parsed) ? String(parsed) : "";
+}
+
 function normalizeOnlinePlayer(player = {}) {
   return {
-    player_uid: stringFrom(player, ["player_uid", "playeruid", "playerUid", "PlayerUid"]),
+    player_uid: stringFrom(player, ["player_uid", "playeruid", "playerUid", "PlayerUid"], playerUidFromId(player.playerId)),
     user_id: stringFrom(player, ["user_id", "userid", "userId", "UserId"]),
     steam_id: stringFrom(player, ["steam_id", "steamid", "steamId", "SteamId"]),
     nickname: stringFrom(player, ["nickname", "name", "Nickname"]),
@@ -208,9 +215,9 @@ function splitAddress(address, defaultHost, defaultPort) {
   if (!value) return { host: defaultHost, port: defaultPort };
   try {
     const url = new URL(value.includes("://") ? value : `tcp://${value}`);
-    return { host: url.hostname || defaultHost, port: Number(url.port || defaultPort) };
+    return { host: url.hostname || defaultHost, port: Number(url.port || defaultPort), protocol: url.protocol };
   } catch {
-    return { host: defaultHost, port: defaultPort };
+    return { host: defaultHost, port: defaultPort, protocol: "" };
   }
 }
 
@@ -227,7 +234,7 @@ function toUpstreamConfig(config) {
       public_url: automation.webPublicUrl || ""
     },
     task: {
-      sync_interval: Number(automation.playerSyncInterval || 60),
+      sync_interval: Number(automation.playerSyncInterval ?? 60),
       player_logging: Boolean(automation.playerLogging),
       player_login_message: automation.playerLoginMessage || "Player {username} has joined the server! Current online player count: {online_num}.",
       player_logout_message: automation.playerLogoutMessage || "Player {username} has left the server! Current online player count: {online_num}."
@@ -236,20 +243,20 @@ function toUpstreamConfig(config) {
       address: `${server.rconHost || "127.0.0.1"}:${Number(server.rconPort || 25575)}`,
       password: config.settings?.AdminPassword || "",
       use_base64: Boolean(automation.rconUseBase64),
-      timeout: Number(automation.rconTimeout || 5)
+      timeout: Number(automation.rconTimeout ?? 5)
     },
     rest: {
-      address: `http://${server.restHost || "127.0.0.1"}:${Number(server.restPort || 8212)}`,
+      address: `${server.restProtocol === "https:" ? "https" : "http"}://${server.restHost || "127.0.0.1"}:${Number(server.restPort || 8212)}`,
       username: server.restUser || "admin",
       password: server.restPassword || config.settings?.AdminPassword || "",
-      timeout: Number(automation.restTimeout || 5)
+      timeout: Number(automation.restTimeout ?? 5)
     },
     save: {
       source_mode: automation.saveSourceMode || "directory",
-      path: server.saveDir || "",
+      path: automation.saveSourcePath || server.saveDir || "",
       decode_path: server.saveParserCommand || "",
-      sync_interval: Number(automation.saveSyncInterval || 120),
-      backup_interval: Number(automation.backupIntervalMinutes || 0) * 60,
+      sync_interval: Number(automation.saveSyncInterval ?? 120),
+      backup_interval: Number(automation.backupIntervalSeconds || (Number(automation.backupIntervalMinutes || 0) * 60)),
       backup_keep_days: Number(automation.backupKeepDays || 7)
     },
     manage: {
@@ -304,10 +311,20 @@ function createUpstreamCompatibility(deps) {
 
   async function getSaveData(config, force = false) {
     if (!force && saveCache.data && Date.now() < saveCache.expiresAt) return saveCache.data;
+    if (!force) {
+      const synced = await loadSyncedSaveData();
+      if (synced.players.length || synced.guilds.length) {
+        saveCache = { expiresAt: Date.now() + 15000, data: synced };
+        return synced;
+      }
+    }
     let data = await deps.managedCall("saveData", {}, () => deps.querySaveData(config));
     if (!asArray(data?.players).length && !asArray(data?.guilds).length) {
       const synced = await loadSyncedSaveData();
       if (synced.players.length || synced.guilds.length) data = synced;
+    } else if (deps.saveSyncedSaveData) {
+      data = { ...data, synced_at: new Date().toISOString() };
+      await deps.saveSyncedSaveData(data);
     }
     saveCache = { expiresAt: Date.now() + 15000, data };
     return data;
@@ -378,21 +395,21 @@ function createUpstreamCompatibility(deps) {
         return true;
       }
       const password = deps.hashPassword(body.password);
-      const token = process.env.PANEL_TOKEN && process.env.PANEL_TOKEN !== "change-me"
+      const staticToken = process.env.PANEL_TOKEN && process.env.PANEL_TOKEN !== "change-me"
         ? process.env.PANEL_TOKEN
         : crypto.randomBytes(24).toString("hex");
-      await deps.saveConfig({
+      const next = await deps.saveConfig({
         ...config,
         panel: {
           ...config.panel,
-          token,
+          token: staticToken,
           adminInitialized: true,
           adminUser: "admin",
           adminPasswordHash: password.hash,
           adminPasswordSalt: password.salt
         }
       });
-      deps.sendJson(res, 200, { token });
+      deps.sendJson(res, 200, { token: deps.issueAuthToken(next) });
       return true;
     }
     return false;
@@ -492,9 +509,12 @@ function createUpstreamCompatibility(deps) {
           rconPort: rconAddress.port,
           restHost: restAddress.host,
           restPort: restAddress.port,
+          restProtocol: restAddress.protocol === "https:" ? "https:" : "http:",
           restUser: settings.rest?.username || effectiveConfig.server.restUser,
           restPassword: settings.rest?.password ?? effectiveConfig.server.restPassword,
-          saveDir: settings.save?.path || effectiveConfig.server.saveDir,
+          saveDir: settings.save?.source_mode === "agent"
+            ? effectiveConfig.server.saveDir
+            : (settings.save?.path || effectiveConfig.server.saveDir),
           saveParserCommand: settings.save?.decode_path || effectiveConfig.server.saveParserCommand
         },
         automation: {
@@ -508,11 +528,13 @@ function createUpstreamCompatibility(deps) {
           playerLoginMessage: settings.task?.player_login_message || "",
           playerLogoutMessage: settings.task?.player_logout_message || "",
           rconUseBase64: Boolean(settings.rcon?.use_base64),
-          rconTimeout: Number(settings.rcon?.timeout || 5),
-          restTimeout: Number(settings.rest?.timeout || 5),
+          rconTimeout: Number(settings.rcon?.timeout ?? 5),
+          restTimeout: Number(settings.rest?.timeout ?? 5),
           saveSourceMode: settings.save?.source_mode || "directory",
+          saveSourcePath: settings.save?.source_mode === "agent" ? (settings.save?.path || "") : "",
           saveSyncInterval: Number(settings.save?.sync_interval || 0),
-          backupIntervalMinutes: Math.max(0, Math.round(Number(settings.save?.backup_interval || 0) / 60)),
+          backupIntervalSeconds: Math.max(0, Number(settings.save?.backup_interval || 0)),
+          backupIntervalMinutes: Math.max(0, Number(settings.save?.backup_interval || 0) / 60),
           backupKeepDays: Number(settings.save?.backup_keep_days || 0),
           kickNonWhitelist: Boolean(settings.manage?.kick_non_whitelist)
         },
@@ -532,11 +554,16 @@ function createUpstreamCompatibility(deps) {
         settings: next.settings
       }, async () => ({ success: true }));
       await deps.saveConfig(next);
+      const restartFields = [];
+      if (Number(next.panel.port) !== Number(config.panel.port)) restartFields.push("web.port");
+      if (Boolean(next.automation.webTls) !== Boolean(config.automation.webTls)) restartFields.push("web.tls");
+      if (next.automation.webCertPath !== config.automation.webCertPath) restartFields.push("web.cert_path");
+      if (next.automation.webKeyPath !== config.automation.webKeyPath) restartFields.push("web.key_path");
       deps.sendJson(res, 200, {
         success: true,
-        token: body.new_password ? deps.effectivePanelToken(next) : "",
-        restart_required: Number(next.panel.port) !== Number(config.panel.port),
-        restart_fields: Number(next.panel.port) !== Number(config.panel.port) ? ["web.port"] : []
+        token: body.new_password ? deps.issueAuthToken(next) : "",
+        restart_required: restartFields.length > 0,
+        restart_fields: restartFields
       });
       return true;
     }
@@ -560,7 +587,9 @@ function createUpstreamCompatibility(deps) {
     if (req.method === "POST" && pathname === "/api/config/test/save") {
       const body = await deps.readBody(req);
       const target = body.save?.path;
-      const result = await deps.managedCall("testSave", { path: target }, async () => {
+      const sourceMode = body.save?.source_mode || "directory";
+      const result = await deps.managedCall("testSave", { path: target, sourceMode }, async () => {
+        if (deps.testSaveSource) return deps.testSaveSource(sourceMode, target);
         if (!target) return { status: "unconfigured", message: "Save path is empty." };
         if (!fs.existsSync(target)) return { status: "error", message: "Save path does not exist." };
         return { status: "normal", message: path.resolve(target) };
@@ -576,10 +605,16 @@ function createUpstreamCompatibility(deps) {
       const temporary = {
         ...effectiveConfig,
         server: { ...effectiveConfig.server, rconHost: address.host, rconPort: address.port },
+        automation: {
+          ...effectiveConfig.automation,
+          rconUseBase64: Boolean(body.rcon?.use_base64),
+          rconTimeout: Number(body.rcon?.timeout ?? effectiveConfig.automation.rconTimeout ?? 5)
+        },
         settings: { ...effectiveConfig.settings, AdminPassword: body.rcon?.password || effectiveConfig.settings.AdminPassword }
       };
       const result = await deps.managedCall("testRcon", {
         server: temporary.server,
+        automation: temporary.automation,
         settings: temporary.settings
       }, () => deps.rcon(temporary, "ShowPlayers"));
       deps.sendJson(res, 200, { status: result.ok ? "normal" : "error", message: result.stdout || result.stderr });

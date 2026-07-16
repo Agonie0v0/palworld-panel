@@ -20,6 +20,17 @@ const publicDir = fs.existsSync(path.join(upstreamPublicDir, "index.html"))
   : path.join(rootDir, "public");
 const deployScriptPath = path.join(rootDir, "scripts", "deploy-palworld-server.sh");
 const agentRuntime = process.env.AGENT_MODE === "1";
+const authTokenTtlSeconds = 24 * 60 * 60;
+
+let previousOnlinePlayers = null;
+let schedulerRunning = false;
+const schedulerState = {
+  playerSync: 0,
+  saveSync: 0,
+  backup: 0,
+  broadcast: 0,
+  rconTasks: 0
+};
 
 const defaultConfig = {
   panel: {
@@ -46,6 +57,7 @@ const defaultConfig = {
     rconPort: 25575,
     restHost: "127.0.0.1",
     restPort: 8212,
+    restProtocol: "http:",
     restUser: "admin",
     restPassword: "",
     publicPort: 8211,
@@ -53,6 +65,7 @@ const defaultConfig = {
   },
   automation: {
     backupIntervalMinutes: 0,
+    backupIntervalSeconds: 0,
     broadcastIntervalMinutes: 0,
     broadcastMessage: "",
     keepBackups: 20,
@@ -60,10 +73,19 @@ const defaultConfig = {
     backupKeepDays: 7,
     playerSyncInterval: 60,
     saveSyncInterval: 120,
+    saveSourceMode: "directory",
+    saveSourcePath: "",
     playerLogging: false,
     playerLoginMessage: "",
     playerLogoutMessage: "",
-    kickNonWhitelist: false
+    kickNonWhitelist: false,
+    rconUseBase64: false,
+    rconTimeout: 5,
+    restTimeout: 5,
+    webTls: false,
+    webCertPath: "",
+    webKeyPath: "",
+    webPublicUrl: ""
   },
   settings: {
     ServerName: "Palworld 1.0 Oracle ARM",
@@ -141,6 +163,43 @@ function verifyPassword(password, salt, expected) {
   return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
+function encodeBase64Url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function authSigningKey(config) {
+  const material = config.panel.adminPasswordHash || effectivePanelToken(config) || "change-me";
+  return crypto.createHash("sha256").update(String(material)).digest();
+}
+
+function issueAuthToken(config, now = Date.now()) {
+  const issuedAt = Math.floor(now / 1000);
+  const header = encodeBase64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = encodeBase64Url(JSON.stringify({
+    sub: config.panel.adminUser || "admin",
+    iat: issuedAt,
+    exp: issuedAt + authTokenTtlSeconds
+  }));
+  const signature = crypto.createHmac("sha256", authSigningKey(config)).update(`${header}.${payload}`).digest("base64url");
+  return `${header}.${payload}.${signature}`;
+}
+
+function verifyAuthToken(config, token, now = Date.now()) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) return false;
+  const expected = crypto.createHmac("sha256", authSigningKey(config)).update(`${parts[0]}.${parts[1]}`).digest("base64url");
+  const actualBuffer = Buffer.from(parts[2]);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const current = Math.floor(now / 1000);
+    return Number(payload.exp) > current && Number(payload.iat) <= current + 60;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureConfig() {
   await fsp.mkdir(dataDir, { recursive: true });
   if (!fs.existsSync(configPath)) {
@@ -189,9 +248,10 @@ function effectivePanelToken(config) {
 
 function isAuthorized(req, config) {
   const expected = effectivePanelToken(config);
-  if (!expected || expected === "change-me") return true;
   const header = req.headers.authorization || "";
-  return header === `Bearer ${expected}`;
+  if (!header.startsWith("Bearer ")) return false;
+  const token = header.slice(7);
+  return (Boolean(expected) && expected !== "change-me" && token === expected) || verifyAuthToken(config, token);
 }
 
 async function loadJsonFile(name, fallback) {
@@ -401,20 +461,47 @@ function packet(id, type, body) {
   return buffer;
 }
 
-function parsePackets(buffer) {
-  const responses = [];
+function parsePacketFrames(buffer) {
+  const frames = [];
   let offset = 0;
   while (offset + 4 <= buffer.length) {
     const size = buffer.readInt32LE(offset);
     if (offset + 4 + size > buffer.length) break;
-    responses.push(buffer.toString("utf8", offset + 12, offset + 4 + size - 2));
+    frames.push({
+      id: buffer.readInt32LE(offset + 4),
+      type: buffer.readInt32LE(offset + 8),
+      body: buffer.toString("utf8", offset + 12, offset + 4 + size - 2)
+    });
     offset += 4 + size;
   }
-  return responses.join("");
+  return frames;
+}
+
+function parsePackets(buffer) {
+  return parsePacketFrames(buffer).map((frame) => frame.body).join("");
+}
+
+function encodeRconCommand(command, useBase64) {
+  return useBase64 ? Buffer.from(String(command), "utf8").toString("base64") : String(command);
+}
+
+function decodeRconResponse(response, useBase64) {
+  if (!useBase64 || !response) return response;
+  try {
+    const encoded = String(response).trim();
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 !== 0) return response;
+    const decoded = Buffer.from(encoded, "base64");
+    if (decoded.toString("base64").replace(/=+$/, "") !== encoded.replace(/=+$/, "")) return response;
+    return decoded.toString("utf8");
+  } catch {
+    return response;
+  }
 }
 
 function rcon(config, command) {
   const password = config.settings.AdminPassword;
+  const useBase64 = Boolean(config.automation.rconUseBase64);
+  const timeoutSeconds = Math.max(0, Number(config.automation.rconTimeout ?? 5));
   return new Promise((resolve) => {
     const socket = net.createConnection({
       host: config.server.rconHost,
@@ -422,19 +509,25 @@ function rcon(config, command) {
     });
     const chunks = [];
     let authed = false;
+    let settled = false;
     const done = (ok, output) => {
+      if (settled) return;
+      settled = true;
       socket.destroy();
-      resolve({ ok, stdout: output.trim(), stderr: ok ? "" : output.trim() });
+      const decoded = decodeRconResponse(String(output || "").trim(), useBase64);
+      resolve({ ok, stdout: decoded.trim(), stderr: ok ? "" : decoded.trim() });
     };
-    socket.setTimeout(8000);
+    if (timeoutSeconds > 0) socket.setTimeout(timeoutSeconds * 1000);
     socket.on("connect", () => socket.write(packet(1, 3, password)));
     socket.on("data", (chunk) => {
       chunks.push(chunk);
-      const output = parsePackets(Buffer.concat(chunks));
-      if (!authed && output !== undefined) {
+      const buffered = Buffer.concat(chunks);
+      const frames = parsePacketFrames(buffered);
+      if (!authed && frames.some((frame) => frame.id === -1)) return done(false, "RCON authentication failed.");
+      if (!authed && frames.length) {
         authed = true;
         chunks.length = 0;
-        socket.write(packet(2, 2, command));
+        socket.write(packet(2, 2, encodeRconCommand(command, useBase64)));
         socket.write(packet(3, 0, ""));
         setTimeout(() => done(true, parsePackets(Buffer.concat(chunks))), 250);
       }
@@ -448,8 +541,11 @@ function restRequest(config, endpoint, options = {}) {
   const password = config.server.restPassword || config.settings.AdminPassword;
   const auth = Buffer.from(`${config.server.restUser}:${password}`).toString("base64");
   const body = options.body ? JSON.stringify(options.body) : "";
+  const protocol = config.server.restProtocol === "https:" ? "https:" : "http:";
+  const transport = protocol === "https:" ? https : http;
+  const timeoutSeconds = Math.max(0, Number(options.timeout ?? config.automation.restTimeout ?? 5));
   return new Promise((resolve) => {
-    const req = http.request(
+    const req = transport.request(
       {
         host: config.server.restHost,
         port: Number(config.server.restPort),
@@ -460,7 +556,7 @@ function restRequest(config, endpoint, options = {}) {
           "content-type": "application/json",
           "content-length": Buffer.byteLength(body)
         },
-        timeout: 8000
+        timeout: timeoutSeconds > 0 ? timeoutSeconds * 1000 : undefined
       },
       (res) => {
         let raw = "";
@@ -597,12 +693,100 @@ async function runAction(action, config) {
   return exec("systemctl", systemdActions[action]);
 }
 
+function remoteSaveSourceUrl(config) {
+  return String(config.automation.saveSourcePath || "").trim();
+}
+
+function requestRemoteFile(url, destination, options = {}, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    let endpoint;
+    try {
+      endpoint = new URL(url);
+    } catch {
+      reject(new Error("Save Agent URL is invalid."));
+      return;
+    }
+    if (!['http:', 'https:'].includes(endpoint.protocol)) {
+      reject(new Error("Save Agent URL must use http:// or https://."));
+      return;
+    }
+    const transport = endpoint.protocol === "https:" ? https : http;
+    const request = transport.get(endpoint, { timeout: options.timeout || 30000 }, (response) => {
+      if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
+        response.resume();
+        if (redirects >= 5) return reject(new Error("Save Agent returned too many redirects."));
+        return resolve(requestRemoteFile(new URL(response.headers.location, endpoint).toString(), destination, options, redirects + 1));
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        response.resume();
+        reject(new Error(`Save Agent request failed (${response.statusCode}).`));
+        return;
+      }
+      if (options.probeOnly) {
+        response.destroy();
+        resolve({ ok: true, status: response.statusCode, contentType: response.headers["content-type"] || "" });
+        return;
+      }
+      const output = fs.createWriteStream(destination, { mode: 0o600 });
+      response.pipe(output);
+      output.on("finish", () => output.close(() => resolve({ ok: true, status: response.statusCode })));
+      output.on("error", reject);
+      response.on("error", reject);
+    });
+    request.on("timeout", () => request.destroy(new Error("Save Agent connection timed out.")));
+    request.on("error", reject);
+  });
+}
+
+async function testSaveSource(sourceMode, target) {
+  if (!target) return { status: "unconfigured", message: "Save path is empty." };
+  if (sourceMode === "agent") {
+    try {
+      const result = await requestRemoteFile(target, "", { probeOnly: true, timeout: 15000 });
+      return { status: "normal", message: `Save Agent responded with HTTP ${result.status}.` };
+    } catch (error) {
+      return { status: "error", message: error.message };
+    }
+  }
+  if (!fs.existsSync(target)) return { status: "error", message: "Save path does not exist." };
+  return { status: "normal", message: path.resolve(target) };
+}
+
+async function prepareSaveSource(config, purpose) {
+  if (config.automation.saveSourceMode !== "agent") {
+    return { directory: path.join(config.server.saveDir, "SaveGames"), cleanup: async () => {} };
+  }
+  const sourceUrl = remoteSaveSourceUrl(config);
+  if (!sourceUrl) throw new Error("Save Agent URL is not configured.");
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), `palworld-save-${purpose}-`));
+  const zipFile = path.join(tempDir, "sav.zip");
+  const extracted = path.join(tempDir, "extracted");
+  try {
+    await fsp.mkdir(extracted, { recursive: true });
+    await requestRemoteFile(sourceUrl, zipFile, { timeout: 5 * 60 * 1000 });
+    const python = process.env.PYTHON || (os.platform() === "win32" ? "python" : "python3");
+    const unpack = await exec(python, ["-m", "zipfile", "-e", zipFile, extracted], { timeout: 5 * 60 * 1000 });
+    if (!unpack.ok) throw new Error(unpack.stderr || unpack.stdout || "Unable to extract Save Agent archive.");
+    return { directory: extracted, cleanup: () => fsp.rm(tempDir, { recursive: true, force: true }) };
+  } catch (error) {
+    await fsp.rm(tempDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 async function createBackup(config) {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   await fsp.mkdir(config.server.backupDir, { recursive: true });
   const target = path.join(config.server.backupDir, `palworld-save-${stamp}.tar.gz`);
-  const result = await exec("tar", ["-czf", target, "-C", config.server.saveDir, "."]);
-  return { ...result, backup: target };
+  const source = config.automation.saveSourceMode === "agent"
+    ? await prepareSaveSource(config, "backup")
+    : { directory: config.server.saveDir, cleanup: async () => {} };
+  try {
+    const result = await exec("tar", ["-czf", target, "-C", source.directory, "."]);
+    return { ...result, backup: target };
+  } finally {
+    await source.cleanup();
+  }
 }
 
 async function listBackups(config) {
@@ -610,7 +794,7 @@ async function listBackups(config) {
   const entries = await fsp.readdir(config.server.backupDir, { withFileTypes: true });
   const backups = await Promise.all(
     entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".tar.gz"))
+      .filter((entry) => entry.isFile() && (entry.name.endsWith(".tar.gz") || entry.name.endsWith(".zip")))
       .map(async (entry) => {
         const file = path.join(config.server.backupDir, entry.name);
         const stat = await fsp.stat(file);
@@ -624,7 +808,7 @@ async function sendBackupFile(req, res, config, name) {
   const file = safeBackupPath(config, name);
   const stat = await fsp.stat(file);
   res.writeHead(200, {
-    "content-type": "application/gzip",
+    "content-type": file.endsWith(".zip") ? "application/zip" : "application/gzip",
     "content-length": stat.size,
     "content-disposition": `attachment; filename="${path.basename(file)}"`
   });
@@ -653,10 +837,17 @@ async function restoreBackup(config, name) {
 }
 
 async function trimBackups(config) {
-  const keep = Number(config.automation.keepBackups || 0);
-  if (!keep) return;
   const backups = await listBackups(config);
-  await Promise.all(backups.slice(keep).map((backup) => fsp.unlink(backup.path).catch(() => {})));
+  const keepDays = Math.max(1, Number(config.automation.backupKeepDays || 7));
+  const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000;
+  const expired = backups.filter((backup) => Date.parse(backup.mtime) < cutoff);
+  const expiredPaths = new Set(expired.map((backup) => backup.path));
+  const remaining = backups.filter((backup) => !expiredPaths.has(backup.path));
+  const keepCount = Math.max(0, Number(config.automation.keepBackups || 0));
+  const overflow = keepCount > 0 ? remaining.slice(keepCount) : [];
+  const remove = [...expired, ...overflow.filter((backup) => !expiredPaths.has(backup.path))];
+  await Promise.all(remove.map((backup) => fsp.unlink(backup.path).catch(() => {})));
+  return remove;
 }
 
 function safeManagedDirectory(target, label) {
@@ -759,6 +950,116 @@ async function saveWhitelist(players) {
   return players;
 }
 
+function responseData(result) {
+  if (!result) return {};
+  return result.data && typeof result.data === "object" ? result.data : result;
+}
+
+function playerUidFromId(playerId) {
+  const value = String(playerId || "");
+  if (value.length < 8) return "";
+  const parsed = Number.parseInt(value.slice(0, 8), 16);
+  return Number.isFinite(parsed) ? String(parsed) : "";
+}
+
+function normalizeLivePlayers(live) {
+  if (!live?.players?.ok) throw new Error(live?.players?.error || "Palworld REST player endpoint is unavailable.");
+  const payload = responseData(live.players);
+  const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.players) ? payload.players : []);
+  return rows.map((player) => {
+    const userId = String(player.user_id || player.userId || player.userid || "");
+    return {
+      player_uid: String(player.player_uid || player.playerUid || playerUidFromId(player.playerId) || ""),
+      user_id: userId,
+      steam_id: String(player.steam_id || player.steamId || (userId.startsWith("steam_") ? userId.slice(6) : "")),
+      nickname: String(player.nickname || player.name || ""),
+      account_name: String(player.account_name || player.accountName || ""),
+      ip: String(player.ip || ""),
+      ping: Number(player.ping || 0),
+      location_x: Number(player.location_x || player.locationX || 0),
+      location_y: Number(player.location_y || player.locationY || 0),
+      level: Number(player.level || 0),
+      building_count: Number(player.building_count || player.buildingCount || 0),
+      last_online: new Date().toISOString()
+    };
+  });
+}
+
+function playerIdentity(player) {
+  return String(player.player_uid || player.steam_id || player.user_id || player.nickname || "");
+}
+
+function formatPlayerMessage(template, player, onlineCount) {
+  return String(template || "")
+    .replaceAll("{username}", player.nickname || playerIdentity(player))
+    .replaceAll("{online_num}", String(onlineCount));
+}
+
+function isWhitelisted(player, whitelist) {
+  return whitelist.some((entry) =>
+    (player.player_uid && String(entry.player_uid || entry.playerUid || "") === String(player.player_uid))
+    || (player.steam_id && String(entry.steam_id || entry.steamId || "") === String(player.steam_id))
+  );
+}
+
+async function broadcastLines(config, message) {
+  for (const line of String(message || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
+    const result = await managedCall("rcon", { command: `Broadcast ${line}` }, () => rcon(config, `Broadcast ${line}`));
+    if (!result.ok) throw new Error(result.stderr || result.stdout || "Broadcast failed.");
+  }
+}
+
+async function syncOnlinePlayers(config) {
+  const live = await managedCall("live", {}, () => liveServerData(config));
+  const players = normalizeLivePlayers(live);
+  await saveJsonFile("online-players.json", { players, synced_at: new Date().toISOString() });
+
+  if (config.automation.playerLogging && previousOnlinePlayers) {
+    const previous = new Map(previousOnlinePlayers.map((player) => [playerIdentity(player), player]));
+    const current = new Map(players.map((player) => [playerIdentity(player), player]));
+    for (const [identity, player] of current) {
+      if (!previous.has(identity)) {
+        await broadcastLines(config, formatPlayerMessage(
+          config.automation.playerLoginMessage || "Player {username} has joined the server! Current online player count: {online_num}.",
+          player,
+          players.length
+        )).catch((error) => console.error(`Player login broadcast failed: ${error.message}`));
+      }
+    }
+    for (const [identity, player] of previous) {
+      if (!current.has(identity)) {
+        await broadcastLines(config, formatPlayerMessage(
+          config.automation.playerLogoutMessage || "Player {username} has left the server! Current online player count: {online_num}.",
+          player,
+          players.length
+        )).catch((error) => console.error(`Player logout broadcast failed: ${error.message}`));
+      }
+    }
+  }
+
+  if (config.automation.kickNonWhitelist) {
+    const whitelist = await loadWhitelist();
+    for (const player of players) {
+      if (isWhitelisted(player, whitelist)) continue;
+      const target = player.user_id || (player.steam_id ? `steam_${player.steam_id}` : "");
+      if (!target) continue;
+      const result = await managedCall("rcon", { command: `KickPlayer ${target}` }, () => rcon(config, `KickPlayer ${target}`));
+      if (!result.ok) console.error(`Whitelist kick failed for ${player.nickname || target}: ${result.stderr || result.stdout}`);
+    }
+  }
+
+  previousOnlinePlayers = players;
+  return players;
+}
+
+async function syncSaveData(config) {
+  const data = await managedCall("saveData", {}, () => querySaveData(config));
+  if (data?.source === "parser_error") throw new Error(data.message || "Save parser failed.");
+  const synced = { ...data, source: data?.source || "sync", synced_at: new Date().toISOString() };
+  await saveSyncedSaveData(synced);
+  return synced;
+}
+
 async function querySaveData(config) {
   const output = {
     players: [],
@@ -770,10 +1071,11 @@ async function querySaveData(config) {
     message: "Configure server.saveParserCommand to parse Level.sav data."
   };
   if (!config.server.saveParserCommand) return output;
-  const level = path.join(config.server.saveDir, "SaveGames");
-  const result = await exec(config.server.saveParserCommand, [level], { timeout: 300000 });
-  if (!result.ok) return { ...output, source: "parser_error", message: result.stderr || result.stdout };
+  let source;
   try {
+    source = await prepareSaveSource(config, "decode");
+    const result = await exec(config.server.saveParserCommand, [source.directory], { timeout: 300000 });
+    if (!result.ok) return { ...output, source: "parser_error", message: result.stderr || result.stdout };
     const parsed = JSON.parse(result.stdout);
     const players = Array.isArray(parsed.players) ? parsed.players : [];
     const pals = parsed.pals || players.flatMap((player) =>
@@ -799,10 +1101,12 @@ async function querySaveData(config) {
       pals,
       inventory,
       map: parsed.map || null,
-      source: "parser"
+      source: config.automation.saveSourceMode === "agent" ? "agent" : "parser"
     };
-  } catch {
-    return { ...output, source: "parser_error", message: "Save parser did not return JSON." };
+  } catch (error) {
+    return { ...output, source: "parser_error", message: error.message || "Save parser did not return JSON." };
+  } finally {
+    if (source) await source.cleanup();
   }
 }
 
@@ -948,13 +1252,12 @@ async function executeAgentOperation(operation, payload, config) {
     },
     testSave: async () => {
       const target = payload.path;
-      if (!target) return { status: "unconfigured", message: "Save path is empty." };
-      if (!fs.existsSync(target)) return { status: "error", message: "Save path does not exist." };
-      return { status: "normal", message: path.resolve(target) };
+      return testSaveSource(payload.sourceMode || config.automation.saveSourceMode || "directory", target);
     },
     testRcon: () => rcon({
       ...config,
       server: { ...config.server, ...(payload.server || {}) },
+      automation: { ...config.automation, ...(payload.automation || {}) },
       settings: { ...config.settings, ...(payload.settings || {}) }
     }, "ShowPlayers"),
     deploy: () => deployServer(config, payload),
@@ -1058,12 +1361,14 @@ const upstreamCompat = createUpstreamCompatibility({
   sendError,
   readBody,
   hashPassword,
+  issueAuthToken,
   saveConfig,
   effectivePanelToken,
   managedCall,
   liveServerData,
   querySaveData,
   rcon,
+  testSaveSource,
   loadWhitelist,
   saveWhitelist,
   loadSyncedSaveData,
@@ -1111,7 +1416,7 @@ async function handleApi(req, res, config) {
         adminPasswordSalt: password.salt
       }
     });
-    return sendJson(res, 200, { ok: true, token: configuredToken, username: next.panel.adminUser });
+    return sendJson(res, 200, { ok: true, token: issueAuthToken(next), username: next.panel.adminUser });
   }
 
   if (req.method === "POST" && req.url === "/api/login") {
@@ -1122,7 +1427,7 @@ async function handleApi(req, res, config) {
       || (body.password && verifyPassword(body.password, config.panel.adminPasswordSalt, config.panel.adminPasswordHash))
       || (body.username === config.panel.adminUser && verifyPassword(body.password, config.panel.adminPasswordSalt, config.panel.adminPasswordHash));
     if (!ok) return sendError(res, 401, "Invalid login.");
-    return sendJson(res, 200, { ok: true, token: effectivePanelToken(config) });
+    return sendJson(res, 200, { ok: true, token: issueAuthToken(config) });
   }
 
   if (!authorized) return sendError(res, 401, "Unauthorized.");
@@ -1352,35 +1657,71 @@ async function handleApi(req, res, config) {
   return sendError(res, 404, "API route not found.");
 }
 
-function startSchedulers() {
-  setInterval(async () => {
-    try {
-      const config = await loadConfig();
-      if (Number(config.automation.backupIntervalMinutes || 0) > 0) {
-        const marker = path.join(dataDir, "last-backup.txt");
-        const last = fs.existsSync(marker) ? Number(await fsp.readFile(marker, "utf8")) : 0;
-        if (Date.now() - last >= Number(config.automation.backupIntervalMinutes) * 60000) {
-          await managedCall("action", { action: "backup" }, () => createBackup(config));
-          const agent = await loadAgentConfig();
-          if (!agentIsEnabled(agent)) await trimBackups(config);
-          await fsp.writeFile(marker, String(Date.now()));
-        }
-      }
-      if (Number(config.automation.broadcastIntervalMinutes || 0) > 0 && config.automation.broadcastMessage) {
-        const marker = path.join(dataDir, "last-broadcast.txt");
-        const last = fs.existsSync(marker) ? Number(await fsp.readFile(marker, "utf8")) : 0;
-        if (Date.now() - last >= Number(config.automation.broadcastIntervalMinutes) * 60000) {
-          const command = `Broadcast ${config.automation.broadcastMessage}`;
-          await managedCall("rcon", { command }, () => rcon(config, command));
-          await fsp.writeFile(marker, String(Date.now()));
-        }
-      }
+function isDue(lastRun, intervalSeconds, now) {
+  return intervalSeconds > 0 && now - lastRun >= intervalSeconds * 1000;
+}
 
-      await upstreamCompat.runScheduledTasks(config);
-    } catch (error) {
-      console.error(`Scheduler error: ${error.message}`);
+async function runSchedulerJob(name, callback) {
+  try {
+    await callback();
+  } catch (error) {
+    console.error(`${name} scheduler error: ${error.message}`);
+  }
+}
+
+async function schedulerTick() {
+  if (schedulerRunning) return;
+  schedulerRunning = true;
+  try {
+    const config = await loadConfig();
+    const now = Date.now();
+    const playerInterval = Math.max(0, Number(config.automation.playerSyncInterval || 0));
+    if (isDue(schedulerState.playerSync, playerInterval, now)) {
+      schedulerState.playerSync = now;
+      await runSchedulerJob("Player sync", () => syncOnlinePlayers(config));
     }
-  }, 30000).unref();
+
+    const saveInterval = Math.max(0, Number(config.automation.saveSyncInterval || 0));
+    if (isDue(schedulerState.saveSync, saveInterval, now)) {
+      schedulerState.saveSync = now;
+      await runSchedulerJob("Save sync", () => syncSaveData(config));
+    }
+
+    const backupInterval = Math.max(0, Number(config.automation.backupIntervalSeconds || 0)
+      || Number(config.automation.backupIntervalMinutes || 0) * 60);
+    if (isDue(schedulerState.backup, backupInterval, now)) {
+      schedulerState.backup = now;
+      await runSchedulerJob("Backup", async () => {
+        const result = await managedCall("action", { action: "backup" }, () => createBackup(config));
+        if (!result.ok) throw new Error(result.stderr || result.stdout || "Backup failed.");
+        const agent = await loadAgentConfig();
+        if (!agentIsEnabled(agent)) await trimBackups(config);
+        await fsp.writeFile(path.join(dataDir, "last-backup.txt"), String(Date.now()));
+      });
+    }
+
+    const broadcastInterval = Math.max(0, Number(config.automation.broadcastIntervalMinutes || 0) * 60);
+    if (config.automation.broadcastMessage && isDue(schedulerState.broadcast, broadcastInterval, now)) {
+      schedulerState.broadcast = now;
+      await runSchedulerJob("Broadcast", async () => {
+        await broadcastLines(config, config.automation.broadcastMessage);
+        await fsp.writeFile(path.join(dataDir, "last-broadcast.txt"), String(Date.now()));
+      });
+    }
+
+    const rconTaskInterval = Math.max(1, Number(config.automation.rconTaskCheckSeconds || 30));
+    if (isDue(schedulerState.rconTasks, rconTaskInterval, now)) {
+      schedulerState.rconTasks = now;
+      await runSchedulerJob("RCON task", () => upstreamCompat.runScheduledTasks(config));
+    }
+  } finally {
+    schedulerRunning = false;
+  }
+}
+
+function startSchedulers() {
+  schedulerTick().catch((error) => console.error(`Scheduler error: ${error.message}`));
+  setInterval(() => schedulerTick().catch((error) => console.error(`Scheduler error: ${error.message}`)), 1000).unref();
 }
 
 async function serveStatic(req, res) {
@@ -1412,7 +1753,7 @@ async function main() {
     throw new Error("PAL_AGENT_TOKEN is required when AGENT_MODE=1.");
   }
   if (!agentRuntime) startSchedulers();
-  const server = http.createServer(async (req, res) => {
+  const requestHandler = async (req, res) => {
     try {
       if (agentRuntime) {
         const currentConfig = await loadConfig();
@@ -1426,16 +1767,47 @@ async function main() {
     } catch (error) {
       sendError(res, 500, error.message || "Internal server error.");
     }
-  });
+  };
+  let server;
+  let protocol = "http";
+  if (!agentRuntime && config.automation.webTls) {
+    if (!config.automation.webCertPath || !config.automation.webKeyPath) {
+      throw new Error("TLS is enabled but the certificate or private key path is empty.");
+    }
+    server = https.createServer({
+      cert: await fsp.readFile(config.automation.webCertPath),
+      key: await fsp.readFile(config.automation.webKeyPath)
+    }, requestHandler);
+    protocol = "https";
+  } else {
+    server = http.createServer(requestHandler);
+  }
 
   const host = agentRuntime ? (process.env.AGENT_HOST || "0.0.0.0") : config.panel.host;
   const port = agentRuntime ? Number(process.env.AGENT_PORT || 8081) : config.panel.port;
   server.listen(port, host, () => {
-    console.log(`Palworld ${agentRuntime ? "agent" : "panel"} listening on http://${host}:${port}`);
+    console.log(`Palworld ${agentRuntime ? "agent" : "panel"} listening on ${protocol}://${host}:${port}`);
   });
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  authSigningKey,
+  decodeRconResponse,
+  encodeRconCommand,
+  formatPlayerMessage,
+  isDue,
+  isWhitelisted,
+  issueAuthToken,
+  normalizeLivePlayers,
+  playerUidFromId,
+  testSaveSource,
+  trimBackups,
+  verifyAuthToken
+};

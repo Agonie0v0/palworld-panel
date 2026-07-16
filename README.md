@@ -8,18 +8,19 @@
 
 ## 功能
 
-- 首次管理员初始化、密码登录和备用 Panel Token 登录
+- 首次管理员初始化、24 小时 JWT 登录和备用 Panel Token 登录
 - 服务器版本、FPS、帧时间、在线人数、运行时间和游戏天数
 - 玩家列表、搜索、筛选、排序和玩家详情
 - 玩家帕鲁、技能、背包物品和在线信息
 - 公会列表、公会成员、公会等级和基地详情
 - 完整世界地图瓦片、传送点、高塔、玩家和基地标记
-- 玩家踢出、封禁、解封和白名单管理
+- 玩家踢出、封禁、解封、白名单管理和自动踢出非白名单玩家
+- 玩家定时同步、上线/下线检测和可自定义游戏内通知
 - 游戏内广播、倒计时关服和 RCON 命令执行
 - RCON 命令模板新增、编辑、删除和文件导入
 - Cron 定时 RCON 任务新增、编辑、启停、手动执行和删除
-- 存档自动解析、玩家/公会数据同步和解析状态检测
-- 备份列表、手动创建、下载和删除
+- 存档定时解析、玩家/公会数据同步和解析状态检测
+- 备份列表、定时/手动创建、按天清理、下载和删除
 - PST 配置、目录选择、存档测试和 RCON 测试
 - 常用游戏服参数和任意高级 `PalWorldSettings.ini` 参数写入
 - 一键部署、启动、停止、重启、更新和手动备份
@@ -28,7 +29,8 @@
 - Oracle/Ampere ARM64 使用 box64 和 DepotDownloader 部署
 - 桌面端和移动端界面
 - Docker 面板部署
-- 远程 Agent 分离部署
+- 完整远程 Agent 分离部署和参考项目兼容的 PST `/sync` Agent 存档源
+- 面板 HTTPS、REST HTTPS、可配置请求超时和 RCON Base64 模式
 - 中文、英文、日文界面
 
 ## 选择部署方式
@@ -127,6 +129,16 @@ Agent Token：安装脚本输出的 Token
 - 存档解析、玩家、公会、帕鲁和地图数据
 - PST 目录浏览、存档测试、RCON 测试和配置保存
 
+### 兼容参考项目 PST Agent
+
+已有 `zaigie/palworld-server-tool` 的 `pst-agent` 时，无需安装本项目的完整 Agent。在“PST 配置”中将存档来源切换为 `pst-agent`，填写：
+
+```text
+http://游戏服务器IP:8081/sync
+```
+
+面板会按存档同步间隔下载并解析 Agent 返回的 `sav.zip`，定时备份也支持该来源。此模式只传输存档；服务器启停、一键部署和远程 RCON/REST 管理仍建议使用本项目的完整 Agent。
+
 Docker 面板与 Agent 在同一台机器时，Agent 地址可以使用：
 
 ```text
@@ -210,6 +222,7 @@ sudo bash scripts/install-agent.sh
 ```bash
 npm ci
 npm run check
+npm test
 pnpm --dir upstream-web install
 pnpm --dir upstream-web test
 pnpm --dir upstream-web build
