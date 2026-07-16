@@ -1,8 +1,13 @@
 <script setup>
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { DocumentImport } from "@vicons/carbon";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
+import {
+  formatPalworldSetting,
+  parsePalworldSettings,
+} from "@/utils/palworldSettings";
 
 const props = defineProps({ show: Boolean });
 const emit = defineEmits(["update:show", "saved"]);
@@ -32,6 +37,10 @@ const settings = ref({});
 const extraRows = ref([]);
 const loading = ref(false);
 const saving = ref(false);
+const importVisible = ref(false);
+const importText = ref("");
+const importResult = ref(null);
+const importError = ref("");
 
 const difficultyOptions = [
   { label: "None", value: "None" },
@@ -58,21 +67,93 @@ const inferType = (value) => {
   return "string";
 };
 
+const assignSettings = (current) => {
+  settings.value = { ...current };
+  extraRows.value = Object.entries(current)
+    .filter(([key]) => !knownKeys.has(key))
+    .map(([key, value]) => ({ key, type: inferType(value), value }));
+};
+
 const load = async () => {
   loading.value = true;
   try {
     const { data, statusCode } = await api.getPanelStatus();
     if (statusCode.value !== 200) throw new Error(data.value?.error || "Request failed");
     const current = data.value?.config?.settings || {};
-    settings.value = { ...current };
-    extraRows.value = Object.entries(current)
-      .filter(([key]) => !knownKeys.has(key))
-      .map(([key, value]) => ({ key, type: inferType(value), value }));
+    assignSettings(current);
   } catch (error) {
     message.error(`${t("gameSettings.loadFailed")} ${error.message}`);
   } finally {
     loading.value = false;
   }
+};
+
+const sensitiveKey = (key) => /password|token|secret/i.test(key);
+const previewValue = (key, value) => {
+  if (sensitiveKey(key) && String(value ?? "")) return "••••••••";
+  const formatted = formatPalworldSetting(value);
+  return formatted || t("gameSettings.emptyValue");
+};
+
+const importRows = computed(() =>
+  (importResult.value?.entries || []).map((entry) => {
+    const exists = Object.prototype.hasOwnProperty.call(settings.value, entry.key);
+    const current = settings.value[entry.key];
+    const status = !exists
+      ? "added"
+      : Object.is(current, entry.value)
+        ? "unchanged"
+        : "changed";
+    return {
+      ...entry,
+      status,
+      current: exists ? previewValue(entry.key, current) : t("gameSettings.notSet"),
+      imported: previewValue(entry.key, entry.value),
+    };
+  }),
+);
+
+const importSummary = computed(() => ({
+  total: importRows.value.length,
+  changed: importRows.value.filter((row) => row.status === "changed").length,
+  added: importRows.value.filter((row) => row.status === "added").length,
+  unchanged: importRows.value.filter((row) => row.status === "unchanged").length,
+}));
+
+const parseImport = () => {
+  importError.value = "";
+  importResult.value = null;
+  if (!importText.value.trim()) return;
+  try {
+    importResult.value = parsePalworldSettings(importText.value);
+  } catch (error) {
+    const knownErrors = new Set([
+      "empty",
+      "unclosed",
+      "unclosedQuote",
+      "missingOptionSettings",
+      "invalidAssignment",
+      "invalidKey",
+    ]);
+    importError.value = t(
+      `gameSettings.importError.${knownErrors.has(error.message) ? error.message : "unknown"}`,
+    );
+  }
+};
+
+const openImport = () => {
+  importText.value = "";
+  importResult.value = null;
+  importError.value = "";
+  importVisible.value = true;
+};
+
+const applyImport = () => {
+  if (!importResult.value) return;
+  assignSettings({ ...settings.value, ...importResult.value.settings });
+  const count = importResult.value.entries.length;
+  importVisible.value = false;
+  message.success(t("gameSettings.importApplied", { count }));
 };
 
 const createExtra = () => ({ key: "", type: "string", value: "" });
@@ -113,6 +194,7 @@ const save = async () => {
 };
 
 watch(() => props.show, (show) => show && load(), { immediate: true });
+watch(importText, parseImport);
 </script>
 
 <template>
@@ -214,12 +296,94 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
       </n-scrollbar>
     </n-spin>
     <template #footer>
-      <n-flex justify="end">
-        <n-button @click="emit('update:show', false)">{{ $t("button.cancel") }}</n-button>
-        <n-button type="primary" :loading="saving" @click="save">{{ $t("button.save") }}</n-button>
+      <n-flex justify="space-between" align="center" class="settings-footer">
+        <n-button secondary @click="openImport">
+          <template #icon><n-icon><DocumentImport /></n-icon></template>
+          {{ $t("gameSettings.importConfig") }}
+        </n-button>
+        <n-flex>
+          <n-button @click="emit('update:show', false)">{{ $t("button.cancel") }}</n-button>
+          <n-button type="primary" :loading="saving" @click="save">{{ $t("button.save") }}</n-button>
+        </n-flex>
       </n-flex>
     </template>
   </n-modal>
+
+  <n-drawer
+    v-model:show="importVisible"
+    placement="right"
+    width="min(620px, 100vw)"
+  >
+    <n-drawer-content :title="$t('gameSettings.importTitle')" closable>
+      <n-space vertical :size="16">
+        <n-alert type="info" :bordered="false">
+          {{ $t("gameSettings.importMergeHint") }}
+        </n-alert>
+        <n-input
+          v-model:value="importText"
+          type="textarea"
+          :autosize="{ minRows: 8, maxRows: 14 }"
+          :placeholder="$t('gameSettings.importPlaceholder')"
+          class="import-input"
+        />
+        <n-alert v-if="importError" type="error" :title="$t('gameSettings.importFailed')">
+          {{ importError }}
+        </n-alert>
+        <template v-if="importResult">
+          <n-alert
+            v-if="importResult.duplicateKeys.length"
+            type="warning"
+            :title="$t('gameSettings.duplicateImportTitle')"
+          >
+            {{ importResult.duplicateKeys.join(", ") }}
+          </n-alert>
+          <n-flex align="center" :wrap="true" class="import-summary">
+            <n-text strong>
+              {{ $t("gameSettings.importDetected", { count: importSummary.total }) }}
+            </n-text>
+            <n-tag size="small" type="warning">
+              {{ $t("gameSettings.importChanged", { count: importSummary.changed }) }}
+            </n-tag>
+            <n-tag size="small" type="success">
+              {{ $t("gameSettings.importAdded", { count: importSummary.added }) }}
+            </n-tag>
+            <n-tag size="small">
+              {{ $t("gameSettings.importUnchanged", { count: importSummary.unchanged }) }}
+            </n-tag>
+          </n-flex>
+          <div class="import-preview" role="table" :aria-label="$t('gameSettings.importPreview')">
+            <div class="import-preview-header" role="row">
+              <span role="columnheader">{{ $t("gameSettings.key") }}</span>
+              <span role="columnheader">{{ $t("gameSettings.currentValue") }}</span>
+              <span role="columnheader">{{ $t("gameSettings.importedValue") }}</span>
+            </div>
+            <div v-for="row in importRows" :key="row.key" class="import-preview-row" role="row">
+              <code role="cell" :data-label="$t('gameSettings.key')">{{ row.key }}</code>
+              <span role="cell" class="preview-value" :data-label="$t('gameSettings.currentValue')">
+                {{ row.current }}
+              </span>
+              <span
+                role="cell"
+                class="preview-value"
+                :class="`is-${row.status}`"
+                :data-label="$t('gameSettings.importedValue')"
+              >
+                {{ row.imported }}
+              </span>
+            </div>
+          </div>
+        </template>
+      </n-space>
+      <template #footer>
+        <n-flex justify="end">
+          <n-button @click="importVisible = false">{{ $t("button.cancel") }}</n-button>
+          <n-button type="primary" :disabled="!importResult" @click="applyImport">
+            {{ $t("gameSettings.applyImport") }}
+          </n-button>
+        </n-flex>
+      </template>
+    </n-drawer-content>
+  </n-drawer>
 </template>
 
 <style scoped>
@@ -241,7 +405,74 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
   min-width: 52px;
 }
 
+.settings-footer {
+  width: 100%;
+}
+
+.import-input :deep(textarea) {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  line-height: 1.55;
+}
+
+.import-summary {
+  min-height: 28px;
+}
+
+.import-preview {
+  overflow: auto;
+  max-height: 42vh;
+  border-block: 1px solid var(--n-border-color);
+}
+
+.import-preview-header,
+.import-preview-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-width: 560px;
+  padding: 10px 4px;
+}
+
+.import-preview-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--n-text-color-2);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--n-color);
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.import-preview-row + .import-preview-row {
+  border-top: 1px solid var(--n-divider-color);
+}
+
+.import-preview-row code,
+.preview-value {
+  overflow-wrap: anywhere;
+}
+
+.preview-value {
+  color: var(--n-text-color-2);
+}
+
+.preview-value.is-added,
+.preview-value.is-changed {
+  color: var(--n-text-color-1);
+  font-weight: 600;
+}
+
 @media (max-width: 640px) {
+  .settings-footer {
+    align-items: stretch !important;
+  }
+
+  .settings-footer > :last-child {
+    margin-left: auto;
+  }
+
   .advanced-row {
     flex-wrap: wrap !important;
   }
@@ -249,6 +480,41 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
   .type-select {
     width: 100%;
     flex-basis: 100%;
+  }
+
+  .import-preview-header {
+    display: none;
+  }
+
+  .import-preview {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .import-preview-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-width: 0;
+    gap: 10px 14px;
+    padding: 12px 4px;
+  }
+
+  .import-preview-row code {
+    grid-column: 1 / -1;
+  }
+
+  .import-preview-row [data-label] {
+    display: block;
+    min-width: 0;
+  }
+
+  .import-preview-row [data-label]::before {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--n-text-color-3);
+    font-family: var(--n-font-family);
+    font-size: 12px;
+    font-weight: 400;
+    content: attr(data-label);
   }
 }
 </style>
