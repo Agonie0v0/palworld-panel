@@ -40,6 +40,11 @@ Build a Palworld management platform with this flow:
 - Panel shows Palworld map tiles with player and base markers.
 - Panel has first-run administrator initialization and account/password login.
 - Panel has responsive mobile layouts.
+- Panel uses a desktop operations sidebar and mobile bottom navigation.
+- Dashboard shows server version, uptime, FPS, world day, online count, memory, and backup health.
+- Player management merges live REST API presence with historical save records and supports search/filtering.
+- Player and guild records use structured detail views with raw JSON available only as diagnostics.
+- Save data uses category switching for players, guilds, pals, inventory, and the Palworld world map.
 - Panel has a Deployment page.
 - Deployment page can call a Linux deployment script.
 - Deployment script supports AMD64 native and ARM64 box64.
@@ -47,10 +52,11 @@ Build a Palworld management platform with this flow:
 
 ## Deliberate Differences From palworld-server-tool
 
-- Persistent database instead of only JSON files.
 - The lightweight panel uses JSON files instead of a database.
-- Detail views expose complete parsed records in a compact dialog instead of copying the reference Vue tables exactly.
+- The frontend stays dependency-light and build-free instead of shipping a Vue component bundle.
+- Detail views prioritize the fields returned by the bundled parser and keep complete records in expandable diagnostics.
 - Map tiles are loaded on demand from the public upstream map resource to keep the Docker image small.
+- Pal images and the full item/pal asset catalog are not bundled, which keeps ARM deployments and updates small.
 
 ## Recommended Next Milestone
 
@@ -59,3 +65,5 @@ Add production hardening:
 - HTTPS reverse-proxy examples.
 - Agent IP allow-list examples for Oracle Cloud.
 - Automated integration tests against a disposable Linux VM.
+- Optional self-hosted map and pal asset package for offline installations.
+- Rich whitelist table actions and RCON template variable completion.

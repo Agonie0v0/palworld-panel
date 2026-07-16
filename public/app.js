@@ -3,7 +3,12 @@ const state = {
   config: null,
   rconTemplates: [],
   rconTasks: [],
+  live: null,
+  onlinePlayers: [],
+  backups: [],
   saveData: null,
+  activeSaveSection: "players",
+  activeTab: "overview",
   map: null,
   markerLayer: null,
   loginPromise: null,
@@ -23,23 +28,49 @@ const initDialog = document.querySelector("#initDialog");
 const rconTaskDialog = document.querySelector("#rconTaskDialog");
 const detailDialog = document.querySelector("#detailDialog");
 
-const settingFields = [
-  ["ServerName", "服务器名称", "text"],
-  ["ServerDescription", "服务器说明", "text"],
-  ["AdminPassword", "管理员密码", "password"],
-  ["ServerPassword", "加入密码", "password"],
-  ["PublicPort", "公网端口", "number"],
-  ["RCONPort", "RCON 端口", "number"],
-  ["RESTAPIPort", "REST API 端口", "number"],
-  ["Difficulty", "难度", "text"],
-  ["ExpRate", "经验倍率", "number"],
-  ["PalCaptureRate", "捕获倍率", "number"],
-  ["DayTimeSpeedRate", "白天速度", "number"],
-  ["NightTimeSpeedRate", "夜晚速度", "number"],
-  ["DeathPenalty", "死亡惩罚", "text"],
-  ["RCONEnabled", "启用 RCON", "checkbox"],
-  ["RESTAPIEnabled", "启用 REST API", "checkbox"]
+const settingGroups = [
+  {
+    title: "基础信息",
+    fields: [
+      ["ServerName", "服务器名称", "text"],
+      ["ServerDescription", "服务器说明", "text"],
+      ["AdminPassword", "管理员密码", "password"],
+      ["ServerPassword", "加入密码", "password"]
+    ]
+  },
+  {
+    title: "网络与管理接口",
+    fields: [
+      ["PublicPort", "公网端口", "number"],
+      ["RCONPort", "RCON 端口", "number"],
+      ["RESTAPIPort", "REST API 端口", "number"],
+      ["RCONEnabled", "启用 RCON", "checkbox"],
+      ["RESTAPIEnabled", "启用 REST API", "checkbox"]
+    ]
+  },
+  {
+    title: "世界规则",
+    fields: [
+      ["Difficulty", "难度", "text"],
+      ["ExpRate", "经验倍率", "number"],
+      ["PalCaptureRate", "捕获倍率", "number"],
+      ["DayTimeSpeedRate", "白天速度", "number"],
+      ["NightTimeSpeedRate", "夜晚速度", "number"],
+      ["DeathPenalty", "死亡惩罚", "text"]
+    ]
+  }
 ];
+
+const pageMetadata = {
+  overview: ["服务器总览", "运行状态与快捷控制", "查看服务器健康状态、在线玩家和最近备份。"],
+  players: ["玩家管理", "玩家、白名单与在线操作", "搜索玩家档案，执行广播、踢出、封禁和关服操作。"],
+  saves: ["存档数据", "玩家、公会、帕鲁与世界地图", "解析 Level.sav，并以结构化方式检查世界数据。"],
+  rcon: ["RCON", "命令控制台与计划任务", "执行实时命令、维护模板并管理定时任务。"],
+  backups: ["备份", "存档保护与恢复", "创建、下载、恢复或清理服务器备份。"],
+  settings: ["服务器参数", "PalWorldSettings.ini", "调整服务器规则、倍率、端口和管理接口。"],
+  deploy: ["部署维护", "安装、更新与危险操作", "在 AMD64 或 ARM64 主机上一键部署和维护服务端。"],
+  automation: ["自动化与 Agent", "计划任务和分离部署", "管理自动备份、广播，以及远程 Agent 连接。"]
+};
 
 function authHeaders(json = true) {
   const result = {};
@@ -142,20 +173,64 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
+function formatDuration(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return "-";
+  const days = Math.floor(value / 86400);
+  const hours = Math.floor((value % 86400) / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  if (days) return `${days} 天 ${hours} 小时`;
+  if (hours) return `${hours} 小时 ${minutes} 分钟`;
+  return `${minutes} 分钟`;
+}
+
+function formatDateTime(value, fallback = "-") {
+  if (!value) return fallback;
+  const numeric = Number(value);
+  const normalized = Number.isFinite(numeric) && numeric > 0
+    ? (numeric < 1e12 ? numeric * 1000 : numeric)
+    : value;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? fallback : date.toLocaleString();
+}
+
+function initials(value) {
+  const name = text(value, "P").trim();
+  return escapeHtml(name.slice(0, 1).toUpperCase());
+}
+
+function refreshIcons() {
+  if (window.lucide?.createIcons) window.lucide.createIcons({ attrs: { "aria-hidden": "true" } });
+}
+
+function showToast(message, type = "success") {
+  const region = document.querySelector("#toastRegion");
+  if (!region || !message) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${type === "error" ? "error" : ""}`;
+  toast.textContent = message;
+  region.appendChild(toast);
+  setTimeout(() => toast.remove(), 4200);
+}
+
 function setStatus(running) {
   statusPill.textContent = running ? "运行中" : "已停止";
-  statusPill.classList.toggle("online", running);
-  statusPill.classList.toggle("offline", !running);
+  document.querySelector("#headerServerState").textContent = running ? "服务器运行中" : "服务器已停止";
+  document.querySelector("#overviewState").textContent = running ? "运行中" : "已停止";
+  document.querySelectorAll(".status-dot").forEach((dot) => {
+    dot.classList.toggle("online", running);
+    dot.classList.toggle("offline", !running);
+  });
+  document.querySelector("#overviewState").classList.toggle("online", running);
+  document.querySelector("#overviewState").classList.toggle("offline", !running);
 }
 
 function renderSettingsForm() {
-  settingsForm.innerHTML = settingFields
-    .map(([name, label, type]) => {
-      if (type === "checkbox") {
-        return `<label class="toggle"><input name="${name}" type="checkbox" /><span>${label}</span></label>`;
-      }
+  settingsForm.innerHTML = settingGroups
+    .map((group) => `<section class="settings-group"><h3 class="settings-group-title">${escapeHtml(group.title)}</h3>${group.fields.map(([name, label, type]) => {
+      if (type === "checkbox") return `<label class="toggle"><input name="${name}" type="checkbox" /><span>${label}</span></label>`;
       return `<label><span>${label}</span><input name="${name}" type="${type}" ${type === "number" ? 'step="0.1"' : ""} /></label>`;
-    })
+    }).join("")}</section>`)
     .join("");
 }
 
@@ -184,8 +259,15 @@ async function refresh() {
   const data = await api("/api/status");
   state.config = data.config;
   setStatus(data.status.running);
+  const serverName = data.config.settings.ServerName || "Palworld Server";
+  const description = data.config.settings.ServerDescription || "Palworld 专用服务器";
+  const publicPort = data.config.server.publicPort || data.config.settings.PublicPort;
+  document.querySelector("#sidebarServerName").textContent = serverName;
+  document.querySelector("#overviewServerName").textContent = serverName;
+  document.querySelector("#overviewDescription").textContent = description;
+  document.querySelector("#overviewEndpoint").textContent = `${location.hostname}:${publicPort}`;
   document.querySelector("#manager").textContent = data.status.manager;
-  document.querySelector("#publicPort").textContent = data.config.server.publicPort || data.config.settings.PublicPort;
+  document.querySelector("#publicPort").textContent = publicPort;
   document.querySelector("#arch").textContent = `${data.host.platform} / ${data.host.arch}`;
   document.querySelector("#memory").textContent = `${formatBytes(data.host.freeMemory)} / ${formatBytes(data.host.totalMemory)}`;
   fillForm(settingsForm, data.config.settings);
@@ -197,14 +279,56 @@ async function runAction(action) {
   const data = await api("/api/action", { method: "POST", body: JSON.stringify({ action }) });
   const result = data.result || {};
   actionLog.textContent = [result.stdout, result.stderr, result.backup ? `备份文件：${result.backup}` : ""].filter(Boolean).join("\n") || "操作完成";
+  showToast({ start: "服务器已启动", restart: "服务器已重启", stop: "服务器已停止", update: "服务端更新完成", backup: "备份已创建" }[action] || "操作完成");
   await refresh();
+  if (action === "backup") await loadBackups();
+}
+
+function renderOverviewPlayers() {
+  const box = document.querySelector("#overviewPlayers");
+  const players = state.onlinePlayers || [];
+  if (!players.length) {
+    box.innerHTML = '<div class="empty">当前没有玩家在线</div>';
+    return;
+  }
+  box.innerHTML = players.slice(0, 6).map((player) => {
+    const name = player.name || player.playerName || player.accountName || "Player";
+    const id = player.playerId || player.player_uid || player.userId || player.steamId || "-";
+    return `<div class="compact-player"><span class="entity-avatar online">${initials(name)}</span><div class="compact-player-info"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(id)}</span></div><span class="presence-badge online">在线</span></div>`;
+  }).join("");
+}
+
+function renderLiveMetrics() {
+  const live = state.live || {};
+  const metrics = live.metrics?.data || {};
+  const info = live.info?.data || {};
+  const online = Number(metrics.currentplayernum ?? state.onlinePlayers.length ?? 0);
+  const max = Number(metrics.maxplayernum ?? 0);
+  document.querySelector("#metricOnline").textContent = `${online} / ${max || "-"}`;
+  document.querySelector("#navOnlineCount").textContent = String(online);
+  document.querySelector("#metricFps").textContent = Number.isFinite(Number(metrics.serverfps)) ? Number(metrics.serverfps).toFixed(0) : "-";
+  document.querySelector("#metricFrameTime").textContent = Number.isFinite(Number(metrics.serverframetime)) ? `${Number(metrics.serverframetime).toFixed(1)} ms 帧时间` : "等待 REST API";
+  document.querySelector("#metricDays").textContent = Number.isFinite(Number(metrics.days)) ? `第 ${Number(metrics.days)} 天` : "-";
+  document.querySelector("#overviewUptime").textContent = formatDuration(metrics.uptime);
+  document.querySelector("#overviewVersion").textContent = info.version || "-";
+  document.querySelector("#sidebarVersion").textContent = info.version || "版本未知";
+  if (info.servername) {
+    document.querySelector("#sidebarServerName").textContent = info.servername;
+    document.querySelector("#overviewServerName").textContent = info.servername;
+  }
+  if (info.description) document.querySelector("#overviewDescription").textContent = info.description;
 }
 
 async function loadLive() {
   const data = await api("/api/live");
+  state.live = data.live || {};
   document.querySelector("#liveOutput").textContent = JSON.stringify(data.live, null, 2);
   const players = data.live.players && data.live.players.data;
-  renderPlayers(Array.isArray(players) ? players : players?.players || []);
+  state.onlinePlayers = Array.isArray(players) ? players : players?.players || [];
+  renderOverviewPlayers();
+  renderLiveMetrics();
+  renderPlayers();
+  refreshIcons();
 }
 
 async function loadDeployPlan() {
@@ -261,27 +385,63 @@ async function runServerMaintenance(operation, button) {
   }
 }
 
-function renderPlayers(players) {
+function playerIdentifiers(player) {
+  return [player?.player_uid, player?.playerId, player?.playerid, player?.userId, player?.steamId, player?.accountName]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .map((value) => String(value).toLowerCase());
+}
+
+function renderPlayers() {
   const box = document.querySelector("#playersList");
+  const savedPlayers = Array.isArray(state.saveData?.players) ? state.saveData.players : [];
+  const onlinePlayers = state.onlinePlayers || [];
+  const onlineIds = new Set(onlinePlayers.flatMap(playerIdentifiers));
+  const savedIds = new Set(savedPlayers.flatMap(playerIdentifiers));
+  const combined = [
+    ...savedPlayers.map((player, index) => ({ ...player, _savedIndex: index, _online: playerIdentifiers(player).some((id) => onlineIds.has(id)) })),
+    ...onlinePlayers.filter((player) => !playerIdentifiers(player).some((id) => savedIds.has(id))).map((player) => ({ ...player, _savedIndex: -1, _online: true }))
+  ];
+  const query = document.querySelector("#playerSearch")?.value.trim().toLowerCase() || "";
+  const filter = document.querySelector("#playerStatusFilter")?.value || "all";
+  const players = combined.filter((player) => {
+    const haystack = [player.nickname, player.name, player.playerName, ...playerIdentifiers(player)].filter(Boolean).join(" ").toLowerCase();
+    return (!query || haystack.includes(query)) && (filter === "all" || (filter === "online") === player._online);
+  });
+  document.querySelector("#playerCountLabel").textContent = `${players.length} 名玩家`;
   if (!players.length) {
-    box.innerHTML = '<div class="empty">暂无玩家数据，确认 REST API 已启用。</div>';
+    box.innerHTML = '<div class="empty">没有符合条件的玩家。在线数据来自 REST API，历史档案来自存档解析器。</div>';
     return;
   }
   box.innerHTML = players
-    .map((player) => `<div class="row"><strong>${escapeHtml(player.name || player.playerName || "Player")}</strong><span>${escapeHtml(player.playerId || player.steamId || player.userId || "-")}</span></div>`)
+    .map((player) => {
+      const name = player.nickname || player.name || player.playerName || "Player";
+      const id = player.player_uid || player.playerId || player.steamId || player.userId || "-";
+      const level = player.level !== undefined ? `<span class="level-badge">Lv.${escapeHtml(player.level)}</span>` : "";
+      const detail = player._savedIndex >= 0
+        ? `<button class="secondary" data-save-detail="player" data-detail-id="${escapeHtml(id)}" data-detail-index="${player._savedIndex}">详情</button>`
+        : `<button class="secondary" data-select-player="${escapeHtml(id)}">选择</button>`;
+      return `<div class="entity-row"><span class="entity-avatar ${player._online ? "online" : ""}">${initials(name)}</span><div class="entity-main"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(id)} · ${player._online ? "当前在线" : `最后在线 ${escapeHtml(formatDateTime(player.save_last_online, "未知"))}`}</span></div>${level}<span class="presence-badge ${player._online ? "online" : ""}">${player._online ? "在线" : "离线"}</span>${detail}</div>`;
+    })
     .join("");
+  refreshIcons();
 }
 
 async function loadBackups() {
   const data = await api("/api/backups");
+  state.backups = data.backups || [];
   const box = document.querySelector("#backupList");
-  if (!data.backups.length) {
-    box.innerHTML = '<div class="empty">还没有备份</div>';
+  document.querySelector("#metricBackups").textContent = String(state.backups.length);
+  document.querySelector("#backupSummary").textContent = state.backups.length ? `当前共有 ${state.backups.length} 个备份。` : "保护当前世界并支持随时下载或恢复。";
+  if (!state.backups.length) {
+    document.querySelector("#metricLatestBackup").textContent = "暂无备份";
+    box.innerHTML = '<div class="empty">还没有备份。创建第一份备份后，可在这里下载或恢复。</div>';
     return;
   }
-  box.innerHTML = data.backups
-    .map((backup) => `<div class="row backup-row"><strong>${escapeHtml(backup.name)}</strong><span>${new Date(backup.mtime).toLocaleString()} · ${(Number(backup.size || 0) / 1024 / 1024).toFixed(1)} MB</span><button data-download="${escapeHtml(backup.name)}">下载</button><button data-restore="${escapeHtml(backup.name)}">恢复</button><button class="danger" data-delete="${escapeHtml(backup.name)}">删除</button></div>`)
+  document.querySelector("#metricLatestBackup").textContent = formatDateTime(state.backups[0].mtime);
+  box.innerHTML = state.backups
+    .map((backup) => `<div class="backup-row"><div><strong>${escapeHtml(backup.name)}</strong><span>存档压缩包</span></div><span>${formatDateTime(backup.mtime)} · ${(Number(backup.size || 0) / 1024 / 1024).toFixed(1)} MB</span><button class="secondary" data-download="${escapeHtml(backup.name)}"><i data-lucide="download"></i><span>下载</span></button><button class="secondary" data-restore="${escapeHtml(backup.name)}"><i data-lucide="history"></i><span>恢复</span></button><button class="danger-ghost" data-delete="${escapeHtml(backup.name)}"><i data-lucide="trash-2"></i><span>删除</span></button></div>`)
     .join("");
+  refreshIcons();
 }
 
 async function downloadBackup(name) {
@@ -310,9 +470,10 @@ function renderRconTemplates() {
     <div class="editable-row" data-template-row data-id="${escapeHtml(template.id)}">
       <input class="template-name" value="${escapeHtml(template.name)}" aria-label="模板名称" />
       <input class="template-command" value="${escapeHtml(template.command)}" aria-label="RCON 命令" />
-      <button data-use-template="${escapeHtml(template.id)}">使用</button>
-      <button class="danger" data-delete-template="${escapeHtml(template.id)}">删除</button>
+      <button class="secondary" data-use-template="${escapeHtml(template.id)}"><i data-lucide="corner-down-left"></i><span>使用</span></button>
+      <button class="danger-ghost" data-delete-template="${escapeHtml(template.id)}"><i data-lucide="trash-2"></i><span>删除</span></button>
     </div>`).join("");
+  refreshIcons();
 }
 
 async function loadRconTemplates() {
@@ -343,11 +504,12 @@ function renderRconTasks() {
     <div class="task-row">
       <div><strong>${escapeHtml(task.name)}</strong><span>${escapeHtml(task.command)} · 每 ${Number(task.intervalMinutes)} 分钟 · ${task.enabled ? "已启用" : "已停用"}</span></div>
       <div class="inline-actions">
-        <button data-run-task="${escapeHtml(task.id)}">运行</button>
-        <button data-edit-task="${escapeHtml(task.id)}">编辑</button>
-        <button class="danger" data-delete-task="${escapeHtml(task.id)}">删除</button>
+        <button data-run-task="${escapeHtml(task.id)}"><i data-lucide="play"></i><span>运行</span></button>
+        <button class="secondary" data-edit-task="${escapeHtml(task.id)}"><i data-lucide="pencil"></i><span>编辑</span></button>
+        <button class="danger-ghost" data-delete-task="${escapeHtml(task.id)}"><i data-lucide="trash-2"></i><span>删除</span></button>
       </div>
     </div>`).join("");
+  refreshIcons();
 }
 
 async function loadRconTasks() {
@@ -388,33 +550,83 @@ function entityId(type, row) {
 function detailButton(type, row) {
   const id = entityId(type, row);
   const index = (state.saveData?.[`${type}s`] || []).indexOf(row);
-  return `<button data-save-detail="${type}" data-detail-id="${escapeHtml(id ?? "")}" data-detail-index="${index}">详情</button>`;
+  return `<button class="secondary" data-save-detail="${type}" data-detail-id="${escapeHtml(id ?? "")}" data-detail-index="${index}"><i data-lucide="panel-right-open"></i><span>详情</span></button>`;
 }
 
 function renderSaveData(data) {
-  state.saveData = data;
-  const players = Array.isArray(data.players) ? data.players : [];
-  const guilds = Array.isArray(data.guilds) ? data.guilds : [];
-  const pals = Array.isArray(data.pals) ? data.pals : [];
-  const inventory = Array.isArray(data.inventory) ? data.inventory : [];
+  state.saveData = data || {};
+  const players = Array.isArray(state.saveData.players) ? state.saveData.players : [];
+  const guilds = Array.isArray(state.saveData.guilds) ? state.saveData.guilds : [];
+  const pals = Array.isArray(state.saveData.pals) ? state.saveData.pals : [];
+  const inventory = Array.isArray(state.saveData.inventory) ? state.saveData.inventory : [];
+  const query = document.querySelector("#saveSearch")?.value.trim().toLowerCase() || "";
+  const includesQuery = (...values) => !query || values.filter(Boolean).join(" ").toLowerCase().includes(query);
 
   document.querySelector("#savePlayersCount").textContent = players.length;
   document.querySelector("#saveGuildsCount").textContent = guilds.length;
   document.querySelector("#savePalsCount").textContent = pals.length;
   document.querySelector("#saveItemsCount").textContent = inventory.length;
+  document.querySelector("#metricKnownPlayers").textContent = `${players.length} 名已记录玩家`;
 
-  renderSimpleList("#savePlayersList", players, "没有玩家数据", (player) =>
-    `<div class="row"><strong>${escapeHtml(text(player.nickname || player.name, "玩家"))}</strong><span>Lv.${escapeHtml(text(player.level, 0))} / ${escapeHtml(text(player.player_uid))}</span>${detailButton("player", player)}</div>`
+  renderSimpleList("#savePlayersList", players.filter((player) => includesQuery(player.nickname, player.name, player.player_uid)), "没有符合条件的玩家数据", (player) =>
+    `<div class="data-row"><strong>${escapeHtml(text(player.nickname || player.name, "未命名玩家"))}</strong><span>Lv.${escapeHtml(text(player.level, 0))} · ${escapeHtml(formatDateTime(player.save_last_online, "最后在线未知"))}</span><span>${escapeHtml(text(player.player_uid))}</span>${detailButton("player", player)}</div>`
   );
-  renderSimpleList("#saveGuildsList", guilds, "没有公会数据", (guild) =>
-    `<div class="row"><strong>${escapeHtml(text(guild.name, "公会"))}</strong><span>基地 Lv.${escapeHtml(text(guild.base_camp_level, 0))} / 成员 ${(guild.players || []).length}</span>${detailButton("guild", guild)}</div>`
+  renderSimpleList("#saveGuildsList", guilds.filter((guild) => includesQuery(guild.name, guild.admin_player_uid, ...(guild.players || []).map((player) => player.nickname || player.player_uid))), "没有符合条件的公会数据", (guild) =>
+    `<div class="data-row"><strong>${escapeHtml(text(guild.name, "未命名公会"))}</strong><span>${(guild.players || []).length} 名成员 · ${(guild.base_ids || []).length} 个据点</span><span>基地 Lv.${escapeHtml(text(guild.base_camp_level, 0))}</span>${detailButton("guild", guild)}</div>`
   );
-  renderSimpleList("#savePalsList", pals, "没有帕鲁数据", (pal) =>
-    `<div class="row"><strong>${escapeHtml(text(pal.type || pal.name, "帕鲁"))}</strong><span>Lv.${escapeHtml(text(pal.level, 0))} / ${escapeHtml(text(pal.owner_name, "未知主人"))}</span>${detailButton("pal", pal)}</div>`
+  renderSimpleList("#savePalsList", pals.filter((pal) => includesQuery(pal.type, pal.name, pal.owner_name, pal.instance_id)), "当前解析器没有返回独立帕鲁数据", (pal) =>
+    `<div class="data-row"><strong>${escapeHtml(text(pal.type || pal.name, "未知帕鲁"))}</strong><span>Lv.${escapeHtml(text(pal.level, 0))} · ${escapeHtml(text(pal.owner_name, "未知主人"))}</span><span>${escapeHtml(text(pal.instance_id || pal.id))}</span>${detailButton("pal", pal)}</div>`
   );
-  renderSimpleList("#saveInventoryList", inventory, "没有背包数据", (item) =>
-    `<div class="row"><strong>${escapeHtml(text(item.ItemId || item.item_id || item.static_id, "物品"))}</strong><span>x${escapeHtml(text(item.StackCount || item.count, 1))} / ${escapeHtml(text(item.owner_name, "未知主人"))}</span></div>`
+  renderSimpleList("#saveInventoryList", inventory.filter((item) => includesQuery(item.ItemId, item.item_id, item.static_id, item.owner_name)), "当前解析器没有返回独立物品条目", (item) =>
+    `<div class="data-row"><strong>${escapeHtml(text(item.ItemId || item.item_id || item.static_id, "未知物品"))}</strong><span>数量 x${escapeHtml(text(item.StackCount || item.count, 1))}</span><span>${escapeHtml(text(item.owner_name, "未知主人"))}</span><span></span></div>`
   );
+  renderPlayers();
+  refreshIcons();
+}
+
+function detailMetrics(items) {
+  return `<div class="detail-metrics">${items.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(summarizeValue(value))}</strong></div>`).join("")}</div>`;
+}
+
+function summarizeValue(value, fallback = "-") {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (Array.isArray(value)) return `${value.length} 项`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value);
+    return entries.length ? entries.slice(0, 3).map(([key, item]) => `${key}: ${item}`).join(" · ") : fallback;
+  }
+  return String(value);
+}
+
+function rawDetails(data) {
+  return `<details class="raw-details"><summary>查看原始 JSON</summary><pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre></details>`;
+}
+
+function renderEntityDetail(type, data) {
+  if (type === "player") {
+    const name = data.nickname || data.name || "未命名玩家";
+    const containers = data.items && typeof data.items === "object" ? Object.entries(data.items) : [];
+    return `<div class="detail-hero"><span class="entity-avatar">${initials(name)}</span><div><h3>${escapeHtml(name)}</h3><p>UID ${escapeHtml(text(data.player_uid || data.id))} · 最后在线 ${escapeHtml(formatDateTime(data.save_last_online, "未知"))}</p></div></div>
+      ${detailMetrics([["等级", data.level ?? 0], ["经验", data.exp ?? 0], ["生命", data.max_hp ? `${text(data.hp, 0)} / ${text(data.max_hp, 0)}` : data.hp ?? 0], ["护盾", data.shield_max_hp ? `${text(data.shield_hp, 0)} / ${text(data.shield_max_hp, 0)}` : data.shield_hp ?? 0], ["饱食度", data.full_stomach ?? 0], ["帕鲁数量", Array.isArray(data.pals) ? data.pals.length : 0], ["容器数量", containers.length], ["最后在线", formatDateTime(data.save_last_online, "未知")]])}
+      ${data.status_point && typeof data.status_point === "object" ? `<section class="detail-section"><h3>属性加点</h3><div class="detail-member-list">${Object.entries(data.status_point).map(([label, value]) => `<div class="detail-member"><strong>${escapeHtml(label)}</strong><div>${escapeHtml(summarizeValue(value, "0"))}</div></div>`).join("")}</div></section>` : ""}
+      <section class="detail-section"><h3>物品容器</h3><div class="detail-member-list">${containers.length ? containers.map(([label, value]) => `<div class="detail-member"><strong>${escapeHtml(label)}</strong><div>${escapeHtml(summarizeValue(value, "0 项"))}</div></div>`).join("") : '<div class="empty">没有容器数据</div>'}</div></section>
+      ${rawDetails(data)}`;
+  }
+  if (type === "guild") {
+    const name = data.name || "未命名公会";
+    const members = Array.isArray(data.players) ? data.players : [];
+    return `<div class="detail-hero"><span class="entity-avatar">${initials(name)}</span><div><h3>${escapeHtml(name)}</h3><p>会长 UID ${escapeHtml(text(data.admin_player_uid))}</p></div></div>
+      ${detailMetrics([["基地等级", data.base_camp_level ?? 0], ["成员", members.length], ["据点", Array.isArray(data.base_ids) ? data.base_ids.length : 0], ["会长", data.admin_player_uid]])}
+      <section class="detail-section"><h3>公会成员</h3><div class="detail-member-list">${members.length ? members.map((member) => `<div class="detail-member"><strong>${escapeHtml(text(member.nickname || member.name, "成员"))}</strong><div>${escapeHtml(text(member.player_uid || member.id))}</div></div>`).join("") : '<div class="empty">没有成员数据</div>'}</div></section>
+      ${rawDetails(data)}`;
+  }
+  if (type === "pal") {
+    const name = data.name || data.type || "未知帕鲁";
+    return `<div class="detail-hero"><span class="entity-avatar">${initials(name)}</span><div><h3>${escapeHtml(name)}</h3><p>${escapeHtml(text(data.owner_name, "未知主人"))}</p></div></div>
+      ${detailMetrics([["等级", data.level ?? 0], ["生命", data.hp ?? data.max_hp], ["攻击", data.attack ?? data.melee], ["防御", data.defense], ["性别", data.gender], ["实例 ID", data.instance_id || data.id]])}
+      ${rawDetails(data)}`;
+  }
+  return rawDetails(data);
 }
 
 async function showSaveDetail(type, id, index) {
@@ -429,8 +641,9 @@ async function showSaveDetail(type, id, index) {
     }
   }
   document.querySelector("#detailTitle").textContent = { player: "玩家详情", guild: "公会详情", pal: "帕鲁详情" }[type] || "详情";
-  document.querySelector("#detailOutput").textContent = JSON.stringify(data, null, 2);
+  document.querySelector("#detailOutput").innerHTML = renderEntityDetail(type, data);
   detailDialog.showModal();
+  refreshIcons();
 }
 
 function toMapPosition(x, y) {
@@ -517,18 +730,52 @@ async function loadWhitelist() {
   document.querySelector("#whitelistText").value = (data.players || []).join("\n");
 }
 
+async function loadSaveData(showFeedback = true) {
+  const data = await api("/api/save-data");
+  renderSaveData(data.data || {});
+  document.querySelector("#saveOutput").textContent = JSON.stringify(data.data, null, 2);
+  if (data.data?.message && !state.map) document.querySelector("#mapBox").textContent = data.data.message;
+  if (showFeedback) showToast("存档解析完成");
+  return data.data;
+}
+
+async function refreshAll() {
+  const button = document.querySelector("#refreshBtn");
+  button.disabled = true;
+  try {
+    await Promise.all([refresh(), loadLive(), loadBackups()]);
+    if (state.activeTab === "saves" || state.activeTab === "players") await loadSaveData(false);
+    showToast("面板数据已刷新");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function reportError(error) {
-  actionLog.textContent = error.message || String(error);
+  const message = error.message || String(error);
+  actionLog.textContent = message;
+  showToast(message, "error");
   console.error(error);
 }
 
-document.querySelectorAll(".tab").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".tab,.view").forEach((element) => element.classList.remove("active"));
-    button.classList.add("active");
-    document.querySelector(`#${button.dataset.tab}`).classList.add("active");
-    if (button.dataset.tab === "saves" && state.map) setTimeout(() => state.map.invalidateSize(), 50);
-  });
+function switchView(tabName) {
+  if (!pageMetadata[tabName]) return;
+  state.activeTab = tabName;
+  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === tabName));
+  document.querySelectorAll(".tab[data-tab]").forEach((button) => button.classList.toggle("active", button.dataset.tab === tabName));
+  document.querySelector("#mobileMoreBtn").classList.toggle("active", ["backups", "settings", "deploy", "automation"].includes(tabName));
+  const [eyebrow, title, subtitle] = pageMetadata[tabName];
+  document.querySelector("#pageEyebrow").textContent = eyebrow;
+  document.querySelector("#pageTitle").textContent = title;
+  document.querySelector("#pageSubtitle").textContent = subtitle;
+  const mobileDialog = document.querySelector("#mobileMoreDialog");
+  if (mobileDialog.open) mobileDialog.close();
+  if (tabName === "saves" && state.map) setTimeout(() => state.map.invalidateSize(), 50);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+document.querySelectorAll(".tab[data-tab]").forEach((button) => {
+  button.addEventListener("click", () => switchView(button.dataset.tab));
 });
 
 document.body.addEventListener("click", async (event) => {
@@ -540,8 +787,26 @@ document.body.addEventListener("click", async (event) => {
     if (playerButton) {
       const body = readForm(document.querySelector("#playerActionForm"));
       body.action = playerButton.dataset.playerAction;
-      const data = await api("/api/player", { method: "POST", body: JSON.stringify(body) });
-      actionLog.textContent = data.result.stdout || data.result.stderr || "完成";
+      const confirmations = {
+        kick: "确定要将该玩家踢出服务器？",
+        ban: "确定要封禁该玩家？封禁后需要通过 RCON 手动解除。",
+        shutdown: `确定在 ${Number(body.seconds || 30)} 秒后关闭服务器？所有在线玩家会收到广播。`
+      };
+      if (confirmations[body.action] && !confirm(confirmations[body.action])) return;
+      playerButton.disabled = true;
+      try {
+        const data = await api("/api/player", { method: "POST", body: JSON.stringify(body) });
+        actionLog.textContent = data.result.stdout || data.result.stderr || "完成";
+        showToast({ kick: "玩家已踢出", ban: "玩家已封禁", broadcast: "广播已发送", save: "世界已保存", shutdown: "关服任务已提交" }[body.action] || "操作完成");
+      } finally {
+        playerButton.disabled = false;
+      }
+    }
+
+    const selectPlayer = event.target.closest("[data-select-player]");
+    if (selectPlayer) {
+      document.querySelector('#playerActionForm [name="playerId"]').value = selectPlayer.dataset.selectPlayer;
+      showToast("已选择玩家");
     }
 
     const download = event.target.closest("[data-download]");
@@ -588,7 +853,12 @@ document.body.addEventListener("click", async (event) => {
     }
 
     const detail = event.target.closest("[data-save-detail]");
-    if (detail) await showSaveDetail(detail.dataset.saveDetail, detail.dataset.detailId, detail.dataset.detailIndex);
+    if (detail) {
+      if (detail.dataset.saveDetail === "player" && detail.dataset.detailId) {
+        document.querySelector('#playerActionForm [name="playerId"]').value = detail.dataset.detailId;
+      }
+      await showSaveDetail(detail.dataset.saveDetail, detail.dataset.detailId, detail.dataset.detailIndex);
+    }
   } catch (error) {
     reportError(error);
   }
@@ -638,7 +908,7 @@ document.querySelector("#rconTaskForm").addEventListener("submit", async (event)
   }
 });
 
-document.querySelector("#refreshBtn").addEventListener("click", () => refresh().catch(reportError));
+document.querySelector("#refreshBtn").addEventListener("click", () => refreshAll().catch(reportError));
 document.querySelector("#loadLiveBtn").addEventListener("click", () => loadLive().catch(reportError));
 document.querySelector("#loadDeployPlanBtn").addEventListener("click", () => loadDeployPlan().catch(reportError));
 document.querySelector("#deployServerBtn").addEventListener("click", () => deployServer().catch(reportError));
@@ -658,6 +928,19 @@ document.querySelector("#closeDetailBtn").addEventListener("click", () => detail
 document.querySelector("#loadMapMarkersBtn").addEventListener("click", () => loadMapMarkers().catch(reportError));
 document.querySelector("#saveAgentBtn").addEventListener("click", () => saveAgent().catch(reportError));
 document.querySelector("#testAgentBtn").addEventListener("click", () => testAgent().catch(reportError));
+document.querySelector("#playerSearch").addEventListener("input", renderPlayers);
+document.querySelector("#playerStatusFilter").addEventListener("change", renderPlayers);
+document.querySelector("#saveSearch").addEventListener("input", () => state.saveData && renderSaveData(state.saveData));
+document.querySelectorAll("[data-save-section]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.activeSaveSection = button.dataset.saveSection;
+    document.querySelectorAll("[data-save-section]").forEach((item) => item.classList.toggle("active", item.dataset.saveSection === state.activeSaveSection));
+    document.querySelectorAll("[data-save-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.savePanel === state.activeSaveSection));
+    if (state.activeSaveSection === "map" && state.map) setTimeout(() => state.map.invalidateSize(), 50);
+  });
+});
+document.querySelector("#mobileMoreBtn").addEventListener("click", () => document.querySelector("#mobileMoreDialog").showModal());
+document.querySelector("#closeMobileMoreBtn").addEventListener("click", () => document.querySelector("#mobileMoreDialog").close());
 
 document.querySelector("#saveSettingsBtn").addEventListener("click", async () => {
   try {
@@ -689,18 +972,9 @@ document.querySelector("#saveWhitelistBtn").addEventListener("click", async () =
   }
 });
 
-document.querySelector("#loadSaveBtn").addEventListener("click", async () => {
-  try {
-    const data = await api("/api/save-data");
-    renderSaveData(data.data);
-    document.querySelector("#saveOutput").textContent = JSON.stringify(data.data, null, 2);
-    if (data.data.message && !state.map) document.querySelector("#mapBox").textContent = data.data.message;
-  } catch (error) {
-    reportError(error);
-  }
-});
+document.querySelector("#loadSaveBtn").addEventListener("click", () => loadSaveData().catch(reportError));
 
-[rconTaskDialog, detailDialog].forEach((dialog) => {
+[rconTaskDialog, detailDialog, document.querySelector("#mobileMoreDialog")].forEach((dialog) => {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
@@ -711,6 +985,7 @@ document.querySelector("#loadSaveBtn").addEventListener("click", async () => {
 });
 
 async function initialize() {
+  refreshIcons();
   const authResponse = await fetch("/api/auth/status");
   const auth = await readJsonResponse(authResponse);
   if (!auth.initialized) await openInit();
@@ -724,9 +999,13 @@ async function initialize() {
     loadAgent(),
     loadWhitelist()
   ]);
+  const optionalLoads = await Promise.allSettled([loadLive(), loadBackups(), loadSaveData(false)]);
+  optionalLoads.filter((result) => result.status === "rejected").forEach((result) => reportError(result.reason));
+  refreshIcons();
 }
 
 renderSettingsForm();
+refreshIcons();
 initialize().catch((error) => {
   statusPill.textContent = "连接失败";
   statusPill.classList.add("offline");
