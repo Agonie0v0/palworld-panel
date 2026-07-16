@@ -634,6 +634,94 @@ async function trimBackups(config) {
   await Promise.all(backups.slice(keep).map((backup) => fsp.unlink(backup.path).catch(() => {})));
 }
 
+function safeManagedDirectory(target, label) {
+  const resolved = path.resolve(target || "");
+  const blocked = new Set(["/", "/bin", "/boot", "/dev", "/etc", "/home", "/opt", "/root", "/usr", "/var"]);
+  if (!path.isAbsolute(resolved) || blocked.has(resolved) || resolved.length < 6) {
+    throw new Error(`${label} is not a safe managed directory.`);
+  }
+  return resolved;
+}
+
+function serverMaintenancePlan(config, operation) {
+  const installDir = safeManagedDirectory(config.server.installDir, "Server install directory");
+  const saveDir = safeManagedDirectory(config.server.saveDir, "Server save directory");
+  const backupDir = safeManagedDirectory(config.server.backupDir, "Server backup directory");
+  const backupRelative = path.relative(installDir, backupDir);
+  if (!backupRelative || (!backupRelative.startsWith("..") && !path.isAbsolute(backupRelative))) {
+    throw new Error("Server backup directory must be outside the install directory.");
+  }
+  return {
+    operation,
+    serviceName: config.server.serviceName,
+    installDir,
+    saveDir,
+    worldDir: path.join(saveDir, "SaveGames"),
+    backupDir,
+    keepsPanel: true,
+    keepsBackups: true
+  };
+}
+
+async function createMaintenanceBackup(config) {
+  if (!fs.existsSync(config.server.saveDir)) {
+    return { ok: true, skipped: true, stdout: "No save directory exists yet.", stderr: "" };
+  }
+  return createBackup(config);
+}
+
+async function resetWorld(config, options = {}) {
+  const plan = serverMaintenancePlan(config, "reset-world");
+  if (options.dryRun) return { ok: true, dryRun: true, plan };
+
+  const stop = await runAction("stop", config);
+  if (!stop.ok) return stop;
+  const backup = await createMaintenanceBackup(config);
+  if (!backup.ok) {
+    await runAction("start", config);
+    return backup;
+  }
+
+  await fsp.rm(plan.worldDir, { recursive: true, force: true });
+  const start = await runAction("start", config);
+  return {
+    ...start,
+    backup: backup.backup || "",
+    resetPath: plan.worldDir
+  };
+}
+
+async function uninstallServer(config, options = {}) {
+  const plan = serverMaintenancePlan(config, "uninstall");
+  if (options.dryRun) return { ok: true, dryRun: true, plan };
+  if (config.server.mode !== "systemd") {
+    return { ok: false, stdout: "", stderr: "One-click uninstall currently supports systemd servers only." };
+  }
+  if (!/^[A-Za-z0-9_.@-]+$/.test(config.server.serviceName)) {
+    return { ok: false, stdout: "", stderr: "Invalid systemd service name." };
+  }
+
+  const stop = await runAction("stop", config);
+  if (!stop.ok) return stop;
+  const backup = await createMaintenanceBackup(config);
+  if (!backup.ok) {
+    await runAction("start", config);
+    return backup;
+  }
+
+  await exec("systemctl", ["disable", config.server.serviceName]);
+  await fsp.rm(`/etc/systemd/system/${config.server.serviceName}.service`, { force: true });
+  await exec("systemctl", ["daemon-reload"]);
+  await fsp.rm(plan.installDir, { recursive: true, force: true });
+  return {
+    ok: true,
+    stdout: `Removed ${plan.installDir} and disabled ${config.server.serviceName}.`,
+    stderr: "",
+    backup: backup.backup || "",
+    removed: plan.installDir
+  };
+}
+
 async function loadWhitelist() {
   const file = path.join(dataDir, "whitelist.json");
   if (!fs.existsSync(file)) return [];
@@ -819,6 +907,8 @@ async function executeAgentOperation(operation, payload, config) {
     backups: () => listBackups(config),
     restoreBackup: () => restoreBackup(config, payload.name),
     deleteBackup: () => deleteBackup(config, payload.name),
+    resetWorld: () => resetWorld(config, payload),
+    uninstallServer: () => uninstallServer(config, payload),
     saveData: () => querySaveData(config),
     saveEntity: () => findSaveEntity(config, payload.type, payload.id),
     mapMarkers: async () => extractMapMarkers(await querySaveData(config)),
@@ -978,6 +1068,18 @@ async function handleApi(req, res, config) {
   if (req.method === "POST" && req.url === "/api/deploy/server") {
     const body = await readBody(req);
     const result = await managedCall("deploy", body, () => deployServer(config, body));
+    return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
+  }
+
+  if (req.method === "POST" && req.url === "/api/server/reset-world") {
+    const body = await readBody(req);
+    const result = await managedCall("resetWorld", body, () => resetWorld(config, body));
+    return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
+  }
+
+  if (req.method === "POST" && req.url === "/api/server/uninstall") {
+    const body = await readBody(req);
+    const result = await managedCall("uninstallServer", body, () => uninstallServer(config, body));
     return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
   }
 

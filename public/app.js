@@ -234,6 +234,33 @@ async function deployServer() {
   await refresh();
 }
 
+async function runServerMaintenance(operation, button) {
+  const messages = {
+    "reset-world": "重开服会先停止服务器并备份当前存档，然后清空世界存档并启动新世界。确定继续？",
+    uninstall: "卸载会先停止服务器并备份存档，然后删除游戏服务和服务端文件。面板与备份会保留。确定继续？"
+  };
+  if (!confirm(messages[operation])) return;
+
+  const route = operation === "reset-world" ? "/api/server/reset-world" : "/api/server/uninstall";
+  const deployLog = document.querySelector("#deployLog");
+  button.disabled = true;
+  deployLog.textContent = operation === "reset-world" ? "正在备份并创建新世界..." : "正在备份并卸载服务端...";
+  try {
+    const data = await api(route, { method: "POST", body: "{}" });
+    const result = data.result || {};
+    deployLog.textContent = [
+      result.stdout,
+      result.stderr,
+      result.backup ? `备份文件：${result.backup}` : "",
+      result.removed ? `已删除：${result.removed}` : "",
+      result.resetPath ? `已重置：${result.resetPath}` : ""
+    ].filter(Boolean).join("\n") || "操作完成";
+    await refresh();
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function renderPlayers(players) {
   const box = document.querySelector("#playersList");
   if (!players.length) {
@@ -615,6 +642,8 @@ document.querySelector("#refreshBtn").addEventListener("click", () => refresh().
 document.querySelector("#loadLiveBtn").addEventListener("click", () => loadLive().catch(reportError));
 document.querySelector("#loadDeployPlanBtn").addEventListener("click", () => loadDeployPlan().catch(reportError));
 document.querySelector("#deployServerBtn").addEventListener("click", () => deployServer().catch(reportError));
+document.querySelector("#resetWorldBtn").addEventListener("click", (event) => runServerMaintenance("reset-world", event.currentTarget).catch(reportError));
+document.querySelector("#uninstallServerBtn").addEventListener("click", (event) => runServerMaintenance("uninstall", event.currentTarget).catch(reportError));
 document.querySelector("#reloadPlayersBtn").addEventListener("click", () => loadLive().catch(reportError));
 document.querySelector("#reloadBackupsBtn").addEventListener("click", () => loadBackups().catch(reportError));
 document.querySelector("#sendRconBtn").addEventListener("click", () => sendRcon(document.querySelector("#rconCommand").value).catch(reportError));
