@@ -25,8 +25,9 @@ if [[ -z "$LEVEL_FILE" ]]; then
   exit 1
 fi
 
-TMP_JSON="$(mktemp)"
-trap 'rm -f "$TMP_JSON"' EXIT
+TMP_DIR="$(mktemp -d)"
+TMP_JSON="$TMP_DIR/save-data.json"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 "$PYTHON_BIN" "$SCRIPT_DIR/sav_cli.py" -f "$LEVEL_FILE" -o "$TMP_JSON" >/dev/null
 cat "$TMP_JSON"

@@ -319,6 +319,9 @@ async function deployServer(config, body = {}) {
   };
   const installDir = body.installDir || config.server.installDir;
   const appRoot = path.dirname(installDir);
+  const updaterPath = body.steamcmdPath
+    || (hostProfile().runner === "box64" ? "/opt/depotdownloader/DepotDownloader" : config.server.steamcmdPath)
+    || "/opt/steamcmd/steamcmd.sh";
   const nextConfig = await saveConfig({
     ...config,
     server: {
@@ -329,7 +332,7 @@ async function deployServer(config, body = {}) {
       settingsPath: path.join(installDir, "Pal", "Saved", "Config", "LinuxServer", "PalWorldSettings.ini"),
       saveDir: path.join(installDir, "Pal", "Saved"),
       backupDir: body.backupDir || path.join(appRoot, "backups"),
-      steamcmdPath: body.steamcmdPath || config.server.steamcmdPath || "/opt/steamcmd/steamcmd.sh",
+      steamcmdPath: updaterPath,
       rconHost: "127.0.0.1",
       rconPort: nextSettings.RCONPort,
       restHost: "127.0.0.1",
@@ -346,7 +349,8 @@ async function deployServer(config, body = {}) {
       APP_ROOT: appRoot,
       SERVER_DIR: nextConfig.server.installDir,
       BACKUP_DIR: nextConfig.server.backupDir,
-      STEAMCMD_DIR: path.dirname(nextConfig.server.steamcmdPath),
+      STEAMCMD_DIR: "/opt/steamcmd",
+      DEPOT_DOWNLOADER_DIR: "/opt/depotdownloader",
       SERVICE_NAME: nextConfig.server.serviceName,
       SERVER_NAME: nextSettings.ServerName,
       SERVER_DESCRIPTION: nextSettings.ServerDescription,
@@ -543,17 +547,27 @@ async function runAction(action, config) {
   if (!systemdActions[action]) throw new Error("Unsupported action.");
 
   if (action === "update") {
-    const update = await exec(config.server.steamcmdPath, [
-      "+force_install_dir",
-      config.server.installDir,
-      "+login",
-      "anonymous",
-      "+app_update",
-      "2394010",
-      "validate",
-      "+quit"
-    ]);
-    if (!update.ok) return update;
+    const stop = await exec("systemctl", ["stop", service]);
+    if (!stop.ok) return stop;
+    const depotDownloader = path.basename(config.server.steamcmdPath).toLowerCase().includes("depotdownloader");
+    const updateArgs = depotDownloader
+      ? ["-app", "2394010", "-dir", config.server.installDir, "-validate"]
+      : [
+        "+force_install_dir",
+        config.server.installDir,
+        "+login",
+        "anonymous",
+        "+app_update",
+        "2394010",
+        "validate",
+        "+quit"
+      ];
+    const update = await exec(config.server.steamcmdPath, updateArgs, { timeout: 30 * 60 * 1000 });
+    if (!update.ok) {
+      await exec("systemctl", ["start", service]);
+      return update;
+    }
+    return exec("systemctl", ["start", service]);
   }
   return exec("systemctl", systemdActions[action]);
 }

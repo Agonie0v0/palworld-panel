@@ -69,7 +69,7 @@ http://你的服务器IP:19090
 5. 点击“部署 Palworld 服务端”。
 6. 部署完成后在“总览”页面启动服务器。
 
-ARM64 机器会自动安装 box64；AMD64 机器会直接运行官方服务端。
+ARM64 机器会使用原生 DepotDownloader 下载服务端，并通过 box64 运行；AMD64 机器会使用 SteamCMD 和官方服务端。
 
 ## 方式二：Docker 面板 + 远程 Agent
 
