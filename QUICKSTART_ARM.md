@@ -48,7 +48,7 @@ sudo bash scripts/firewall-ubuntu.sh
 http://你的服务器IP:8080
 ```
 
-输入安装脚本输出的 `Panel token`。
+第一次打开先创建管理员账号和密码。安装脚本输出的 `Panel token` 可以作为备用登录方式。
 
 ## 5. 一键部署服务端
 
@@ -105,3 +105,13 @@ sudo systemctl status palworld
 ```bash
 journalctl -u palworld -f
 ```
+
+## 面板和服务器分开部署
+
+如果面板不在这台 ARM 游戏服务器上，只在 ARM 服务器安装 Agent：
+
+```bash
+sudo AGENT_PORT=8081 bash scripts/install-agent.sh
+```
+
+然后把脚本输出的地址和 Token 填到面板的“自动化 -> Agent 分离部署”，保存并测试连接。连接成功后，再去“部署”页面一键安装服务端。

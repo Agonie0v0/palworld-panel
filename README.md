@@ -35,6 +35,8 @@ Panel token: 一串随机字符
 http://你的服务器IP:8080
 ```
 
+第一次打开会要求创建管理员账号和密码。以后直接用账号密码登录；安装脚本输出的 Token 也可以作为备用登录方式。
+
 进入面板后：
 
 ```text
@@ -63,32 +65,27 @@ AMD64 和 ARM64 都用同一个面板安装脚本：
 - 修改常用 `PalWorldSettings.ini` 参数
 - 手动备份
 - 备份列表
+- 备份下载
 - 删除备份
 - 恢复备份
 - 自动备份
 - 自动广播
 - RCON 控制台
+- RCON 命令模板新增、编辑、删除和快速使用
+- 定时 RCON 任务新增、编辑、启停、立即执行和删除
 - 广播、踢人、封禁、保存、平滑关服
 - 读取 Palworld REST API 数据
 - 白名单记录管理
 - 内置参考项目同源 `sav_cli` 存档解析器
 - 解析 `Level.sav` 和 `Players/`
 - 展示玩家、公会、帕鲁、背包摘要
+- 玩家、公会、帕鲁详情查看
+- Palworld 地图瓦片、玩家位置和基地标记
+- 首次管理员初始化和账号密码登录
+- 移动端布局
+- 面板与游戏服务器分离部署的远程 Agent
 - Docker 部署面板
 - Docker 模式管理已有 Palworld 容器
-
-还需要继续补齐到参考项目同等体验：
-
-- 首次管理员初始化流程
-- 玩家详情页
-- 公会详情页
-- 帕鲁详情页
-- 地图瓦片和玩家/基地标记
-- RCON 命令模板库
-- 定时 RCON 任务完整管理
-- 备份下载
-- 更完整的移动端体验
-- 面板和服务器分离部署的 Agent 模式
 
 ## 面板部署方式
 
@@ -109,6 +106,25 @@ docker compose up -d --build
 ```
 
 但 Docker 面板不能直接给宿主机安装 systemd 服务端。Docker 面板更适合管理已经存在的 Palworld Docker 容器。
+
+如果面板放在 Docker 或另一台机器上，请在游戏服务器安装 Agent：
+
+```bash
+git clone https://github.com/Agonie0v0/palworld-panel.git
+cd palworld-panel
+sudo AGENT_PORT=8081 bash scripts/install-agent.sh
+```
+
+脚本会输出 Agent 地址和 Token。然后在面板打开：
+
+```text
+自动化 -> Agent 分离部署 -> 启用 Agent 模式
+模式选择“远程 Agent”
+填写 http://游戏服务器IP:8081 和 Agent Token
+保存 -> 测试连接
+```
+
+连接成功后，部署、启停、更新、RCON、参数、备份和存档解析都会在游戏服务器上执行。Agent 的 `8081/TCP` 只应允许面板机器访问。
 
 ## 存档解析
 
@@ -138,6 +154,7 @@ sudo PARSER_DIR=/opt/palworld-panel/parsers/sav_cli bash /opt/palworld-panel/scr
 | 8211 | UDP | 玩家连接 |
 | 8212 | TCP | Palworld REST API |
 | 25575 | TCP | RCON |
+| 8081 | TCP | 远程 Agent（仅分离部署时使用） |
 
 Oracle Cloud 需要在安全列表或 NSG 里放行端口。
 
@@ -158,7 +175,12 @@ docker compose -f deploy/docker-compose.yml config
 ## 安全建议
 
 - 面板 token 必须改成强随机字符串
+- Agent 端口只允许面板 IP 访问
 - 面板端口最好只允许你的 IP 访问
 - RCON 和 REST API 不建议直接开放给所有公网 IP
 - 第一次开服后立刻修改管理员密码
 - 定期备份存档
+
+## 地图说明
+
+地图组件使用 Leaflet，瓦片按需读取参考项目公开的 Palworld 地图资源，不会把约 70 MB 的地图文件打进面板镜像。服务器或浏览器无法访问 GitHub/CDN 时，其他管理功能仍可正常使用，但地图底图不会显示。

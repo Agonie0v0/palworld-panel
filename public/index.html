@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Palworld Full Panel</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -141,6 +142,22 @@
           <textarea id="rconCommand" rows="4" placeholder="例如：ShowPlayers"></textarea>
           <pre id="rconOutput" class="log tall">等待命令...</pre>
         </article>
+        <div class="grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <h2>命令模板</h2>
+              <div class="inline-actions">
+                <button id="addRconTemplateBtn">新增</button>
+                <button id="saveRconTemplatesBtn">保存</button>
+              </div>
+            </div>
+            <div id="rconTemplateList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><h2>定时 RCON</h2><button id="addRconTaskBtn">新增</button></div>
+            <div id="rconTaskList" class="list"></div>
+          </article>
+        </div>
       </section>
 
       <section class="view" id="backups">
@@ -203,6 +220,9 @@
           </article>
           <article class="panel">
             <div class="panel-heading"><h2>地图</h2></div>
+            <div class="inline-actions map-actions">
+              <button id="loadMapMarkersBtn">读取标记</button>
+            </div>
             <div id="mapBox" class="map-box">等待存档解析器输出地图数据</div>
           </article>
         </div>
@@ -221,8 +241,69 @@
             <label class="wide"><span>自动广播内容</span><input name="broadcastMessage" /></label>
           </form>
         </article>
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Agent 分离部署</h2>
+            <div class="inline-actions">
+              <button id="testAgentBtn" type="button">测试连接</button>
+              <button id="saveAgentBtn" type="button">保存</button>
+            </div>
+          </div>
+          <form id="agentForm" class="settings-form">
+            <label class="toggle"><input name="enabled" type="checkbox" /><span>启用 Agent 模式</span></label>
+            <label><span>模式</span><select name="mode"><option value="local">本机</option><option value="remote">远程 Agent</option></select></label>
+            <label><span>Agent 地址</span><input name="endpoint" placeholder="http://agent:8081" /></label>
+            <label><span>Agent Token</span><input name="token" type="password" /></label>
+          </form>
+          <pre id="agentStatus" class="log">未测试连接</pre>
+        </article>
       </section>
+
+      <dialog id="initDialog" class="modal">
+        <form id="initForm" class="stack">
+          <h2>首次初始化管理员</h2>
+          <label><span>用户名</span><input name="username" value="admin" required /></label>
+          <label><span>密码</span><input name="password" type="password" minlength="8" required /></label>
+          <button>创建管理员</button>
+          <p class="form-error" id="initError"></p>
+        </form>
+      </dialog>
+
+      <dialog id="loginDialog" class="modal">
+        <form id="loginForm" class="stack">
+          <h2>登录管理面板</h2>
+          <label><span>用户名</span><input name="username" value="admin" autocomplete="username" /></label>
+          <label><span>密码</span><input name="password" type="password" autocomplete="current-password" /></label>
+          <label><span>或使用安装 Token</span><input name="token" type="password" autocomplete="off" /></label>
+          <button>登录</button>
+          <p class="form-error" id="loginError"></p>
+        </form>
+      </dialog>
+
+      <dialog id="rconTaskDialog" class="modal">
+        <form id="rconTaskForm" class="stack">
+          <h2>定时 RCON 任务</h2>
+          <input name="id" type="hidden" />
+          <label><span>任务名称</span><input name="name" required /></label>
+          <label><span>RCON 命令</span><input name="command" required /></label>
+          <label><span>执行间隔（分钟）</span><input name="intervalMinutes" type="number" min="1" value="60" required /></label>
+          <label class="toggle"><input name="enabled" type="checkbox" /><span>启用任务</span></label>
+          <div class="dialog-actions">
+            <button id="cancelRconTaskBtn" type="button" class="secondary">取消</button>
+            <button>保存任务</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog id="detailDialog" class="modal">
+        <div class="panel-heading">
+          <h2 id="detailTitle">详情</h2>
+          <button id="closeDetailBtn" class="icon-button" type="button" title="关闭">×</button>
+        </div>
+        <pre id="detailOutput" class="log tall"></pre>
+      </dialog>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
