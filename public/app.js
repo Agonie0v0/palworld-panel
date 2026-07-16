@@ -9,6 +9,7 @@ const state = {
   saveData: null,
   activeSaveSection: "players",
   activeTab: "overview",
+  selectedPlayerIndex: null,
   map: null,
   markerLayer: null,
   loginPromise: null,
@@ -391,6 +392,41 @@ function playerIdentifiers(player) {
     .map((value) => String(value).toLowerCase());
 }
 
+function renderPlayerProfile(player, index, online = false) {
+  const title = document.querySelector("#playerProfileTitle");
+  const presence = document.querySelector("#playerProfilePresence");
+  const content = document.querySelector("#playerProfileContent");
+  if (!player) {
+    state.selectedPlayerIndex = null;
+    title.textContent = "选择玩家查看详情";
+    presence.textContent = "未选择";
+    presence.classList.remove("online");
+    content.innerHTML = '<div class="empty">从左侧玩家列表选择一名玩家。</div>';
+    return;
+  }
+  state.selectedPlayerIndex = Number(index);
+  const name = player.nickname || player.name || player.playerName || "Player";
+  const id = player.player_uid || player.playerId || player.steamId || player.userId || "-";
+  const guild = (state.saveData?.guilds || []).find((item) => (item.players || []).some((member) => playerIdentifiers(member).some((memberId) => playerIdentifiers(player).includes(memberId))));
+  title.textContent = name;
+  presence.textContent = online ? "在线" : "离线";
+  presence.classList.toggle("online", online);
+  content.innerHTML = `<div class="player-profile-head"><span class="entity-avatar ${online ? "online" : ""}">${initials(name)}</span><div><h3>${escapeHtml(name)}</h3><p>UID ${escapeHtml(text(id))}${guild ? ` · ${escapeHtml(text(guild.name, "未命名公会"))}` : ""}</p></div></div>
+    <div class="profile-stat-grid">
+      <div><span>等级</span><strong>Lv.${escapeHtml(text(player.level, 0))}</strong></div>
+      <div><span>经验</span><strong>${escapeHtml(text(player.exp, 0))}</strong></div>
+      <div><span>生命</span><strong>${escapeHtml(player.max_hp ? `${text(player.hp, 0)} / ${text(player.max_hp, 0)}` : text(player.hp, 0))}</strong></div>
+      <div><span>护盾</span><strong>${escapeHtml(player.shield_max_hp ? `${text(player.shield_hp, 0)} / ${text(player.shield_max_hp, 0)}` : text(player.shield_hp, 0))}</strong></div>
+      <div><span>饱食度</span><strong>${escapeHtml(text(player.full_stomach, 0))}</strong></div>
+      <div><span>帕鲁数量</span><strong>${Array.isArray(player.pals) ? player.pals.length : 0}</strong></div>
+      <div><span>物品容器</span><strong>${player.items && typeof player.items === "object" ? Object.keys(player.items).length : 0}</strong></div>
+      <div><span>最后在线</span><strong>${escapeHtml(formatDateTime(player.save_last_online, "未知"))}</strong></div>
+    </div>
+    <div class="profile-footer"><span>${online ? "玩家当前正在服务器中" : "历史数据来自最近一次存档解析"}</span><button class="secondary" data-save-detail="player" data-detail-id="${escapeHtml(id)}" data-detail-index="${Number(index)}"><i data-lucide="panel-right-open"></i><span>完整档案</span></button></div>`;
+  document.querySelector('#playerActionForm [name="playerId"]').value = id;
+  refreshIcons();
+}
+
 function renderPlayers() {
   const box = document.querySelector("#playersList");
   const savedPlayers = Array.isArray(state.saveData?.players) ? state.saveData.players : [];
@@ -418,11 +454,18 @@ function renderPlayers() {
       const id = player.player_uid || player.playerId || player.steamId || player.userId || "-";
       const level = player.level !== undefined ? `<span class="level-badge">Lv.${escapeHtml(player.level)}</span>` : "";
       const detail = player._savedIndex >= 0
-        ? `<button class="secondary" data-save-detail="player" data-detail-id="${escapeHtml(id)}" data-detail-index="${player._savedIndex}">详情</button>`
+        ? `<button class="secondary" data-preview-player="${player._savedIndex}">查看</button>`
         : `<button class="secondary" data-select-player="${escapeHtml(id)}">选择</button>`;
       return `<div class="entity-row"><span class="entity-avatar ${player._online ? "online" : ""}">${initials(name)}</span><div class="entity-main"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(id)} · ${player._online ? "当前在线" : `最后在线 ${escapeHtml(formatDateTime(player.save_last_online, "未知"))}`}</span></div>${level}<span class="presence-badge ${player._online ? "online" : ""}">${player._online ? "在线" : "离线"}</span>${detail}</div>`;
     })
     .join("");
+  if (savedPlayers.length) {
+    const selectedIndex = Number.isInteger(state.selectedPlayerIndex) && savedPlayers[state.selectedPlayerIndex] ? state.selectedPlayerIndex : 0;
+    const selected = savedPlayers[selectedIndex];
+    renderPlayerProfile(selected, selectedIndex, playerIdentifiers(selected).some((id) => onlineIds.has(id)));
+  } else {
+    renderPlayerProfile(null);
+  }
   refreshIcons();
 }
 
@@ -801,6 +844,14 @@ document.body.addEventListener("click", async (event) => {
       } finally {
         playerButton.disabled = false;
       }
+    }
+
+    const previewPlayer = event.target.closest("[data-preview-player]");
+    if (previewPlayer) {
+      const index = Number(previewPlayer.dataset.previewPlayer);
+      const player = state.saveData?.players?.[index];
+      const onlineIds = new Set((state.onlinePlayers || []).flatMap(playerIdentifiers));
+      if (player) renderPlayerProfile(player, index, playerIdentifiers(player).some((id) => onlineIds.has(id)));
     }
 
     const selectPlayer = event.target.closest("[data-select-player]");

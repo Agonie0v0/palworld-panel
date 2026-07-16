@@ -263,3 +263,9 @@ docker compose -f deploy/docker-compose.yml config
 ```
 
 更多 ARM 部署说明见 [QUICKSTART_ARM.md](QUICKSTART_ARM.md)。
+
+## 致谢
+
+本项目的管理功能、玩家与公会信息架构、桌面端和移动端交互设计，以及 Palworld 地图方案，重点参考了 [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)。感谢 zaigie 和该项目贡献者长期维护并公开这些成果。
+
+`palworld-server-tool` 采用 [Apache License 2.0](https://github.com/zaigie/palworld-server-tool/blob/main/LICENSE)。本项目使用其公开地图瓦片，并在存档解析与管理界面实现中保留来源说明。第三方组件和解析器的具体许可信息见项目内各自的 `NOTICE` 文件及根目录 [NOTICE.md](NOTICE.md)。
