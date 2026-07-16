@@ -312,6 +312,14 @@ function exec(command, args, options = {}) {
   });
 }
 
+async function dockerCompose(config, args) {
+  const options = { cwd: config.server.composeProjectDir || config.server.installDir };
+  const modern = await exec("docker", ["compose", ...args], options);
+  if (modern.ok) return modern;
+  const legacy = await exec("docker-compose", args, options);
+  return legacy.ok ? legacy : modern;
+}
+
 async function deployServer(config, body = {}) {
   const profile = hostProfile();
   if (!profile.supported) {
@@ -496,9 +504,7 @@ async function serviceStatus(config) {
       };
     }
 
-    const result = await exec("docker", ["compose", "ps", "--format", "json"], {
-      cwd: config.server.composeProjectDir || config.server.installDir
-    });
+    const result = await dockerCompose(config, ["ps", "--format", "json"]);
     return {
       manager: "docker compose",
       running: result.ok && result.stdout.includes("running"),
@@ -548,13 +554,13 @@ async function runAction(action, config) {
     }
 
     const dockerActions = {
-      start: ["compose", "up", "-d"],
-      stop: ["compose", "down"],
-      restart: ["compose", "restart"],
-      update: ["compose", "pull"]
+      start: ["up", "-d"],
+      stop: ["down"],
+      restart: ["restart"],
+      update: ["pull"]
     };
     if (!dockerActions[action]) throw new Error("Unsupported action.");
-    return exec("docker", dockerActions[action], { cwd: config.server.composeProjectDir || config.server.installDir });
+    return dockerCompose(config, dockerActions[action]);
   }
 
   const systemdActions = {
