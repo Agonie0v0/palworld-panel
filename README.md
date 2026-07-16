@@ -1,18 +1,43 @@
 # Palworld Panel
 
-这是一个《幻兽帕鲁》服务器管理面板。
+一个支持 AMD64 和 ARM64 的《幻兽帕鲁》服务器管理面板。
 
-目标流程很简单：
+安装面板后，可以直接在网页中部署 Palworld 服务端，并管理启动、停止、更新、参数、玩家、RCON、备份和存档数据。
 
-1. 先在 AMD64 或 ARM64 Linux 机器上部署 Web 面板。
-2. 打开面板，在“部署”页一键安装 Palworld 服务端。
-3. 之后在面板里管理开服、停服、参数、玩家、备份、RCON、REST API 和存档数据。
+项目参考：[zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)
 
-参考项目：[zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)
+## 主要功能
 
-## 最快部署
+- AMD64 原生运行 Palworld 服务端
+- ARM64 通过 box64 运行 Palworld 服务端
+- 网页一键部署、启动、停止、重启和更新
+- 修改 `PalWorldSettings.ini` 常用参数
+- 查看在线玩家，执行广播、踢出、封禁和关服命令
+- RCON 控制台、命令模板和定时任务
+- 手动备份、自动备份、下载、恢复和删除
+- Palworld REST API 数据查看
+- `Level.sav`、玩家、公会、帕鲁和背包解析
+- 玩家、公会和帕鲁详情
+- 世界地图、玩家位置和基地标记
+- 首次管理员初始化和账号密码登录
+- 手机浏览器适配
+- Docker 面板部署
+- 面板与游戏服务器分离部署的 Agent 模式
 
-Ubuntu / Debian 服务器执行：
+## 方式一：单机部署
+
+适合甲骨文 ARM、普通 AMD64 云服务器，以及“面板和游戏服务器安装在同一台机器”的情况。
+
+这是最简单的部署方式，也是需要在网页中直接一键安装 Palworld 服务端时的推荐方式。
+
+服务器要求：
+
+- Ubuntu 或 Debian
+- root 或 sudo 权限
+- 建议至少 16 GB 内存
+- 建议至少 40 GB 可用磁盘
+
+执行：
 
 ```bash
 sudo apt-get update
@@ -22,7 +47,7 @@ cd palworld-panel
 sudo PANEL_PORT=8080 bash scripts/install-panel.sh
 ```
 
-安装完成后会显示：
+安装结束后会显示面板地址和备用 Token：
 
 ```text
 Panel URL: http://SERVER_PUBLIC_IP:8080
@@ -35,152 +60,197 @@ Panel token: 一串随机字符
 http://你的服务器IP:8080
 ```
 
-第一次打开会要求创建管理员账号和密码。以后直接用账号密码登录；安装脚本输出的 Token 也可以作为备用登录方式。
+第一次打开时：
 
-进入面板后：
+1. 创建管理员账号和密码。
+2. 打开“部署”页面。
+3. 点击“检测”。
+4. 填写服务器名称和管理员密码。
+5. 点击“部署 Palworld 服务端”。
+6. 部署完成后在“总览”页面启动服务器。
 
-```text
-部署 -> 检测 -> 部署 Palworld 服务端
-总览 -> 启动
-```
+ARM64 机器会自动安装 box64；AMD64 机器会直接运行官方服务端。
 
-修改参数：
+## 方式二：Docker 面板 + 远程 Agent
 
-```text
-参数 -> 修改 -> 保存并写入 -> 总览 -> 重启
-```
+适合下面这些情况：
 
-AMD64 和 ARM64 都用同一个面板安装脚本：
+- 面板想用 Docker 运行
+- 面板和游戏服务器不在同一台机器
+- 一个面板需要远程管理游戏服务器
 
-- AMD64：服务端原生运行
-- ARM64：部署服务端时自动安装 box64
+Docker 容器不能直接操作宿主机的 systemd，所以要在游戏服务器上安装 Agent。
 
-## 当前功能
-
-已经实现：
-
-- 面板可部署在 AMD64 / ARM64 Linux
-- 面板里一键部署 Palworld 服务端
-- 启动、停止、重启、更新服务器
-- 修改常用 `PalWorldSettings.ini` 参数
-- 手动备份
-- 备份列表
-- 备份下载
-- 删除备份
-- 恢复备份
-- 自动备份
-- 自动广播
-- RCON 控制台
-- RCON 命令模板新增、编辑、删除和快速使用
-- 定时 RCON 任务新增、编辑、启停、立即执行和删除
-- 广播、踢人、封禁、保存、平滑关服
-- 读取 Palworld REST API 数据
-- 白名单记录管理
-- 内置参考项目同源 `sav_cli` 存档解析器
-- 解析 `Level.sav` 和 `Players/`
-- 展示玩家、公会、帕鲁、背包摘要
-- 玩家、公会、帕鲁详情查看
-- Palworld 地图瓦片、玩家位置和基地标记
-- 首次管理员初始化和账号密码登录
-- 移动端布局
-- 面板与游戏服务器分离部署的远程 Agent
-- Docker 部署面板
-- Docker 模式管理已有 Palworld 容器
-
-## 面板部署方式
-
-推荐方式是直接装到宿主机：
+### 1. 部署 Docker 面板
 
 ```bash
-sudo PANEL_PORT=8080 bash scripts/install-panel.sh
-```
-
-这样面板可以调用系统命令，在“部署”页安装 Palworld 服务端和 systemd 服务。
-
-Docker 方式也支持：
-
-```bash
-cd deploy
-export PANEL_TOKEN="change-this-to-a-long-random-token"
+git clone https://github.com/Agonie0v0/palworld-panel.git
+cd palworld-panel/deploy
+export PANEL_TOKEN="请修改成一个足够长的随机字符串"
 docker compose up -d --build
 ```
 
-但 Docker 面板不能直接给宿主机安装 systemd 服务端。Docker 面板更适合管理已经存在的 Palworld Docker 容器。
+面板地址：
 
-如果面板放在 Docker 或另一台机器上，请在游戏服务器安装 Agent：
+```text
+http://面板服务器IP:8080
+```
+
+### 2. 在游戏服务器安装 Agent
 
 ```bash
+sudo apt-get update
+sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
 sudo AGENT_PORT=8081 bash scripts/install-agent.sh
 ```
 
-脚本会输出 Agent 地址和 Token。然后在面板打开：
+安装结束后会显示：
 
 ```text
-自动化 -> Agent 分离部署 -> 启用 Agent 模式
-模式选择“远程 Agent”
-填写 http://游戏服务器IP:8081 和 Agent Token
-保存 -> 测试连接
+Agent address: http://GAME_SERVER_IP:8081
+Agent token: 一串随机字符
 ```
 
-连接成功后，部署、启停、更新、RCON、参数、备份和存档解析都会在游戏服务器上执行。Agent 的 `8081/TCP` 只应允许面板机器访问。
+### 3. 面板连接 Agent
 
-## 存档解析
+打开面板：
 
-项目内置了参考项目同源的 `sav_cli` 解析器。
-
-ARM/AMD 面板安装脚本默认会安装解析器依赖。第一次安装会编译 Python 原生依赖，可能需要一些时间。
-
-如果你只想先快速开服，可以跳过解析器：
-
-```bash
-sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-panel.sh
+```text
+自动化 -> Agent 分离部署
 ```
 
-之后也可以单独安装：
+设置：
 
-```bash
-sudo PARSER_DIR=/opt/palworld-panel/parsers/sav_cli bash /opt/palworld-panel/scripts/install-sav-parser.sh
+```text
+启用 Agent 模式：开启
+模式：远程 Agent
+Agent 地址：http://游戏服务器IP:8081
+Agent Token：安装脚本输出的 Token
 ```
 
-## 端口
+点击“保存”，再点击“测试连接”。连接成功后，部署、启停、更新、参数、RCON、备份和存档解析都会在游戏服务器上执行。
 
-常用端口：
+## 服务器端口
 
-| 端口 | 协议 | 用途 |
-| --- | --- | --- |
-| 8080 | TCP | Web 面板 |
-| 8211 | UDP | 玩家连接 |
-| 8212 | TCP | Palworld REST API |
-| 25575 | TCP | RCON |
-| 8081 | TCP | 远程 Agent（仅分离部署时使用） |
+| 端口 | 协议 | 用途 | 是否需要公网开放 |
+| --- | --- | --- | --- |
+| 8080 | TCP | Web 面板 | 只开放给管理员更安全 |
+| 8211 | UDP | 玩家连接 | 需要 |
+| 8212 | TCP | Palworld REST API | 不建议直接公网开放 |
+| 25575 | TCP | RCON | 不建议直接公网开放 |
+| 8081 | TCP | 远程 Agent | 只允许面板服务器访问 |
 
-Oracle Cloud 需要在安全列表或 NSG 里放行端口。
+Oracle Cloud 还需要在安全列表或 NSG 中放行对应端口。
 
-Ubuntu 本机防火墙可以执行：
+Ubuntu 防火墙可以执行：
 
 ```bash
 sudo bash scripts/firewall-ubuntu.sh
 ```
 
-## 本地开发检查
+## 常用操作
+
+修改服务器参数：
+
+```text
+参数 -> 修改参数 -> 保存并写入 -> 总览 -> 重启
+```
+
+创建和下载备份：
+
+```text
+备份 -> 立即备份 -> 下载
+```
+
+查看存档数据：
+
+```text
+存档数据 -> 读取
+```
+
+管理定时 RCON：
+
+```text
+RCON -> 定时 RCON -> 新增
+```
+
+## 更新项目
+
+宿主机面板：
 
 ```bash
-npm run check
-node --check public/app.js
-docker compose -f deploy/docker-compose.yml config
+cd palworld-panel
+git pull
+sudo bash scripts/install-panel.sh
 ```
+
+Docker 面板：
+
+```bash
+cd palworld-panel
+git pull
+cd deploy
+docker compose up -d --build
+```
+
+远程 Agent：
+
+```bash
+cd palworld-panel
+git pull
+sudo bash scripts/install-agent.sh
+```
+
+安装脚本会保留已有的面板配置和服务器配置。
+
+## 数据位置
+
+宿主机安装默认目录：
+
+| 内容 | 默认位置 |
+| --- | --- |
+| 面板 | `/opt/palworld-panel` |
+| 面板配置 | `/opt/palworld-panel/data/config.json` |
+| Palworld 服务端 | `/opt/palworld/server` |
+| 存档备份 | `/opt/palworld/backups` |
+| Agent | `/opt/palworld-agent` |
+
+Docker 面板配置保存在 `panel-data` volume 中，重建容器不会丢失管理员、RCON 任务、Agent 配置和白名单数据。
+
+## 存档解析器
+
+安装脚本默认安装项目内置的 `sav_cli` 存档解析器。首次安装需要编译 Python 依赖，耗时可能较长。
+
+暂时跳过解析器：
+
+```bash
+sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-panel.sh
+```
+
+之后单独安装：
+
+```bash
+sudo PARSER_DIR=/opt/palworld-panel/parsers/sav_cli bash /opt/palworld-panel/scripts/install-sav-parser.sh
+```
+
+地图使用 Leaflet，并按需读取参考项目公开的地图瓦片。地图资源无法访问时，其他管理功能不受影响。
 
 ## 安全建议
 
-- 面板 token 必须改成强随机字符串
-- Agent 端口只允许面板 IP 访问
-- 面板端口最好只允许你的 IP 访问
-- RCON 和 REST API 不建议直接开放给所有公网 IP
-- 第一次开服后立刻修改管理员密码
-- 定期备份存档
+- 管理员密码和 Panel Token 使用不同的强密码
+- 面板端口只允许自己的 IP 访问
+- Agent 的 8081 端口只允许面板服务器访问
+- 不要把 RCON 和 REST API 直接开放给所有公网 IP
+- 首次部署服务端后立即修改 `AdminPassword`
+- 定期下载备份到其他机器保存
 
-## 地图说明
+## 开发检查
 
-地图组件使用 Leaflet，瓦片按需读取参考项目公开的 Palworld 地图资源，不会把约 70 MB 的地图文件打进面板镜像。服务器或浏览器无法访问 GitHub/CDN 时，其他管理功能仍可正常使用，但地图底图不会显示。
+```bash
+npm run check
+docker compose -f deploy/docker-compose.yml config
+```
+
+更多 ARM 部署说明见 [QUICKSTART_ARM.md](QUICKSTART_ARM.md)。
