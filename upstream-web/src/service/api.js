@@ -1,0 +1,204 @@
+import Service from "./service";
+
+class ApiService extends Service {
+  async login(param) {
+    let data = param;
+    return this.fetch(`/api/login`).post(data).json();
+  }
+
+  async getConfigStatus() {
+    return this.fetch(`/api/config/status`).get().json();
+  }
+
+  async initializeConfig(param) {
+    return this.fetch(`/api/config/initialize`).post(param).json();
+  }
+
+  async getConfig() {
+    return this.fetch(`/api/config`).get().json();
+  }
+
+  async updateConfig(param) {
+    return this.fetch(`/api/config`).put(param).json();
+  }
+
+  async listDirectories(path = "") {
+    const query = new URLSearchParams({ path }).toString();
+    return this.fetch(`/api/config/directories?${query}`).get().json();
+  }
+
+  async testSaveConfig(save) {
+    return this.fetch(`/api/config/test/save`).post({ save }).json();
+  }
+
+  async testRconConfig(rcon) {
+    return this.fetch(`/api/config/test/rcon`).post({ rcon }).json();
+  }
+
+  async getServerToolInfo() {
+    return this.fetch(`/api/server/tool`).get().json();
+  }
+  async getServerInfo() {
+    return this.fetch(`/api/server`).get().json();
+  }
+  async getServerMetrics() {
+    return this.fetch(`/api/server/metrics`).get().json();
+  }
+  async sendBroadcast(param) {
+    let data = param;
+    return this.fetch(`/api/server/broadcast`).post(data).json();
+  }
+  async shutdownServer(param) {
+    let data = param;
+    return this.fetch(`/api/server/shutdown`).post(data).json();
+  }
+
+  async getPlayerList(param) {
+    const query = this.generateQuery(param);
+    return this.fetch(`/api/player?${query}`).get().json();
+  }
+  async getOnlinePlayerList() {
+    return this.fetch(`/api/online_player`).get().json();
+  }
+  async getPlayer(param) {
+    const { playerUid } = param;
+    return this.fetch(`/api/player/${playerUid}`).get().json();
+  }
+  async kickPlayer(param) {
+    const { playerUid } = param;
+    return this.fetch(`/api/player/${playerUid}/kick`).post().json();
+  }
+  async banPlayer(param) {
+    const { playerUid } = param;
+    return this.fetch(`/api/player/${playerUid}/ban`).post().json();
+  }
+  async unbanPlayer(param) {
+    const { playerUid } = param;
+    return this.fetch(`/api/player/${playerUid}/unban`).post().json();
+  }
+
+  async getGuildList() {
+    return this.fetch(`/api/guild`).get().json();
+  }
+  async getGuild(param) {
+    const { adminPlayerUid } = param;
+    return this.fetch(`/api/guild/${adminPlayerUid}`).get().json();
+  }
+
+  async getWhitelist() {
+    return this.fetch(`/api/whitelist`).get().json();
+  }
+
+  async addWhitelist(param) {
+    let data = param;
+    return this.fetch(`/api/whitelist`).post(data).json();
+  }
+
+  async removeWhitelist(param) {
+    let data = param;
+    return this.fetch(`/api/whitelist`).delete(data).json();
+  }
+
+  async putWhitelist(param) {
+    let data = param;
+    return this.fetch(`/api/whitelist`).put(data).json();
+  }
+
+  async getRconCommands() {
+    return this.fetch(`/api/rcon`).get().json();
+  }
+
+  async sendRconCommand(param) {
+    let data = param;
+    return this.fetch(`/api/rcon/send`).post(data).json();
+  }
+
+  async addRconCommand(param) {
+    let data = param;
+    return this.fetch(`/api/rcon`).post(data).json();
+  }
+
+  async putRconCommand(uuid, param) {
+    let data = param;
+    return this.fetch(`/api/rcon/${uuid}`).put(data).json();
+  }
+
+  async removeRconCommand(uuid) {
+    return this.fetch(`/api/rcon/${uuid}`).delete().json();
+  }
+
+  async getRconTasks() {
+    return this.fetch(`/api/rcon/tasks`).get().json();
+  }
+
+  async addRconTask(param) {
+    return this.fetch(`/api/rcon/tasks`).post(param).json();
+  }
+
+  async putRconTask(uuid, param) {
+    return this.fetch(`/api/rcon/tasks/${uuid}`).put(param).json();
+  }
+
+  async removeRconTask(uuid) {
+    return this.fetch(`/api/rcon/tasks/${uuid}`).delete().json();
+  }
+
+  async runRconTask(uuid) {
+    return this.fetch(`/api/rcon/tasks/${uuid}/run`).post().json();
+  }
+
+  async getBackupList(param) {
+    const query = this.generateQuery(param);
+    return this.fetch(`/api/backup?${query}`).get().json();
+  }
+
+  async removeBackup(uuid) {
+    return this.fetch(`/api/backup/${uuid}`).delete().json();
+  }
+
+  async downloadBackup(uuid) {
+    return this.fetch(`/api/backup/${uuid}`).get().blob();
+  }
+
+  async getPanelStatus() {
+    return this.fetch(`/api/status`).get().json();
+  }
+
+  async updateGameSettings(settings) {
+    return this.fetch(`/api/settings`).put({ settings }).json();
+  }
+
+  async getDeployPlan() {
+    return this.fetch(`/api/deploy/plan`).get().json();
+  }
+
+  async deployServer(param) {
+    return this.fetch(`/api/deploy/server`).post(param).json();
+  }
+
+  async runServerAction(action) {
+    return this.fetch(`/api/action`).post({ action }).json();
+  }
+
+  async resetWorld(param) {
+    return this.fetch(`/api/server/reset-world`).post(param).json();
+  }
+
+  async uninstallServer(param) {
+    return this.fetch(`/api/server/uninstall`).post(param).json();
+  }
+
+  async getAgentConfig() {
+    return this.fetch(`/api/agent/config`).get().json();
+  }
+
+  async updateAgentConfig(agent) {
+    return this.fetch(`/api/agent/config`).put({ agent }).json();
+  }
+
+  async testAgent() {
+    return this.fetch(`/api/agent/test`).post({}).json();
+  }
+}
+
+export default ApiService;

@@ -1,3 +1,4 @@
 *.sh text eol=lf
 *.service text eol=lf
 parsers/sav_cli/run-save-parser text eol=lf
+upstream-web/dist/** binary

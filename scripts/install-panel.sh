@@ -24,8 +24,12 @@ if ! command -v node >/dev/null 2>&1; then
   apt-get install -y nodejs
 fi
 
-mkdir -p "$PANEL_DIR/data"
-cp -R package.json src public config.example.json parsers scripts "$PANEL_DIR/"
+mkdir -p "$PANEL_DIR/data" "$PANEL_DIR/upstream-web"
+cp -R package.json package-lock.json src public config.example.json parsers scripts "$PANEL_DIR/"
+cp -R upstream-web/dist "$PANEL_DIR/upstream-web/"
+cp -R upstream-web/public "$PANEL_DIR/upstream-web/"
+cd "$PANEL_DIR"
+npm ci --omit=dev
 chmod +x "$PANEL_DIR/scripts/"*.sh "$PANEL_DIR/parsers/sav_cli/run-save-parser"
 
 if [[ ! -f "$PANEL_DIR/data/config.json" ]]; then

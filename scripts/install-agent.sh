@@ -25,7 +25,9 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 mkdir -p "$AGENT_DIR/data"
-cp -R package.json src public config.example.json parsers scripts "$AGENT_DIR/"
+cp -R package.json package-lock.json src public config.example.json parsers scripts "$AGENT_DIR/"
+cd "$AGENT_DIR"
+npm ci --omit=dev
 chmod +x "$AGENT_DIR/scripts/"*.sh "$AGENT_DIR/parsers/sav_cli/run-save-parser"
 
 if [[ ! -f "$AGENT_DIR/data/config.json" ]]; then

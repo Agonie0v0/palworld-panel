@@ -7,11 +7,17 @@ const { execFile } = require("child_process");
 const os = require("os");
 const net = require("net");
 const crypto = require("crypto");
+const packageInfo = require("../package.json");
+const { createUpstreamCompatibility } = require("./upstream-compat");
 
 const rootDir = path.resolve(__dirname, "..");
 const configPath = process.env.PAL_PANEL_CONFIG || path.join(rootDir, "data", "config.json");
 const dataDir = path.dirname(configPath);
-const publicDir = path.join(rootDir, "public");
+const upstreamPublicDir = path.join(rootDir, "upstream-web", "dist");
+const upstreamSourcePublicDir = path.join(rootDir, "upstream-web", "public");
+const publicDir = fs.existsSync(path.join(upstreamPublicDir, "index.html"))
+  ? upstreamPublicDir
+  : path.join(rootDir, "public");
 const deployScriptPath = path.join(rootDir, "scripts", "deploy-palworld-server.sh");
 const agentRuntime = process.env.AGENT_MODE === "1";
 
@@ -50,7 +56,14 @@ const defaultConfig = {
     broadcastIntervalMinutes: 0,
     broadcastMessage: "",
     keepBackups: 20,
-    rconTaskCheckSeconds: 30
+    rconTaskCheckSeconds: 30,
+    backupKeepDays: 7,
+    playerSyncInterval: 60,
+    saveSyncInterval: 120,
+    playerLogging: false,
+    playerLoginMessage: "",
+    playerLogoutMessage: "",
+    kickNonWhitelist: false
   },
   settings: {
     ServerName: "Palworld 1.0 Oracle ARM",
@@ -97,7 +110,13 @@ const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml"
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".ttf": "font/ttf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2"
 };
 
 function mergeConfig(base, override) {
@@ -895,6 +914,43 @@ async function executeAgentOperation(operation, payload, config) {
         totalMemory: os.totalmem()
       }
     }),
+    config: async () => ({
+      server: config.server,
+      settings: config.settings,
+      automation: config.automation
+    }),
+    configUpdate: async () => {
+      const next = await saveConfig({
+        ...config,
+        server: { ...config.server, ...(payload.server || {}) },
+        settings: { ...config.settings, ...(payload.settings || {}) },
+        automation: { ...config.automation, ...(payload.automation || {}) }
+      });
+      return { server: next.server, settings: next.settings, automation: next.automation };
+    },
+    directories: async () => {
+      const target = path.resolve(payload.path || process.cwd());
+      const entries = await fsp.readdir(target, { withFileTypes: true });
+      return {
+        current: target,
+        parent: path.dirname(target),
+        roots: os.platform() === "win32"
+          ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((drive) => `${drive}:\\`).filter((drive) => fs.existsSync(drive))
+          : ["/"],
+        entries: entries.filter((entry) => entry.isDirectory()).map((entry) => ({ name: entry.name, path: path.join(target, entry.name) }))
+      };
+    },
+    testSave: async () => {
+      const target = payload.path;
+      if (!target) return { status: "unconfigured", message: "Save path is empty." };
+      if (!fs.existsSync(target)) return { status: "error", message: "Save path does not exist." };
+      return { status: "normal", message: path.resolve(target) };
+    },
+    testRcon: () => rcon({
+      ...config,
+      server: { ...config.server, ...(payload.server || {}) },
+      settings: { ...config.settings, ...(payload.settings || {}) }
+    }, "ShowPlayers"),
     deploy: () => deployServer(config, payload),
     live: () => liveServerData(config),
     rcon: () => rcon(config, payload.command || ""),
@@ -976,7 +1032,51 @@ async function proxyAgentBackup(res, agent, name) {
   });
 }
 
+async function loadSyncedSaveData() {
+  return loadJsonFile("upstream-save-sync.json", { players: [], guilds: [], source: "sync" });
+}
+
+async function saveSyncedSaveData(data) {
+  return saveJsonFile("upstream-save-sync.json", data);
+}
+
+async function downloadCompatibleBackup(req, res, config, name) {
+  const agent = await loadAgentConfig();
+  if (agentIsEnabled(agent)) return proxyAgentBackup(res, agent, name);
+  return sendBackupFile(req, res, config, name);
+}
+
+const upstreamCompat = createUpstreamCompatibility({
+  version: packageInfo.version,
+  sendJson,
+  sendError,
+  readBody,
+  hashPassword,
+  saveConfig,
+  effectivePanelToken,
+  managedCall,
+  liveServerData,
+  querySaveData,
+  rcon,
+  loadWhitelist,
+  saveWhitelist,
+  loadSyncedSaveData,
+  saveSyncedSaveData,
+  listRconTemplates,
+  saveRconTemplates,
+  listRconTasks,
+  saveRconTasks,
+  listBackups,
+  deleteBackup,
+  downloadBackup: downloadCompatibleBackup
+});
+
 async function handleApi(req, res, config) {
+  if (await upstreamCompat.handlePublic(req, res, config)) return;
+
+  const authorized = isAuthorized(req, config);
+  if (await upstreamCompat.handleOptional(req, res, config, authorized)) return;
+
   if (req.method === "GET" && req.url === "/api/auth/status") {
     return sendJson(res, 200, {
       ok: true,
@@ -1010,13 +1110,18 @@ async function handleApi(req, res, config) {
 
   if (req.method === "POST" && req.url === "/api/login") {
     const body = await readBody(req);
-    const ok = body.token === effectivePanelToken(config)
+    const panelToken = effectivePanelToken(config);
+    const ok = body.token === panelToken
+      || body.password === panelToken
+      || (body.password && verifyPassword(body.password, config.panel.adminPasswordSalt, config.panel.adminPasswordHash))
       || (body.username === config.panel.adminUser && verifyPassword(body.password, config.panel.adminPasswordSalt, config.panel.adminPasswordHash));
     if (!ok) return sendError(res, 401, "Invalid login.");
     return sendJson(res, 200, { ok: true, token: effectivePanelToken(config) });
   }
 
-  if (!isAuthorized(req, config)) return sendError(res, 401, "Unauthorized.");
+  if (!authorized) return sendError(res, 401, "Unauthorized.");
+
+  if (await upstreamCompat.handleAuthorized(req, res, config)) return;
 
   if (req.method === "GET" && req.url === "/api/status") {
     const managed = await managedCall("status", {}, async () => ({
@@ -1265,17 +1370,7 @@ function startSchedulers() {
         }
       }
 
-      const tasks = await listRconTasks();
-      let changed = false;
-      for (const task of tasks) {
-        if (!task.enabled || !task.command || Number(task.intervalMinutes || 0) <= 0) continue;
-        const due = Date.now() - Number(task.lastRun || 0) >= Number(task.intervalMinutes) * 60000;
-        if (!due) continue;
-        await managedCall("rcon", { command: task.command }, () => rcon(config, task.command));
-        task.lastRun = Date.now();
-        changed = true;
-      }
-      if (changed) await saveRconTasks(tasks);
+      await upstreamCompat.runScheduledTasks(config);
     } catch (error) {
       console.error(`Scheduler error: ${error.message}`);
     }
@@ -1285,8 +1380,11 @@ function startSchedulers() {
 async function serveStatic(req, res) {
   const requestPath = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
   const safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
-  const filePath = path.join(publicDir, safePath === "/" ? "index.html" : safePath);
-  if (!filePath.startsWith(publicDir)) return sendError(res, 403, "Forbidden.");
+  const assetRoot = requestPath.startsWith("/map/tiles/") && fs.existsSync(upstreamSourcePublicDir)
+    ? upstreamSourcePublicDir
+    : publicDir;
+  const filePath = path.join(assetRoot, safePath === "/" ? "index.html" : safePath);
+  if (!filePath.startsWith(assetRoot)) return sendError(res, 403, "Forbidden.");
 
   try {
     const stat = await fsp.stat(filePath);

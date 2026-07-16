@@ -1,14 +1,8 @@
-# ARM 服务器快速部署
+# Oracle ARM 快速部署
 
-适合 Oracle Cloud ARM / Ampere A1 / Ubuntu。
+适用于 Oracle Cloud Ampere A1、Ubuntu/Debian ARM64。
 
-## 1. 登录服务器
-
-```bash
-ssh ubuntu@你的服务器IP
-```
-
-## 2. 安装面板
+## 安装面板
 
 ```bash
 sudo apt-get update
@@ -18,100 +12,48 @@ cd palworld-panel
 sudo PANEL_PORT=19090 bash scripts/install-panel.sh
 ```
 
-安装完成后会显示：
+安装完成后访问：
 
 ```text
-Panel URL: http://SERVER_PUBLIC_IP:19090
-Panel token: 一串随机字符
+http://服务器公网IP:19090
 ```
 
-## 3. 放行端口
+## 放行端口
 
-Oracle Cloud 控制台放行：
+在 Oracle Cloud 安全列表或 NSG 中放行：
 
 | 端口 | 协议 | 用途 |
 | --- | --- | --- |
-| 19090 | TCP | 面板 |
+| 19090 | TCP | Web 面板 |
 | 8211 | UDP | 玩家进服 |
 
-服务器本机执行：
+系统防火墙可执行：
 
 ```bash
 sudo bash scripts/firewall-ubuntu.sh
 ```
 
-## 4. 打开面板
+## 一键开服
 
-浏览器访问：
+首次打开面板后：
 
-```text
-http://你的服务器IP:19090
-```
+1. 创建管理员密码。
+2. 打开“控制中心 -> 服务器运维”。
+3. 设置服务器名称和强 `AdminPassword`。
+4. 点击“部署服务器”。
+5. 等待 DepotDownloader、box64 和 Palworld 服务端安装完成。
 
-第一次打开先创建管理员账号和密码。安装脚本输出的 `Panel token` 可以作为备用登录方式。
+部署完成后，服务会以 `palworld.service` 运行。面板中可以直接启动、停止、重启、更新、备份、重开世界和卸载。
 
-## 5. 一键部署服务端
-
-在面板里点：
-
-```text
-部署 -> 检测 -> 部署 Palworld 服务端
-```
-
-ARM 机器会自动安装 `box64`，然后部署 Palworld 官方服务端。
-
-## 6. 启动服务器
-
-在面板里点：
-
-```text
-总览 -> 启动
-```
-
-如果部署时勾选了“部署完成后自动启动”，这一步可以跳过。
-
-## 7. 修改参数
-
-在面板里点：
-
-```text
-参数 -> 修改服务器名、管理员密码、倍率等 -> 保存并写入 -> 总览 -> 重启
-```
-
-第一次一定要把 `AdminPassword` 从：
-
-```text
-change-admin-password
-```
-
-改成你自己的强密码。
-
-## 常用命令
-
-查看面板：
+## 查看状态
 
 ```bash
 sudo systemctl status palworld-panel
-```
-
-查看服务器：
-
-```bash
 sudo systemctl status palworld
-```
-
-看日志：
-
-```bash
+journalctl -u palworld-panel -f
 journalctl -u palworld -f
 ```
 
-## 面板和服务器分开部署
+安装脚本显示的 `Panel token` 可以直接作为管理认证密码使用。
 
-如果面板不在这台 ARM 游戏服务器上，只在 ARM 服务器安装 Agent：
-
-```bash
-sudo AGENT_PORT=8081 bash scripts/install-agent.sh
-```
-
-然后把脚本输出的地址和 Token 填到面板的“自动化 -> Agent 分离部署”，保存并测试连接。连接成功后，再去“部署”页面一键安装服务端。
+完整功能和 Docker/Agent 部署说明见 [README.md](README.md)。

@@ -7,10 +7,13 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 COPY config.example.json ./
 COPY src ./src
 COPY public ./public
+COPY upstream-web/dist ./upstream-web/dist
+COPY upstream-web/public ./upstream-web/public
 COPY parsers ./parsers
 COPY scripts ./scripts
 

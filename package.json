@@ -2,14 +2,19 @@
   "name": "palworld-oneclick-panel",
   "version": "0.1.0",
   "private": true,
-  "description": "One-click Palworld server manager with a lightweight WebUI.",
+  "description": "Cross-architecture Palworld server deployment and management panel.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check public/app.js"
+    "check": "node --check src/server.js && node --check src/upstream-compat.js",
+    "build:web": "pnpm --dir upstream-web build",
+    "test:web": "pnpm --dir upstream-web test"
   },
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "cron-parser": "^4.9.0"
+  }
 }
