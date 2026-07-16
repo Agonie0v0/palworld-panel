@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PANEL_PORT="${PANEL_PORT:-8080}"
+PANEL_PORT="${PANEL_PORT:-19090}"
 GAME_PORT="${GAME_PORT:-8211}"
 REST_PORT="${REST_PORT:-8212}"
 RCON_PORT="${RCON_PORT:-25575}"

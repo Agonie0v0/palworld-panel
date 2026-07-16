@@ -1,7 +1,7 @@
 {
   "panel": {
     "host": "0.0.0.0",
-    "port": 8080,
+    "port": 19090,
     "token": "change-me-now",
     "adminInitialized": false,
     "adminUser": "",
