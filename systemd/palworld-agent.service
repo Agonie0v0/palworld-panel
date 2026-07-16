@@ -1,0 +1,19 @@
+[Unit]
+Description=Palworld Panel Remote Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/palworld-agent
+Environment=NODE_ENV=production
+Environment=AGENT_MODE=1
+Environment=AGENT_PORT=8081
+Environment=PAL_AGENT_TOKEN=change-me
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

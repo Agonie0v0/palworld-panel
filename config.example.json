@@ -2,7 +2,11 @@
   "panel": {
     "host": "0.0.0.0",
     "port": 8080,
-    "token": "change-me"
+    "token": "change-me",
+    "adminInitialized": false,
+    "adminUser": "",
+    "adminPasswordHash": "",
+    "adminPasswordSalt": ""
   },
   "server": {
     "mode": "systemd",
@@ -28,7 +32,8 @@
     "backupIntervalMinutes": 0,
     "broadcastIntervalMinutes": 0,
     "broadcastMessage": "",
-    "keepBackups": 20
+    "keepBackups": 20,
+    "rconTaskCheckSeconds": 30
   },
   "settings": {
     "ServerName": "Palworld 1.0 Oracle ARM",
