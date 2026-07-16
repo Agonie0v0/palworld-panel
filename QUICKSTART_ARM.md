@@ -17,6 +17,14 @@ cd palworld-panel
 sudo PANEL_PORT=8080 bash scripts/install-oci-arm.sh
 ```
 
+这个命令默认会一起安装存档解析器。第一次安装会编译 Python 原生依赖，时间会比普通脚本长一些。
+
+如果你只想先快速开服，不需要玩家/公会/帕鲁/背包解析，可以执行：
+
+```bash
+sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-oci-arm.sh
+```
+
 如果服务器还没有项目，先克隆：
 
 ```bash

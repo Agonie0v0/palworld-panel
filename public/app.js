@@ -145,6 +145,45 @@ async function sendRcon(command) {
   document.querySelector("#rconOutput").textContent = data.result.stdout || data.result.stderr || "完成";
 }
 
+function text(value, fallback = "-") {
+  if (value === undefined || value === null || value === "") return fallback;
+  return String(value);
+}
+
+function renderSimpleList(selector, rows, emptyText, render) {
+  const box = document.querySelector(selector);
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">${emptyText}</div>`;
+    return;
+  }
+  box.innerHTML = rows.slice(0, 80).map(render).join("");
+}
+
+function renderSaveData(data) {
+  const players = Array.isArray(data.players) ? data.players : [];
+  const guilds = Array.isArray(data.guilds) ? data.guilds : [];
+  const pals = Array.isArray(data.pals) ? data.pals : [];
+  const inventory = Array.isArray(data.inventory) ? data.inventory : [];
+
+  document.querySelector("#savePlayersCount").textContent = players.length;
+  document.querySelector("#saveGuildsCount").textContent = guilds.length;
+  document.querySelector("#savePalsCount").textContent = pals.length;
+  document.querySelector("#saveItemsCount").textContent = inventory.length;
+
+  renderSimpleList("#savePlayersList", players, "没有玩家数据", (player) =>
+    `<div class="row"><strong>${text(player.nickname || player.name, "玩家")}</strong><span>Lv.${text(player.level, 0)} / ${text(player.player_uid)}</span></div>`
+  );
+  renderSimpleList("#saveGuildsList", guilds, "没有公会数据", (guild) =>
+    `<div class="row"><strong>${text(guild.name, "公会")}</strong><span>基地 Lv.${text(guild.base_camp_level, 0)} / 成员 ${(guild.players || []).length}</span></div>`
+  );
+  renderSimpleList("#savePalsList", pals, "没有帕鲁数据", (pal) =>
+    `<div class="row"><strong>${text(pal.type || pal.name, "帕鲁")}</strong><span>Lv.${text(pal.level, 0)} / ${text(pal.owner_name, "未知主人")}</span></div>`
+  );
+  renderSimpleList("#saveInventoryList", inventory, "没有背包数据", (item) =>
+    `<div class="row"><strong>${text(item.ItemId || item.item_id || item.static_id, "物品")}</strong><span>x${text(item.StackCount || item.count, 1)} / ${text(item.owner_name, "未知主人")}</span></div>`
+  );
+}
+
 document.querySelectorAll(".tab").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".tab,.view").forEach((el) => el.classList.remove("active"));
@@ -203,6 +242,7 @@ document.querySelector("#saveWhitelistBtn").addEventListener("click", async () =
 
 document.querySelector("#loadSaveBtn").addEventListener("click", async () => {
   const data = await api("/api/save-data");
+  renderSaveData(data.data);
   document.querySelector("#saveOutput").textContent = JSON.stringify(data.data, null, 2);
   document.querySelector("#mapBox").textContent = data.data.map ? JSON.stringify(data.data.map, null, 2) : data.data.message;
 });

@@ -128,9 +128,38 @@
       </section>
 
       <section class="view" id="saves">
+        <article class="panel">
+          <div class="panel-heading"><h2>存档解析</h2><button id="loadSaveBtn">读取</button></div>
+          <div class="save-summary">
+            <div><strong id="savePlayersCount">0</strong><span>玩家</span></div>
+            <div><strong id="saveGuildsCount">0</strong><span>公会</span></div>
+            <div><strong id="savePalsCount">0</strong><span>帕鲁</span></div>
+            <div><strong id="saveItemsCount">0</strong><span>物品格</span></div>
+          </div>
+        </article>
         <div class="grid">
           <article class="panel">
-            <div class="panel-heading"><h2>玩家 / 公会 / 帕鲁 / 背包</h2><button id="loadSaveBtn">读取</button></div>
+            <div class="panel-heading"><h2>玩家</h2></div>
+            <div id="savePlayersList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><h2>公会</h2></div>
+            <div id="saveGuildsList" class="list"></div>
+          </article>
+        </div>
+        <div class="grid">
+          <article class="panel">
+            <div class="panel-heading"><h2>帕鲁</h2></div>
+            <div id="savePalsList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><h2>背包</h2></div>
+            <div id="saveInventoryList" class="list"></div>
+          </article>
+        </div>
+        <div class="grid">
+          <article class="panel">
+            <div class="panel-heading"><h2>原始数据</h2></div>
             <pre id="saveOutput" class="log tall">需要配置 saveParserCommand 后读取 Level.sav。</pre>
           </article>
           <article class="panel">

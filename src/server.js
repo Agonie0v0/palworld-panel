@@ -35,7 +35,7 @@ const defaultConfig = {
     restUser: "admin",
     restPassword: "",
     publicPort: 8211,
-    saveParserCommand: ""
+    saveParserCommand: process.env.SAVE_PARSER_COMMAND || ""
   },
   automation: {
     backupIntervalMinutes: 0,
@@ -433,7 +433,33 @@ async function querySaveData(config) {
   const result = await exec(config.server.saveParserCommand, [level], { timeout: 300000 });
   if (!result.ok) return { ...output, source: "parser_error", message: result.stderr || result.stdout };
   try {
-    return { ...JSON.parse(result.stdout), source: "parser" };
+    const parsed = JSON.parse(result.stdout);
+    const players = Array.isArray(parsed.players) ? parsed.players : [];
+    const pals = parsed.pals || players.flatMap((player) =>
+      (player.pals || []).map((pal) => ({
+        ...pal,
+        owner_uid: player.player_uid,
+        owner_name: player.nickname
+      }))
+    );
+    const inventory = parsed.inventory || players.flatMap((player) =>
+      Object.entries(player.items || {}).flatMap(([container, items]) =>
+        (items || []).map((item) => ({
+          ...item,
+          container,
+          owner_uid: player.player_uid,
+          owner_name: player.nickname
+        }))
+      )
+    );
+    return {
+      players,
+      guilds: Array.isArray(parsed.guilds) ? parsed.guilds : [],
+      pals,
+      inventory,
+      map: parsed.map || null,
+      source: "parser"
+    };
   } catch {
     return { ...output, source: "parser_error", message: "Save parser did not return JSON." };
   }

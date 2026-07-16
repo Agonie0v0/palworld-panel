@@ -52,17 +52,23 @@ http://你的服务器IP:8080
 - Docker 模式：通过 Docker socket 管理同机 Palworld 容器
 - systemd 模式：适合直接装在云服务器
 - Oracle ARM 安装脚本：通过 `box64` 运行官方 x86_64 服务端
+- 内置参考项目同源 `sav_cli` 存档解析器
+- 解析 `Level.sav` 和 `Players/` 玩家存档
+- 存档页展示玩家、公会、帕鲁、背包摘要
 
-已经预留界面和接口，但需要外部解析器：
+还需要继续补齐到参考项目同等体验的部分：
 
-- `Level.sav` 深度解析
-- 玩家离线数据
-- 公会数据
-- 帕鲁数据
-- 背包数据
 - 地图数据
+- 更完整的玩家/公会/帕鲁详情页
+- 参考项目级别的移动端细节体验
 
-原因是这些功能依赖 Palworld 存档格式解析。项目提供 `server.saveParserCommand` 接口，解析器只要接收存档路径并输出 JSON，面板就能展示。
+存档解析器来自参考项目的 `sav_cli` 思路，依赖 PalworldSaveTools 的 `palsav-flex/palooz`。ARM 一键安装默认会安装解析器依赖；如果只想先开服，可以跳过：
+
+```bash
+sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=8080 bash scripts/install-oci-arm.sh
+```
+
+项目仍保留 `server.saveParserCommand` 接口。你也可以替换成自己的解析器，只要接收存档路径并输出 JSON。
 
 推荐解析器输出：
 

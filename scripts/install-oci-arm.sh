@@ -8,6 +8,7 @@ STEAMCMD_DIR="${STEAMCMD_DIR:-/opt/steamcmd}"
 PANEL_DIR="${PANEL_DIR:-/opt/palworld-panel}"
 PANEL_PORT="${PANEL_PORT:-8080}"
 PANEL_TOKEN="${PANEL_TOKEN:-$(openssl rand -hex 24)}"
+INSTALL_SAVE_PARSER="${INSTALL_SAVE_PARSER:-1}"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Please run as root: sudo bash scripts/install-oci-arm.sh"
@@ -93,8 +94,13 @@ WantedBy=multi-user.target
 EOF
 
 mkdir -p "$PANEL_DIR"
-cp -R package.json src public config.example.json "$PANEL_DIR/"
+cp -R package.json src public config.example.json parsers "$PANEL_DIR/"
 mkdir -p "$PANEL_DIR/data"
+chmod +x "$PANEL_DIR/parsers/sav_cli/run-save-parser"
+
+if [[ "$INSTALL_SAVE_PARSER" == "1" ]]; then
+  PARSER_DIR="$PANEL_DIR/parsers/sav_cli" bash scripts/install-sav-parser.sh
+fi
 
 cat >"$PANEL_DIR/data/config.json" <<EOF
 {
@@ -121,7 +127,7 @@ cat >"$PANEL_DIR/data/config.json" <<EOF
     "restUser": "admin",
     "restPassword": "",
     "publicPort": 8211,
-    "saveParserCommand": ""
+    "saveParserCommand": "$PANEL_DIR/parsers/sav_cli/run-save-parser"
   },
   "automation": {
     "backupIntervalMinutes": 0,
@@ -196,5 +202,11 @@ Or start from shell:
   sudo systemctl start palworld
 
 Change AdminPassword in the panel before inviting players.
+
+Save parser:
+  $PANEL_DIR/parsers/sav_cli/run-save-parser
+
+Disable parser installation if needed:
+  sudo INSTALL_SAVE_PARSER=0 PANEL_PORT=$PANEL_PORT bash scripts/install-oci-arm.sh
 
 EOF

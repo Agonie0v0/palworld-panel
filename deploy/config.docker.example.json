@@ -22,7 +22,7 @@
     "restUser": "admin",
     "restPassword": "",
     "publicPort": 8211,
-    "saveParserCommand": ""
+    "saveParserCommand": "/app/parsers/sav_cli/run-save-parser"
   },
   "automation": {
     "backupIntervalMinutes": 0,
