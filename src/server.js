@@ -29,7 +29,16 @@ const schedulerState = {
   saveSync: 0,
   backup: 0,
   broadcast: 0,
-  rconTasks: 0
+  rconTasks: 0,
+  watchdog: 0,
+  watchdogFailures: 0,
+  memoryBreaches: 0,
+  pendingRestart: false,
+  lastManagedRestart: 0,
+  lastScheduledRestart: Date.now(),
+  lastWatchdogCheck: 0,
+  lastWatchdogAction: "",
+  lastWatchdogError: ""
 };
 
 const defaultConfig = {
@@ -85,7 +94,18 @@ const defaultConfig = {
     webTls: false,
     webCertPath: "",
     webKeyPath: "",
-    webPublicUrl: ""
+    webPublicUrl: "",
+    watchdogEnabled: false,
+    watchdogCheckIntervalSeconds: 30,
+    watchdogAutoRestart: false,
+    watchdogFailureThreshold: 3,
+    watchdogMemoryThresholdPercent: 0,
+    watchdogMemoryBreachChecks: 2,
+    watchdogRestartCooldownMinutes: 15,
+    scheduledRestartIntervalHours: 0,
+    maintenanceWarningSeconds: 60,
+    maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds.",
+    backupBeforeManagedRestart: true
   },
   settings: {
     ServerName: "Palworld 1.0 Oracle ARM",
@@ -615,6 +635,119 @@ async function serviceStatus(config) {
     running: active.stdout === "active",
     active: active.stdout || active.stderr,
     enabled: enabled.stdout || enabled.stderr
+  };
+}
+
+function clampPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.min(100, Math.max(0, Math.round(number * 10) / 10));
+}
+
+function parseDfOutput(output) {
+  const lines = String(output || "").trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return null;
+  const columns = lines[lines.length - 1].trim().split(/\s+/);
+  if (columns.length < 6) return null;
+  const total = Number(columns[1]) * 1024;
+  const used = Number(columns[2]) * 1024;
+  const available = Number(columns[3]) * 1024;
+  if (![total, used, available].every(Number.isFinite)) return null;
+  return {
+    filesystem: columns[0],
+    total,
+    used,
+    available,
+    usedPercent: clampPercent(String(columns[4]).replace("%", "")),
+    mount: columns.slice(5).join(" ")
+  };
+}
+
+function parsePsOutput(output) {
+  const line = String(output || "").trim().split(/\r?\n/).find(Boolean);
+  if (!line) return null;
+  const match = line.trim().match(/^([\d.]+)\s+([\d.]+)\s+(\d+)\s+(\d+)\s+(.+)$/);
+  if (!match) return null;
+  return {
+    cpuPercent: clampPercent(match[1]),
+    memoryPercent: clampPercent(match[2]),
+    memoryBytes: Number(match[3]) * 1024,
+    uptimeSeconds: Number(match[4]),
+    command: match[5]
+  };
+}
+
+async function existingDiskTarget(target) {
+  let current = path.resolve(target || os.homedir());
+  while (current !== path.dirname(current)) {
+    if (fs.existsSync(current)) return current;
+    current = path.dirname(current);
+  }
+  return fs.existsSync(current) ? current : os.homedir();
+}
+
+async function diskMetrics(target) {
+  if (os.platform() === "win32") return null;
+  const result = await exec("df", ["-Pk", await existingDiskTarget(target)]);
+  return result.ok ? parseDfOutput(result.stdout) : null;
+}
+
+async function serviceProcessId(config) {
+  if (config.server.mode === "docker") {
+    let container = config.server.containerName;
+    if (!container) {
+      const result = await dockerCompose(config, ["ps", "-q"]);
+      container = result.stdout.split(/\r?\n/).find(Boolean) || "";
+    }
+    if (!container) return 0;
+    const result = await exec("docker", ["inspect", "-f", "{{.State.Pid}}", container]);
+    return result.ok ? Number(result.stdout) || 0 : 0;
+  }
+  const result = await exec("systemctl", ["show", config.server.serviceName, "--property", "MainPID", "--value"]);
+  return result.ok ? Number(result.stdout) || 0 : 0;
+}
+
+async function processMetrics(config, running) {
+  if (!running || os.platform() === "win32") return null;
+  const pid = await serviceProcessId(config);
+  if (!pid) return null;
+  const result = await exec("ps", ["-p", String(pid), "-o", "%cpu=,%mem=,rss=,etimes=,comm="]);
+  const metrics = result.ok ? parsePsOutput(result.stdout) : null;
+  return metrics ? { pid, ...metrics } : { pid };
+}
+
+async function collectHostMetrics(config) {
+  const cpus = os.cpus() || [];
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  const usedMemory = Math.max(0, totalMemory - freeMemory);
+  const loadAverage = os.loadavg();
+  const status = await serviceStatus(config);
+  const [disk, serverProcess] = await Promise.all([
+    diskMetrics(config.server.installDir),
+    processMetrics(config, status.running)
+  ]);
+  return {
+    collectedAt: new Date().toISOString(),
+    platform: os.platform(),
+    arch: os.arch(),
+    hostname: os.hostname(),
+    uptimeSeconds: os.uptime(),
+    cpu: {
+      model: cpus[0]?.model || "",
+      cores: cpus.length,
+      loadAverage,
+      usedPercent: cpus.length ? clampPercent((Number(loadAverage[0]) / cpus.length) * 100) : 0
+    },
+    memory: {
+      total: totalMemory,
+      used: usedMemory,
+      free: freeMemory,
+      usedPercent: totalMemory ? clampPercent((usedMemory / totalMemory) * 100) : 0
+    },
+    disk,
+    service: status,
+    process: serverProcess
   };
 }
 
@@ -1224,6 +1357,7 @@ async function executeAgentOperation(operation, payload, config) {
         totalMemory: os.totalmem()
       }
     }),
+    hostMetrics: () => collectHostMetrics(config),
     config: async () => ({
       server: config.server,
       settings: config.settings,
@@ -1635,6 +1769,38 @@ async function handleApi(req, res, config) {
     return sendJson(res, 200, { ok: true, agent: result });
   }
 
+  if (req.method === "GET" && req.url === "/api/host/metrics") {
+    let metrics;
+    try {
+      metrics = await managedCall("hostMetrics", {}, () => collectHostMetrics(config));
+    } catch (error) {
+      metrics = { unavailable: true, error: error.message };
+    }
+    return sendJson(res, 200, { ok: true, metrics });
+  }
+
+  if (req.method === "GET" && req.url === "/api/watchdog") {
+    return sendJson(res, 200, {
+      ok: true,
+      settings: watchdogSettings(config.automation),
+      state: watchdogRuntimeState()
+    });
+  }
+
+  if (req.method === "PUT" && req.url === "/api/watchdog") {
+    const body = await readBody(req);
+    const automation = {
+      ...config.automation,
+      ...sanitizeWatchdogSettings(body.settings || {})
+    };
+    const next = await saveConfig({ ...config, automation });
+    return sendJson(res, 200, {
+      ok: true,
+      settings: watchdogSettings(next.automation),
+      state: watchdogRuntimeState()
+    });
+  }
+
   if (req.method === "POST" && req.url === "/api/action") {
     const body = await readBody(req);
     const result = await managedCall("action", { action: body.action }, () => body.action === "backup" ? createBackup(config) : runAction(body.action, config));
@@ -1655,6 +1821,120 @@ async function handleApi(req, res, config) {
   }
 
   return sendError(res, 404, "API route not found.");
+}
+
+function numberInRange(value, fallback, minimum, maximum) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(maximum, Math.max(minimum, number));
+}
+
+function watchdogSettings(automation = {}) {
+  return {
+    watchdogEnabled: Boolean(automation.watchdogEnabled),
+    watchdogCheckIntervalSeconds: numberInRange(automation.watchdogCheckIntervalSeconds, 30, 10, 3600),
+    watchdogAutoRestart: Boolean(automation.watchdogAutoRestart),
+    watchdogFailureThreshold: Math.round(numberInRange(automation.watchdogFailureThreshold, 3, 1, 20)),
+    watchdogMemoryThresholdPercent: numberInRange(automation.watchdogMemoryThresholdPercent, 0, 0, 100),
+    watchdogMemoryBreachChecks: Math.round(numberInRange(automation.watchdogMemoryBreachChecks, 2, 1, 20)),
+    watchdogRestartCooldownMinutes: numberInRange(automation.watchdogRestartCooldownMinutes, 15, 1, 1440),
+    scheduledRestartIntervalHours: numberInRange(automation.scheduledRestartIntervalHours, 0, 0, 720),
+    maintenanceWarningSeconds: Math.round(numberInRange(automation.maintenanceWarningSeconds, 60, 0, 600)),
+    maintenanceWarningMessage: automation.maintenanceWarningMessage === undefined
+      ? "Server maintenance restart in {seconds} seconds."
+      : String(automation.maintenanceWarningMessage),
+    backupBeforeManagedRestart: automation.backupBeforeManagedRestart !== false
+  };
+}
+
+function sanitizeWatchdogSettings(input = {}) {
+  return watchdogSettings(input);
+}
+
+function watchdogRuntimeState() {
+  return {
+    pendingRestart: schedulerState.pendingRestart,
+    consecutiveServiceFailures: schedulerState.watchdogFailures,
+    consecutiveMemoryBreaches: schedulerState.memoryBreaches,
+    lastCheckAt: schedulerState.lastWatchdogCheck ? new Date(schedulerState.lastWatchdogCheck).toISOString() : "",
+    lastRestartAt: schedulerState.lastManagedRestart ? new Date(schedulerState.lastManagedRestart).toISOString() : "",
+    lastAction: schedulerState.lastWatchdogAction,
+    lastError: schedulerState.lastWatchdogError
+  };
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function managedRestart(config, reason) {
+  if (schedulerState.pendingRestart) return;
+  const settings = watchdogSettings(config.automation);
+  schedulerState.pendingRestart = true;
+  schedulerState.lastWatchdogAction = reason;
+  schedulerState.lastWatchdogError = "";
+  try {
+    if (settings.backupBeforeManagedRestart) {
+      const backup = await managedCall("action", { action: "backup" }, () => createBackup(config));
+      if (!backup.ok) throw new Error(backup.stderr || backup.stdout || "Backup before restart failed.");
+      const agent = await loadAgentConfig();
+      if (!agentIsEnabled(agent)) await trimBackups(config);
+    }
+    if (settings.maintenanceWarningSeconds > 0 && settings.maintenanceWarningMessage.trim()) {
+      const warning = settings.maintenanceWarningMessage.replaceAll("{seconds}", String(settings.maintenanceWarningSeconds));
+      await broadcastLines(config, warning);
+      await wait(settings.maintenanceWarningSeconds * 1000);
+    }
+    const result = await managedCall("action", { action: "restart" }, () => runAction("restart", config));
+    if (!result.ok) throw new Error(result.stderr || result.stdout || "Server restart failed.");
+    schedulerState.lastManagedRestart = Date.now();
+    schedulerState.lastScheduledRestart = schedulerState.lastManagedRestart;
+    schedulerState.watchdogFailures = 0;
+    schedulerState.memoryBreaches = 0;
+  } catch (error) {
+    schedulerState.lastWatchdogError = error.message;
+    throw error;
+  } finally {
+    schedulerState.pendingRestart = false;
+  }
+}
+
+async function runWatchdog(config, now) {
+  const settings = watchdogSettings(config.automation);
+  if (!settings.watchdogEnabled || schedulerState.pendingRestart) return;
+  const metrics = await managedCall("hostMetrics", {}, () => collectHostMetrics(config));
+  schedulerState.lastWatchdogCheck = now;
+  schedulerState.lastWatchdogError = "";
+
+  if (metrics.service?.running) {
+    schedulerState.watchdogFailures = 0;
+  } else {
+    schedulerState.watchdogFailures += 1;
+    if (settings.watchdogAutoRestart && schedulerState.watchdogFailures >= settings.watchdogFailureThreshold) {
+      const result = await managedCall("action", { action: "start" }, () => runAction("start", config));
+      if (!result.ok) throw new Error(result.stderr || result.stdout || "Server auto-start failed.");
+      schedulerState.watchdogFailures = 0;
+      schedulerState.lastWatchdogAction = "auto-start";
+    }
+  }
+
+  const memoryThreshold = settings.watchdogMemoryThresholdPercent;
+  if (memoryThreshold > 0 && metrics.memory?.usedPercent >= memoryThreshold && metrics.service?.running) {
+    schedulerState.memoryBreaches += 1;
+  } else {
+    schedulerState.memoryBreaches = 0;
+  }
+  const restartCooldownElapsed = !schedulerState.lastManagedRestart
+    || now - schedulerState.lastManagedRestart >= settings.watchdogRestartCooldownMinutes * 60 * 1000;
+  if (schedulerState.memoryBreaches >= settings.watchdogMemoryBreachChecks && restartCooldownElapsed) {
+    await managedRestart(config, "memory-threshold");
+    return;
+  }
+
+  const restartIntervalSeconds = settings.scheduledRestartIntervalHours * 3600;
+  if (metrics.service?.running && restartIntervalSeconds > 0 && isDue(schedulerState.lastScheduledRestart, restartIntervalSeconds, now)) {
+    await managedRestart(config, "scheduled-restart");
+  }
 }
 
 function isDue(lastRun, intervalSeconds, now) {
@@ -1706,6 +1986,19 @@ async function schedulerTick() {
       await runSchedulerJob("Broadcast", async () => {
         await broadcastLines(config, config.automation.broadcastMessage);
         await fsp.writeFile(path.join(dataDir, "last-broadcast.txt"), String(Date.now()));
+      });
+    }
+
+    const watchdog = watchdogSettings(config.automation);
+    if (watchdog.watchdogEnabled && isDue(schedulerState.watchdog, watchdog.watchdogCheckIntervalSeconds, now)) {
+      schedulerState.watchdog = now;
+      await runSchedulerJob("Watchdog", async () => {
+        try {
+          await runWatchdog(config, now);
+        } catch (error) {
+          schedulerState.lastWatchdogError = error.message;
+          throw error;
+        }
       });
     }
 
@@ -1806,8 +2099,11 @@ module.exports = {
   isWhitelisted,
   issueAuthToken,
   normalizeLivePlayers,
+  parseDfOutput,
+  parsePsOutput,
   playerUidFromId,
   testSaveSource,
   trimBackups,
-  verifyAuthToken
+  verifyAuthToken,
+  watchdogSettings
 };

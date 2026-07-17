@@ -26,6 +26,21 @@ const busy = ref("");
 const status = ref({});
 const plan = ref({});
 const agent = ref({ enabled: false, mode: "local", endpoint: "", token: "" });
+const hostMetrics = ref({});
+const watchdogState = ref({});
+const watchdog = ref({
+  watchdogEnabled: false,
+  watchdogCheckIntervalSeconds: 30,
+  watchdogAutoRestart: false,
+  watchdogFailureThreshold: 3,
+  watchdogMemoryThresholdPercent: 0,
+  watchdogMemoryBreachChecks: 2,
+  watchdogRestartCooldownMinutes: 15,
+  scheduledRestartIntervalHours: 0,
+  maintenanceWarningSeconds: 60,
+  maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds.",
+  backupBeforeManagedRestart: true,
+});
 const deploy = ref({
   installDir: "/opt/palworld/server",
   serviceName: "palworld",
@@ -42,17 +57,48 @@ const deploy = ref({
 const running = computed(() => Boolean(status.value?.status?.running));
 const host = computed(() => status.value?.host || {});
 const manager = computed(() => status.value?.status?.manager || "-");
+const memoryPercent = computed(() => Number(hostMetrics.value?.memory?.usedPercent || 0));
+const diskPercent = computed(() => Number(hostMetrics.value?.disk?.usedPercent || 0));
+const cpuPercent = computed(() => Number(hostMetrics.value?.cpu?.usedPercent || 0));
+const processMemoryPercent = computed(() => Number(hostMetrics.value?.process?.memoryPercent || 0));
+
+const formatBytes = (bytes) => {
+  const value = Number(bytes || 0);
+  if (!value) return "-";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+  return `${(value / 1024 ** index).toFixed(index > 2 ? 1 : 0)} ${units[index]}`;
+};
+
+const formatUptime = (seconds) => {
+  const total = Math.max(0, Number(seconds || 0));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return days > 0 ? `${days}d ${hours}h` : `${hours}h ${minutes}m`;
+};
+
+const metricTone = (value) => {
+  if (value >= 90) return "error";
+  if (value >= 75) return "warning";
+  return "success";
+};
 
 const refresh = async () => {
   loading.value = true;
-  const [statusResponse, planResponse, agentResponse] = await Promise.all([
+  const [statusResponse, planResponse, agentResponse, metricsResponse, watchdogResponse] = await Promise.all([
     api.getPanelStatus(),
     api.getDeployPlan(),
     api.getAgentConfig(),
+    api.getHostMetrics(),
+    api.getWatchdog(),
   ]);
   status.value = statusResponse.data.value || {};
   plan.value = planResponse.data.value || {};
   agent.value = agentResponse.data.value?.agent || agent.value;
+  hostMetrics.value = metricsResponse.data.value?.metrics || {};
+  watchdog.value = { ...watchdog.value, ...(watchdogResponse.data.value?.settings || {}) };
+  watchdogState.value = watchdogResponse.data.value?.state || {};
   const defaults = plan.value?.defaults || {};
   deploy.value = {
     ...deploy.value,
@@ -120,6 +166,19 @@ const testAgent = async () => {
   busy.value = "";
   if (statusCode.value === 200 && data.value?.ok) message.success(t("operations.agentConnected"));
   else message.error(data.value?.error || t("operations.agentFailed"));
+};
+
+const saveWatchdog = async () => {
+  busy.value = "watchdog-save";
+  const { data, statusCode } = await api.updateWatchdog(watchdog.value);
+  busy.value = "";
+  if (statusCode.value === 200 && data.value?.ok) {
+    watchdog.value = { ...watchdog.value, ...(data.value.settings || {}) };
+    watchdogState.value = data.value.state || watchdogState.value;
+    message.success(t("operations.watchdogSaved"));
+  } else {
+    message.error(data.value?.error || t("operations.actionFailed"));
+  }
 };
 
 const maintenance = (operation) => {
@@ -212,6 +271,112 @@ const maintenance = (operation) => {
           <n-flex justify="end"><n-button type="primary" :disabled="plan.profile && !plan.profile.supported" :loading="busy === 'deploy'" @click="submitDeploy"><template #icon><n-icon><CloudDownloadOutlined /></n-icon></template>{{ $t('operations.deploy') }}</n-button></n-flex>
         </n-tab-pane>
 
+        <n-tab-pane name="monitor" :tab="$t('operations.monitor')">
+          <n-alert v-if="hostMetrics.unavailable" type="warning" :bordered="false" class="mb-4">
+            {{ hostMetrics.error || $t('operations.metricsUnavailable') }}
+          </n-alert>
+          <div class="monitor-summary">
+            <section class="monitor-reading">
+              <div class="monitor-reading-head">
+                <span>{{ $t('operations.cpuUsage') }}</span>
+                <strong>{{ hostMetrics.unavailable ? '-' : `${cpuPercent.toFixed(1)}%` }}</strong>
+              </div>
+              <n-progress v-if="!hostMetrics.unavailable" type="line" :percentage="cpuPercent" :status="metricTone(cpuPercent)" :show-indicator="false" />
+              <small>{{ hostMetrics.unavailable ? $t('operations.metricUnavailable') : `${hostMetrics.cpu?.cores || '-'} ${$t('operations.cpuCores')}` }}</small>
+            </section>
+            <section class="monitor-reading">
+              <div class="monitor-reading-head">
+                <span>{{ $t('operations.memoryUsage') }}</span>
+                <strong>{{ hostMetrics.unavailable ? '-' : `${memoryPercent.toFixed(1)}%` }}</strong>
+              </div>
+              <n-progress v-if="!hostMetrics.unavailable" type="line" :percentage="memoryPercent" :status="metricTone(memoryPercent)" :show-indicator="false" />
+              <small>{{ hostMetrics.unavailable ? $t('operations.metricUnavailable') : `${formatBytes(hostMetrics.memory?.used)} / ${formatBytes(hostMetrics.memory?.total)}` }}</small>
+            </section>
+            <section class="monitor-reading">
+              <div class="monitor-reading-head">
+                <span>{{ $t('operations.diskUsage') }}</span>
+                <strong>{{ hostMetrics.disk ? `${diskPercent.toFixed(1)}%` : '-' }}</strong>
+              </div>
+              <n-progress v-if="hostMetrics.disk" type="line" :percentage="diskPercent" :status="metricTone(diskPercent)" :show-indicator="false" />
+              <small>{{ hostMetrics.disk ? `${formatBytes(hostMetrics.disk.used)} / ${formatBytes(hostMetrics.disk.total)}` : $t('operations.metricUnavailable') }}</small>
+            </section>
+            <section class="monitor-reading">
+              <div class="monitor-reading-head">
+                <span>{{ $t('operations.processMemory') }}</span>
+                <strong>{{ hostMetrics.process ? `${processMemoryPercent.toFixed(1)}%` : '-' }}</strong>
+              </div>
+              <n-progress v-if="hostMetrics.process" type="line" :percentage="processMemoryPercent" :status="metricTone(processMemoryPercent)" :show-indicator="false" />
+              <small>{{ hostMetrics.process ? formatBytes(hostMetrics.process.memoryBytes) : $t('operations.processUnavailable') }}</small>
+            </section>
+          </div>
+
+          <n-descriptions label-placement="top" :column="4" bordered class="mb-5 monitor-details">
+            <n-descriptions-item :label="$t('operations.hostname')">{{ hostMetrics.hostname || '-' }}</n-descriptions-item>
+            <n-descriptions-item :label="$t('operations.hostUptime')">{{ formatUptime(hostMetrics.uptimeSeconds) }}</n-descriptions-item>
+            <n-descriptions-item :label="$t('operations.processPid')">{{ hostMetrics.process?.pid || '-' }}</n-descriptions-item>
+            <n-descriptions-item :label="$t('operations.processUptime')">{{ hostMetrics.process ? formatUptime(hostMetrics.process.uptimeSeconds) : '-' }}</n-descriptions-item>
+          </n-descriptions>
+
+          <div class="watchdog-heading">
+            <div>
+              <h3>{{ $t('operations.watchdogTitle') }}</h3>
+              <p>{{ $t('operations.watchdogHint') }}</p>
+            </div>
+            <n-switch v-model:value="watchdog.watchdogEnabled">
+              <template #checked>{{ $t('operations.enabled') }}</template>
+              <template #unchecked>{{ $t('operations.disabled') }}</template>
+            </n-switch>
+          </div>
+
+          <n-alert v-if="watchdogState.lastError" type="error" :bordered="false" class="mb-4">
+            {{ watchdogState.lastError }}
+          </n-alert>
+          <n-alert v-else-if="watchdogState.pendingRestart" type="warning" :bordered="false" class="mb-4">
+            {{ $t('operations.restartPending') }}
+          </n-alert>
+
+          <n-form label-placement="top" :model="watchdog" :disabled="!watchdog.watchdogEnabled">
+            <n-grid cols="1 700:2" :x-gap="16">
+              <n-form-item-gi :label="$t('operations.watchdogInterval')">
+                <n-input-number v-model:value="watchdog.watchdogCheckIntervalSeconds" :min="10" :max="3600" class="w-full" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.failureThreshold')">
+                <n-input-number v-model:value="watchdog.watchdogFailureThreshold" :min="1" :max="20" class="w-full" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.autoRestartStopped')">
+                <n-switch v-model:value="watchdog.watchdogAutoRestart" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.memoryThreshold')">
+                <n-input-number v-model:value="watchdog.watchdogMemoryThresholdPercent" :min="0" :max="100" class="w-full">
+                  <template #suffix>%</template>
+                </n-input-number>
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.memoryBreachChecks')">
+                <n-input-number v-model:value="watchdog.watchdogMemoryBreachChecks" :min="1" :max="20" class="w-full" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.restartCooldown')">
+                <n-input-number v-model:value="watchdog.watchdogRestartCooldownMinutes" :min="1" :max="1440" class="w-full" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.restartIntervalHours')">
+                <n-input-number v-model:value="watchdog.scheduledRestartIntervalHours" :min="0" :max="720" class="w-full" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.warningSeconds')">
+                <n-input-number v-model:value="watchdog.maintenanceWarningSeconds" :min="0" :max="600" class="w-full" />
+              </n-form-item-gi>
+              <n-form-item-gi :label="$t('operations.backupBeforeRestart')">
+                <n-switch v-model:value="watchdog.backupBeforeManagedRestart" />
+              </n-form-item-gi>
+              <n-form-item-gi span="1 700:2" :label="$t('operations.warningMessage')">
+                <n-input v-model:value="watchdog.maintenanceWarningMessage" :placeholder="$t('operations.warningMessagePlaceholder')" />
+              </n-form-item-gi>
+            </n-grid>
+          </n-form>
+          <div class="watchdog-footer">
+            <span>{{ $t('operations.lastWatchdogAction') }}: {{ watchdogState.lastAction || '-' }}</span>
+            <n-button type="primary" :loading="busy === 'watchdog-save'" @click="saveWatchdog">{{ $t('button.save') }}</n-button>
+          </div>
+        </n-tab-pane>
+
         <n-tab-pane name="agent" :tab="$t('operations.agent')">
           <n-form label-placement="top" :model="agent">
             <n-form-item :label="$t('operations.agentEnabled')"><n-switch v-model:value="agent.enabled" /></n-form-item>
@@ -252,9 +417,47 @@ const maintenance = (operation) => {
 <style scoped>
 .w-full { width: 100%; }
 .operations-modal-body { padding-right: 8px; }
+.monitor-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-border);
+}
+.monitor-reading {
+  min-width: 0;
+  padding: 16px;
+  background: var(--app-surface);
+}
+.monitor-reading-head,
+.watchdog-heading,
+.watchdog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.monitor-reading-head { margin-bottom: 10px; }
+.monitor-reading-head span,
+.monitor-reading small,
+.watchdog-heading p,
+.watchdog-footer span { color: var(--app-ink-muted); }
+.monitor-reading-head strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.monitor-reading small { display: block; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watchdog-heading { align-items: flex-start; margin: 4px 0 18px; }
+.watchdog-heading h3 { margin: 0; font-size: 17px; }
+.watchdog-heading p { margin: 4px 0 0; }
+.watchdog-footer { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--app-border); }
 @media (max-width: 640px) {
   .operations-modal-body { padding-right: 4px; }
   :deep(.n-descriptions-table-content) { min-width: 560px; }
   :deep(.n-list-item__suffix) { margin-left: 8px; }
+  .monitor-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .monitor-details { overflow-x: auto; }
+  .watchdog-heading,
+  .watchdog-footer { align-items: stretch; flex-direction: column; }
 }
 </style>

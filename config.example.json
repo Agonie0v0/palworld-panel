@@ -51,7 +51,18 @@
     "webTls": false,
     "webCertPath": "",
     "webKeyPath": "",
-    "webPublicUrl": ""
+    "webPublicUrl": "",
+    "watchdogEnabled": false,
+    "watchdogCheckIntervalSeconds": 30,
+    "watchdogAutoRestart": false,
+    "watchdogFailureThreshold": 3,
+    "watchdogMemoryThresholdPercent": 0,
+    "watchdogMemoryBreachChecks": 2,
+    "watchdogRestartCooldownMinutes": 15,
+    "scheduledRestartIntervalHours": 0,
+    "maintenanceWarningSeconds": 60,
+    "maintenanceWarningMessage": "Server maintenance restart in {seconds} seconds.",
+    "backupBeforeManagedRestart": true
   },
   "settings": {
     "ServerName": "Palworld 1.0 Oracle ARM",

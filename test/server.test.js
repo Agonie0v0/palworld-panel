@@ -13,10 +13,13 @@ const {
   isWhitelisted,
   issueAuthToken,
   normalizeLivePlayers,
+  parseDfOutput,
+  parsePsOutput,
   playerUidFromId,
   testSaveSource,
   trimBackups,
-  verifyAuthToken
+  verifyAuthToken,
+  watchdogSettings
 } = require("../src/server");
 
 function authConfig(passwordHash = "password-hash") {
@@ -86,6 +89,55 @@ test("scheduler due checks honor disabled and elapsed intervals", () => {
   assert.equal(isDue(0, 0, 10000), false);
   assert.equal(isDue(1000, 10, 10999), false);
   assert.equal(isDue(1000, 10, 11000), true);
+});
+
+test("Linux host metrics parsers normalize disk and process readings", () => {
+  assert.deepEqual(parseDfOutput([
+    "Filesystem 1024-blocks Used Available Capacity Mounted on",
+    "/dev/sda1 100000 75000 25000 75% /"
+  ].join("\n")), {
+    filesystem: "/dev/sda1",
+    total: 102400000,
+    used: 76800000,
+    available: 25600000,
+    usedPercent: 75,
+    mount: "/"
+  });
+  assert.deepEqual(parsePsOutput("12.5 8.4 524288 3661 PalServer"), {
+    cpuPercent: 12.5,
+    memoryPercent: 8.4,
+    memoryBytes: 536870912,
+    uptimeSeconds: 3661,
+    command: "PalServer"
+  });
+});
+
+test("watchdog settings stay disabled by default and clamp unsafe values", () => {
+  assert.deepEqual(watchdogSettings({}), {
+    watchdogEnabled: false,
+    watchdogCheckIntervalSeconds: 30,
+    watchdogAutoRestart: false,
+    watchdogFailureThreshold: 3,
+    watchdogMemoryThresholdPercent: 0,
+    watchdogMemoryBreachChecks: 2,
+    watchdogRestartCooldownMinutes: 15,
+    scheduledRestartIntervalHours: 0,
+    maintenanceWarningSeconds: 60,
+    maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds.",
+    backupBeforeManagedRestart: true
+  });
+  const settings = watchdogSettings({
+    watchdogEnabled: true,
+    watchdogCheckIntervalSeconds: 1,
+    watchdogFailureThreshold: 99,
+    watchdogMemoryThresholdPercent: 120,
+    maintenanceWarningSeconds: -1
+  });
+  assert.equal(settings.watchdogCheckIntervalSeconds, 10);
+  assert.equal(settings.watchdogFailureThreshold, 20);
+  assert.equal(settings.watchdogMemoryThresholdPercent, 100);
+  assert.equal(settings.maintenanceWarningSeconds, 0);
+  assert.equal(watchdogSettings({ maintenanceWarningMessage: "" }).maintenanceWarningMessage, "");
 });
 
 test("reference PST Agent sources are accepted through the /sync HTTP flow", async () => {

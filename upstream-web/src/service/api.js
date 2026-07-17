@@ -199,6 +199,18 @@ class ApiService extends Service {
   async testAgent() {
     return this.fetch(`/api/agent/test`).post({}).json();
   }
+
+  async getHostMetrics() {
+    return this.fetch(`/api/host/metrics`).get().json();
+  }
+
+  async getWatchdog() {
+    return this.fetch(`/api/watchdog`).get().json();
+  }
+
+  async updateWatchdog(settings) {
+    return this.fetch(`/api/watchdog`).put({ settings }).json();
+  }
 }
 
 export default ApiService;
