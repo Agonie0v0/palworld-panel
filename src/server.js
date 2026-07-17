@@ -370,7 +370,6 @@ function requiredPermission(req) {
   if (
     pathname.startsWith("/api/access/") ||
     pathname.startsWith("/api/security/") ||
-    pathname.includes("paldefender") ||
     pathname.includes("/workshop/config") ||
     pathname.includes("/astrbot/config")
   ) return "security:write";

@@ -47,7 +47,6 @@ import SaveSourceManager from "@/components/SaveSourceManager.vue";
 import ModManager from "@/components/ModManager.vue";
 import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
-import PalDefenderManager from "@/components/PalDefenderManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
 import AstrBotManager from "@/components/AstrBotManager.vue";
@@ -215,7 +214,6 @@ const showSaveSources = ref(false);
 const showMods = ref(false);
 const showAccessManager = ref(false);
 const showWorldData = ref(false);
-const showPalDefender = ref(false);
 const showBreedingLab = ref(false);
 const showWorkshop = ref(false);
 const showAstrBot = ref(false);
@@ -273,12 +271,6 @@ const handleToolAction = (key) => {
     }
   } else if (key === "world-data") {
     if (checkAuthToken()) showWorldData.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "paldefender") {
-    if (checkAuthToken()) showPalDefender.value = true;
     else {
       message.error(t("message.requireauth"));
       showLoginModal.value = true;
@@ -737,15 +729,6 @@ onMounted(async () => {
             <span>{{ locale === "zh" ? "世界数据" : "World data" }}</span>
           </button>
           <button
-            v-if="isAdmin"
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('paldefender')"
-          >
-            <n-icon><ShieldCheckmarkSharp /></n-icon>
-            <span>PalDefender</span>
-          </button>
-          <button
             type="button"
             class="ops-command-button"
             @click="handleToolAction('breeding')"
@@ -910,7 +893,6 @@ onMounted(async () => {
   <mod-manager v-model:show="showMods" />
   <access-manager v-model:show="showAccessManager" />
   <world-data-manager v-model:show="showWorldData" />
-  <pal-defender-manager v-model:show="showPalDefender" />
   <breeding-lab v-model:show="showBreedingLab" />
   <workshop-manager v-model:show="showWorkshop" />
   <astr-bot-manager v-model:show="showAstrBot" />

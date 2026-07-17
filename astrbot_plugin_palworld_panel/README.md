@@ -9,6 +9,8 @@ Install this directory as a local AstrBot plugin. In the plugin settings, set:
 
 Commands:
 
+Player binding codes are delivered through a short-lived RCON server announcement, so all online players can see the announcement.
+
 - `/帕鲁在线`
 - `/帕鲁绑定 <PlayerID>`
 - `/帕鲁验证 <6位验证码>`

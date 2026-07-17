@@ -3,7 +3,6 @@ const fsp = require("fs/promises");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
-const http = require("http");
 const https = require("https");
 const Busboy = require("busboy");
 const yauzl = require("yauzl");
@@ -870,276 +869,6 @@ function createAdvancedFeatures(deps) {
     }
   }
 
-  function palDefenderPaths(config) {
-    const binaries = path.join(path.resolve(config.server.installDir), "Pal", "Binaries", "Win64");
-    return {
-      binaries,
-      loader: path.join(binaries, "d3d9.dll"),
-      plugin: path.join(binaries, "PalDefender.dll"),
-      directory: path.join(binaries, "PalDefender"),
-      config: path.join(binaries, "PalDefender", "Config.json"),
-      ue4ss: path.join(binaries, "UE4SS.dll"),
-    };
-  }
-
-  async function githubJson(target) {
-    const url = new URL(target);
-    if (url.protocol !== "https:" || url.hostname !== "api.github.com") {
-      throw new Error("Only the GitHub API is allowed for PalDefender releases.");
-    }
-    return new Promise((resolve, reject) => {
-      const request = https.get(
-        url,
-        {
-          headers: {
-            Accept: "application/vnd.github+json",
-            "User-Agent": "palworld-panel",
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-          timeout: 30000,
-        },
-        (response) => {
-          let raw = "";
-          response.on("data", (chunk) => {
-            raw += chunk;
-            if (raw.length > 4 * 1024 * 1024) request.destroy(new Error("GitHub response is too large."));
-          });
-          response.on("end", () => {
-            if (response.statusCode !== 200) return reject(new Error(`GitHub release request failed (${response.statusCode}).`));
-            try {
-              resolve(JSON.parse(raw));
-            } catch {
-              reject(new Error("GitHub returned invalid release data."));
-            }
-          });
-        },
-      );
-      request.on("timeout", () => request.destroy(new Error("GitHub request timed out.")));
-      request.on("error", reject);
-    });
-  }
-
-  async function latestPalDefenderRelease() {
-    const release = await githubJson("https://api.github.com/repos/Ultimeit/PalDefender/releases/latest");
-    const assets = (release.assets || []).map((asset) => ({
-      name: asset.name,
-      size: asset.size,
-      url: asset.browser_download_url,
-      digest: asset.digest || "",
-    }));
-    return { tag: release.tag_name || "", publishedAt: release.published_at || "", assets };
-  }
-
-  async function downloadVerifiedAsset(asset, destination) {
-    if (!asset?.url || !asset.digest?.startsWith("sha256:")) {
-      throw new Error(`GitHub did not publish a SHA-256 digest for ${asset?.name || "asset"}.`);
-    }
-    const expected = asset.digest.slice("sha256:".length).toLowerCase();
-    const url = new URL(asset.url);
-    if (url.protocol !== "https:" || !["github.com", "objects.githubusercontent.com"].includes(url.hostname)) {
-      throw new Error("PalDefender assets must be downloaded from GitHub HTTPS endpoints.");
-    }
-    await new Promise((resolve, reject) => {
-      const request = https.get(url, { headers: { "User-Agent": "palworld-panel" }, timeout: 120000 }, (response) => {
-        if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
-          response.resume();
-          const redirect = new URL(response.headers.location, url);
-          if (redirect.protocol !== "https:" || !redirect.hostname.endsWith("githubusercontent.com")) {
-            return reject(new Error("PalDefender download redirected outside GitHub."));
-          }
-          https.get(redirect, { headers: { "User-Agent": "palworld-panel" }, timeout: 120000 }, (assetResponse) => {
-            if (assetResponse.statusCode !== 200) return reject(new Error(`PalDefender download failed (${assetResponse.statusCode}).`));
-            const output = fs.createWriteStream(destination, { flags: "wx", mode: 0o600 });
-            assetResponse.pipe(output);
-            output.on("finish", () => output.close(resolve));
-            output.on("error", reject);
-          }).on("error", reject);
-          return;
-        }
-        if (response.statusCode !== 200) return reject(new Error(`PalDefender download failed (${response.statusCode}).`));
-        const output = fs.createWriteStream(destination, { flags: "wx", mode: 0o600 });
-        response.pipe(output);
-        output.on("finish", () => output.close(resolve));
-        output.on("error", reject);
-      });
-      request.on("timeout", () => request.destroy(new Error("PalDefender download timed out.")));
-      request.on("error", reject);
-    });
-    const actual = await sha256File(destination);
-    if (actual !== expected) {
-      await fsp.rm(destination, { force: true });
-      throw new Error(`SHA-256 verification failed for ${asset.name}.`);
-    }
-  }
-
-  async function palDefenderStatus(config) {
-    const paths = palDefenderPaths(config);
-    const release = await load("paldefender-release.json", {});
-    const bridge = await load("paldefender-bridge.json", {});
-    const compatible = fs.existsSync(paths.binaries);
-    return {
-      compatible,
-      reason: compatible ? "" : "PalDefender requires a Win64/Wine Palworld runtime.",
-      installed: fs.existsSync(paths.loader) && fs.existsSync(paths.plugin),
-      ue4ssInstalled: fs.existsSync(paths.ue4ss),
-      version: release.version || "",
-      installedAt: release.installedAt || "",
-      configExists: fs.existsSync(paths.config),
-      bridge: {
-        endpoint: bridge.endpoint || "http://127.0.0.1:17993",
-        tokenSet: Boolean(bridge.token),
-      },
-      paths: {
-        binaries: paths.binaries,
-        config: paths.config,
-      },
-    };
-  }
-
-  async function installPalDefender(config) {
-    const paths = palDefenderPaths(config);
-    const status = await palDefenderStatus(config);
-    if (!status.compatible) throw new Error(status.reason);
-    if (!status.ue4ssInstalled) throw new Error("UE4SS must be installed before PalDefender.");
-    const release = await latestPalDefenderRelease();
-    const loaderAsset = release.assets.find((asset) => asset.name.toLowerCase() === "d3d9.dll");
-    const pluginAsset = release.assets.find((asset) => asset.name.toLowerCase() === "paldefender.dll");
-    if (!loaderAsset || !pluginAsset) throw new Error("The latest stable release does not contain direct PalDefender DLL assets.");
-    const work = await fsp.mkdtemp(path.join(deps.dataDir, "paldefender-install-"));
-    const backup = path.join(deps.dataDir, "paldefender-backups", `${Date.now()}-${release.tag || "unknown"}`);
-    const wasRunning = (await deps.serviceStatus(config)).running;
-    try {
-      await downloadVerifiedAsset(loaderAsset, path.join(work, "d3d9.dll"));
-      await downloadVerifiedAsset(pluginAsset, path.join(work, "PalDefender.dll"));
-      if (wasRunning) {
-        const stop = await deps.runAction("stop", config);
-        if (!stop.ok) throw new Error(stop.stderr || stop.stdout || "Unable to stop the server.");
-      }
-      await fsp.mkdir(backup, { recursive: true });
-      for (const target of [paths.loader, paths.plugin]) {
-        if (fs.existsSync(target)) await fsp.copyFile(target, path.join(backup, path.basename(target)));
-      }
-      await fsp.mkdir(paths.binaries, { recursive: true });
-      await fsp.copyFile(path.join(work, "d3d9.dll"), paths.loader);
-      await fsp.copyFile(path.join(work, "PalDefender.dll"), paths.plugin);
-      await save("paldefender-release.json", {
-        version: release.tag,
-        installedAt: nowIso(),
-        rollback: backup,
-      });
-      if (wasRunning) {
-        const start = await deps.runAction("start", config);
-        if (!start.ok) throw new Error(start.stderr || start.stdout || "PalDefender installed, but the server did not restart.");
-      }
-      return { ok: true, version: release.tag };
-    } finally {
-      await fsp.rm(work, { recursive: true, force: true }).catch(() => {});
-    }
-  }
-
-  async function rollbackPalDefender(config) {
-    const paths = palDefenderPaths(config);
-    const release = await load("paldefender-release.json", {});
-    if (!release.rollback || !fs.existsSync(release.rollback)) throw new Error("No PalDefender rollback is available.");
-    const wasRunning = (await deps.serviceStatus(config)).running;
-    if (wasRunning) {
-      const stop = await deps.runAction("stop", config);
-      if (!stop.ok) throw new Error(stop.stderr || stop.stdout || "Unable to stop the server.");
-    }
-    for (const name of ["d3d9.dll", "PalDefender.dll"]) {
-      const source = path.join(release.rollback, name);
-      if (fs.existsSync(source)) await fsp.copyFile(source, path.join(paths.binaries, name));
-    }
-    if (wasRunning) await deps.runAction("start", config);
-    return { ok: true };
-  }
-
-  async function readPalDefenderConfig(config) {
-    const file = palDefenderPaths(config).config;
-    if (!fs.existsSync(file)) return { config: {}, exists: false };
-    return { config: JSON.parse(await fsp.readFile(file, "utf8")), exists: true };
-  }
-
-  async function writePalDefenderConfig(config, value) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("PalDefender configuration must be a JSON object.");
-    }
-    const file = palDefenderPaths(config).config;
-    await fsp.mkdir(path.dirname(file), { recursive: true });
-    if (fs.existsSync(file)) await fsp.copyFile(file, `${file}.bak`);
-    const temp = `${file}.${crypto.randomUUID()}.tmp`;
-    await fsp.writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-    await fsp.rename(temp, file);
-    return { config: value, exists: true };
-  }
-
-  function normalizePalDefenderBridge(input = {}, current = {}) {
-    const endpoint = String(input.endpoint ?? current.endpoint ?? "http://127.0.0.1:17993").replace(/\/$/, "");
-    const parsed = new URL(endpoint);
-    if (parsed.protocol !== "http:" || !["127.0.0.1", "localhost", "::1"].includes(parsed.hostname)) {
-      throw new Error("PalDefender REST must use an HTTP loopback endpoint.");
-    }
-    return {
-      endpoint,
-      token: input.token ? String(input.token) : String(current.token || ""),
-    };
-  }
-
-  async function palDefenderRequest(method, requestPath, body, bridge) {
-    if (!bridge.token) throw new Error("PalDefender REST token is not configured.");
-    if (!/^\/v1\/pdapi\/[A-Za-z0-9_./-]*$/.test(requestPath) || requestPath.includes("..")) {
-      throw new Error("Unsupported PalDefender REST path.");
-    }
-    if (!["GET", "POST", "PUT", "DELETE"].includes(method)) throw new Error("Unsupported PalDefender REST method.");
-    const target = new URL(requestPath, `${bridge.endpoint}/`);
-    return new Promise((resolve, reject) => {
-      const payload = body === undefined ? "" : JSON.stringify(body);
-      const request = http.request(
-        target,
-        {
-          method,
-          headers: {
-            Authorization: `Bearer ${bridge.token}`,
-            Origin: "http://palworld-panel.local",
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(payload),
-          },
-          timeout: 10000,
-        },
-        (response) => {
-          let raw = "";
-          response.on("data", (chunk) => {
-            raw += chunk;
-            if (raw.length > 8 * 1024 * 1024) request.destroy(new Error("PalDefender response is too large."));
-          });
-          response.on("end", () => {
-            let data = raw;
-            try {
-              data = raw ? JSON.parse(raw) : {};
-            } catch {}
-            if (response.statusCode >= 400) return reject(new Error(data?.error || `PalDefender REST failed (${response.statusCode}).`));
-            resolve({ status: response.statusCode, data });
-          });
-        },
-      );
-      request.on("timeout", () => request.destroy(new Error("PalDefender REST timed out.")));
-      request.on("error", reject);
-      request.end(payload);
-    });
-  }
-
-  async function getPalDefenderBridge() {
-    const bridge = await load("paldefender-bridge.json", {});
-    return { endpoint: bridge.endpoint || "http://127.0.0.1:17993", tokenSet: Boolean(bridge.token) };
-  }
-
-  async function savePalDefenderBridge(input) {
-    const current = await load("paldefender-bridge.json", {});
-    const next = normalizePalDefenderBridge(input, current);
-    await save("paldefender-bridge.json", next);
-    return { endpoint: next.endpoint, tokenSet: Boolean(next.token) };
-  }
-
   async function breedingCatalog() {
     if (!breedingCatalogCache) {
       const file = path.join(__dirname, "..", "resources", "palcalc", "catalog.json");
@@ -1734,19 +1463,13 @@ function createAdvancedFeatures(deps) {
       expiresAt: Date.now() + settings.challengeMinutes * 60 * 1000,
       createdAt: nowIso(),
     };
+    const command = `Broadcast QQ_binding_${playerId}_${code}_${settings.challengeMinutes}min`;
+    const delivery = await deps.managedCall("rcon", { command }, () => deps.rcon(config, command));
+    if (!delivery.ok) {
+      throw new Error(delivery.stderr || delivery.stdout || "Unable to broadcast the QQ binding code.");
+    }
     await save("astrbot-challenges.json", [challenge, ...(Array.isArray(challenges) ? challenges : []).filter((row) => row.expiresAt > Date.now())]);
-    const bridge = await load("paldefender-bridge.json", {});
-    const payload = {
-      UserID: playerId,
-      SendType: "PlayerLogImportant",
-      Message: `QQ binding code: ${code} (${settings.challengeMinutes} min)`,
-    };
-    await deps.managedCall(
-      "advancedPalDefenderProxy",
-      { method: "POST", path: "/v1/pdapi/SendPlayerMessage", body: payload },
-      () => palDefenderRequest("POST", "/v1/pdapi/SendPlayerMessage", payload, bridge),
-    );
-    return { id: challenge.id, expiresAt: challenge.expiresAt, delivered: true };
+    return { id: challenge.id, expiresAt: challenge.expiresAt, delivered: true, channel: "rcon-broadcast" };
   }
 
   async function verifyAstrBotChallenge(input) {
@@ -2017,17 +1740,6 @@ function createAdvancedFeatures(deps) {
       advancedModsScan: () => scanMods(config),
       advancedModEnable: () => setModEnabled(config, payload.id, payload.enabled),
       advancedModDelete: () => deleteMod(config, payload.id),
-      advancedPalDefenderStatus: () => palDefenderStatus(config),
-      advancedPalDefenderInstall: () => installPalDefender(config),
-      advancedPalDefenderRollback: () => rollbackPalDefender(config),
-      advancedPalDefenderConfigGet: () => readPalDefenderConfig(config),
-      advancedPalDefenderConfigSave: () => writePalDefenderConfig(config, payload.config),
-      advancedPalDefenderBridgeGet: () => getPalDefenderBridge(),
-      advancedPalDefenderBridgeSave: () => savePalDefenderBridge(payload.bridge || {}),
-      advancedPalDefenderProxy: async () => {
-        const bridge = await load("paldefender-bridge.json", {});
-        return palDefenderRequest(payload.method, payload.path, payload.body, bridge);
-      },
       advancedWorkshopList: () => listWorkshopMods(config),
       advancedWorkshopInstall: () => installWorkshopMod(config, payload.id),
       advancedWorkshopEnable: () => setWorkshopModEnabled(config, payload.id, payload.enabled),
@@ -2057,7 +1769,6 @@ function createAdvancedFeatures(deps) {
           webdav: true,
           saveSources: true,
           mods: true,
-          palDefender: true,
           breeding: true,
           workshop: true,
           astrBot: true,
@@ -2086,72 +1797,6 @@ function createAdvancedFeatures(deps) {
     if (req.method === "GET" && pathname === "/api/advanced/jobs") {
       deps.sendJson(res, 200, { ok: true, jobs: await load("jobs.json", []) });
       return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/paldefender/status") {
-      const status = await deps.managedCall("advancedPalDefenderStatus", {}, () => palDefenderStatus(config));
-      deps.sendJson(res, 200, { ok: true, status });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/bans") {
-      deps.sendJson(res, 200, { ok: true, bans: await load("player-bans.json", []) });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/bans") {
-      const body = await deps.readBody(req);
-      const playerId = String(body.playerId || body.steamId || "").trim();
-      if (!/^[A-Za-z0-9_-]{1,128}$/.test(playerId)) throw new Error("Invalid player identifier.");
-      const rows = await load("player-bans.json", []);
-      const record = {
-        playerId,
-        nickname: String(body.nickname || "").slice(0, 100),
-        reason: String(body.reason || "").slice(0, 300),
-        createdAt: nowIso(),
-        source: body.source || "local",
-      };
-      const next = [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.playerId !== playerId)];
-      await save("player-bans.json", next);
-      deps.sendJson(res, 200, { ok: true, ban: record, bans: next });
-      return true;
-    }
-
-    const banActionMatch = pathname.match(/^\/api\/advanced\/bans\/([^/]+)(?:\/(ban|unban))?$/);
-    if (banActionMatch) {
-      const playerId = decodeURIComponent(banActionMatch[1]);
-      const action = banActionMatch[2];
-      if (req.method === "POST" && action) {
-        const body = await deps.readBody(req);
-        const command = `${action === "ban" ? "BanPlayer" : "UnBanPlayer"} ${playerId}`;
-        const response = await auditRequest(req, principal, `player.${action}`, playerId, () =>
-          deps.managedCall("rcon", { command }, () => deps.rcon(config, command)),
-        );
-        if (!response.ok) throw new Error(response.stderr || response.stdout || `Player ${action} failed.`);
-        const rows = await load("player-bans.json", []);
-        let next;
-        if (action === "ban") {
-          const record = {
-            playerId,
-            nickname: String(body.nickname || "").slice(0, 100),
-            reason: String(body.reason || "").slice(0, 300),
-            createdAt: nowIso(),
-            source: "rcon",
-          };
-          next = [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.playerId !== playerId)];
-        } else {
-          next = (Array.isArray(rows) ? rows : []).filter((row) => row.playerId !== playerId);
-        }
-        await save("player-bans.json", next);
-        deps.sendJson(res, 200, { ok: true, bans: next, result: response });
-        return true;
-      }
-      if (req.method === "DELETE" && !action) {
-        const next = (await load("player-bans.json", [])).filter((row) => row.playerId !== playerId);
-        await save("player-bans.json", next);
-        deps.sendJson(res, 200, { ok: true, bans: next });
-        return true;
-      }
     }
 
     if (req.method === "GET" && pathname === "/api/advanced/breeding/catalog") {
@@ -2458,124 +2103,6 @@ function createAdvancedFeatures(deps) {
       const next = (await load("breeding-presets.json", [])).filter((row) => row.id !== breedingPreset[1]);
       await save("breeding-presets.json", next);
       deps.sendJson(res, 200, { ok: true, presets: next });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/paldefender/release") {
-      deps.sendJson(res, 200, { ok: true, release: await latestPalDefenderRelease() });
-      return true;
-    }
-
-    if (req.method === "POST" && ["/api/advanced/paldefender/install", "/api/advanced/paldefender/update"].includes(pathname)) {
-      const job = await auditRequest(req, principal, "paldefender.install", "latest", () =>
-        queueJob("paldefender-install", "Install PalDefender", () =>
-          deps.managedCall("advancedPalDefenderInstall", {}, () => installPalDefender(config)),
-        ),
-      );
-      deps.sendJson(res, 202, { ok: true, job });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/paldefender/rollback") {
-      const job = await auditRequest(req, principal, "paldefender.rollback", "previous", () =>
-        queueJob("paldefender-rollback", "Rollback PalDefender", () =>
-          deps.managedCall("advancedPalDefenderRollback", {}, () => rollbackPalDefender(config)),
-        ),
-      );
-      deps.sendJson(res, 202, { ok: true, job });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/paldefender/bridge") {
-      const bridge = await deps.managedCall("advancedPalDefenderBridgeGet", {}, () => getPalDefenderBridge());
-      deps.sendJson(res, 200, { ok: true, bridge });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/paldefender/config") {
-      const value = await deps.managedCall("advancedPalDefenderConfigGet", {}, () => readPalDefenderConfig(config));
-      deps.sendJson(res, 200, { ok: true, ...value });
-      return true;
-    }
-
-    if (req.method === "PUT" && pathname === "/api/advanced/paldefender/config") {
-      const body = await deps.readBody(req);
-      const value = await auditRequest(req, principal, "paldefender.config.save", "Config.json", () =>
-        deps.managedCall(
-          "advancedPalDefenderConfigSave",
-          { config: body.config },
-          () => writePalDefenderConfig(config, body.config),
-        ),
-      );
-      deps.sendJson(res, 200, { ok: true, ...value });
-      return true;
-    }
-
-    if (req.method === "PUT" && pathname === "/api/advanced/paldefender/bridge") {
-      const body = await deps.readBody(req);
-      const bridge = await auditRequest(req, principal, "paldefender.bridge.save", body.bridge?.endpoint || "", () =>
-        deps.managedCall(
-          "advancedPalDefenderBridgeSave",
-          { bridge: body.bridge || body },
-          () => savePalDefenderBridge(body.bridge || body),
-        ),
-      );
-      deps.sendJson(res, 200, { ok: true, bridge });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/paldefender/test") {
-      const result = await deps.managedCall(
-        "advancedPalDefenderProxy",
-        { method: "GET", path: "/v1/pdapi/version" },
-        async () => palDefenderRequest("GET", "/v1/pdapi/version", undefined, await load("paldefender-bridge.json", {})),
-      );
-      deps.sendJson(res, 200, { ok: true, result });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/paldefender/templates") {
-      deps.sendJson(res, 200, { ok: true, templates: await load("paldefender-pal-templates.json", []) });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/paldefender/templates") {
-      const body = await deps.readBody(req);
-      const template = body.template || body;
-      if (!template || typeof template !== "object" || Array.isArray(template) || !String(template.PalID || "").trim()) {
-        throw new Error("Pal template must be a JSON object containing PalID.");
-      }
-      const rows = await load("paldefender-pal-templates.json", []);
-      const record = {
-        id: body.id || crypto.randomUUID(),
-        name: String(body.name || template.Nickname || template.PalID).slice(0, 100),
-        template,
-        updatedAt: nowIso(),
-      };
-      const next = [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.id !== record.id)];
-      await save("paldefender-pal-templates.json", next);
-      deps.sendJson(res, 200, { ok: true, template: record, templates: next });
-      return true;
-    }
-
-    const palTemplateMatch = pathname.match(/^\/api\/advanced\/paldefender\/templates\/([^/]+)$/);
-    if (req.method === "DELETE" && palTemplateMatch) {
-      const next = (await load("paldefender-pal-templates.json", [])).filter((row) => row.id !== palTemplateMatch[1]);
-      await save("paldefender-pal-templates.json", next);
-      deps.sendJson(res, 200, { ok: true, templates: next });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/paldefender/proxy") {
-      const body = await deps.readBody(req);
-      const result = await auditRequest(req, principal, "paldefender.gm", body.path || "", () =>
-        deps.managedCall(
-          "advancedPalDefenderProxy",
-          { method: body.method || "GET", path: body.path, body: body.body },
-          async () => palDefenderRequest(body.method || "GET", body.path, body.body, await load("paldefender-bridge.json", {})),
-        ),
-      );
-      deps.sendJson(res, 200, { ok: true, result });
       return true;
     }
 

@@ -61,7 +61,7 @@ class PalworldPanelPlugin(Star):
                 {"qq": self.qq(event), "playerId": player_id},
             )
             expires = data["challenge"]["expiresAt"]
-            yield event.plain_result(f"验证码已发送到游戏内，过期时间戳: {expires}\n请发送: /帕鲁验证 6位验证码")
+            yield event.plain_result(f"验证码已通过服务器公告发送，过期时间戳: {expires}\n请发送: /帕鲁验证 6位验证码")
         except Exception as error:
             yield event.plain_result(str(error))
 
