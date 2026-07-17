@@ -113,6 +113,33 @@ const hostHealthLabel = computed(() => {
   if (hostPeakPercent.value >= 75) return t("overview.hostElevated");
   return t("overview.hostHealthy");
 });
+const signalSegments = computed(() => [
+  {
+    key: "server",
+    label: t("overview.serverStatus"),
+    tone: serverOnline.value ? "is-success" : "is-warning",
+  },
+  {
+    key: "fps",
+    label: t("item.serverFps"),
+    tone: fpsTone.value,
+  },
+  {
+    key: "players",
+    label: t("overview.onlinePlayers"),
+    tone: playerPercent.value >= 85 ? "is-warning" : "is-info",
+  },
+  {
+    key: "backup",
+    label: t("overview.backupStatus"),
+    tone: latestBackup.value ? "is-success" : "is-warning",
+  },
+  {
+    key: "host",
+    label: t("overview.hostLoad"),
+    tone: loadTone(hostPeakPercent.value),
+  },
+]);
 
 const loadTone = (value) => {
   if (value >= 90) return "is-danger";
@@ -195,6 +222,14 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
       </header>
 
       <section class="overview-pulse" :aria-label="$t('overview.pulse')">
+        <div class="overview-signal-rail" aria-hidden="true">
+          <span
+            v-for="segment in signalSegments"
+            :key="segment.key"
+            :class="segment.tone"
+            :title="segment.label"
+          ></span>
+        </div>
         <div class="overview-pulse-identity">
           <div class="overview-pulse-heading">
             <span class="overview-pulse-label">{{ $t("overview.pulse") }}</span>
@@ -532,6 +567,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 .overview-header h2,
 .overview-panel-header h3 {
   color: var(--app-ink);
+  font-family: var(--app-font-display);
   letter-spacing: 0;
 }
 
@@ -556,6 +592,62 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: 8px;
+}
+
+.overview-signal-rail {
+  display: grid;
+  height: 6px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  padding: 0 2px;
+  background: var(--app-border);
+}
+
+.overview-signal-rail span {
+  background: var(--app-info);
+  transform-origin: left;
+  animation: signal-rail-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.overview-signal-rail span:nth-child(2) {
+  animation-delay: 35ms;
+}
+
+.overview-signal-rail span:nth-child(3) {
+  animation-delay: 70ms;
+}
+
+.overview-signal-rail span:nth-child(4) {
+  animation-delay: 105ms;
+}
+
+.overview-signal-rail span:nth-child(5) {
+  animation-delay: 140ms;
+}
+
+.overview-signal-rail .is-success {
+  background: var(--app-success);
+}
+
+.overview-signal-rail .is-warning {
+  background: var(--app-warning);
+}
+
+.overview-signal-rail .is-danger {
+  background: var(--app-danger);
+}
+
+@keyframes signal-rail-in {
+  from {
+    opacity: 0.4;
+    transform: scaleX(0.15);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
 }
 
 .overview-pulse-identity {
@@ -587,6 +679,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 .overview-pulse-identity > strong {
   margin-top: 22px;
   color: var(--app-ink);
+  font-family: var(--app-font-display);
   font-size: 21px;
 }
 
@@ -611,6 +704,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 .overview-pulse-meta dd {
   margin-top: 3px;
   color: var(--app-ink);
+  font-family: var(--app-font-data);
   font-size: 13px;
   font-weight: 700;
 }
@@ -642,6 +736,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
 .overview-reading-head strong {
   color: var(--app-ink);
+  font-family: var(--app-font-data);
   font-size: 25px;
 }
 
@@ -677,6 +772,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 .overview-backup-time {
   margin: 20px 0 7px;
   color: var(--app-success);
+  font-family: var(--app-font-display);
   font-size: 18px;
   font-weight: 700;
 }
@@ -729,6 +825,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
 .overview-host-header h3 {
   color: var(--app-ink);
+  font-family: var(--app-font-display);
   font-size: 14px;
 }
 
@@ -758,6 +855,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
 .overview-host-identity strong {
   color: var(--app-ink);
+  font-family: var(--app-font-display);
   font-size: 13px;
 }
 
@@ -806,6 +904,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
 .host-reading-head strong {
   color: var(--app-ink);
+  font-family: var(--app-font-data);
   font-size: 20px;
   font-variant-numeric: tabular-nums;
 }
@@ -857,17 +956,23 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 .overview-detail-grid {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 16px;
+  gap: 0;
   margin-top: 16px;
+  overflow: hidden;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
 }
 
 .overview-panel {
   min-width: 0;
   min-height: 245px;
   padding: 18px;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
+  background: transparent;
+}
+
+.overview-panel + .overview-panel {
+  border-left: 1px solid var(--app-border);
 }
 
 .overview-panel-header {
@@ -896,6 +1001,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   color: var(--app-info);
   background: var(--app-info-soft);
   border-radius: 6px;
+  font-family: var(--app-font-data);
   font-size: 13px;
   font-weight: 800;
 }
@@ -937,6 +1043,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 .overview-definition-list dd {
   overflow: hidden;
   color: var(--app-ink);
+  font-family: var(--app-font-data);
   font-size: 13px;
   font-weight: 600;
   text-align: right;
@@ -1001,7 +1108,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   }
 
   .overview-detail-grid {
-    gap: 20px;
+    gap: 0;
     margin-top: 20px;
   }
 
@@ -1068,7 +1175,7 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   }
 
   .overview-detail-grid {
-    gap: 24px;
+    gap: 0;
     margin-top: 24px;
   }
 
@@ -1106,6 +1213,15 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
   .overview-panel--players {
     grid-column: 1 / -1;
+  }
+
+  .overview-panel--automation {
+    border-top: 1px solid var(--app-border);
+    border-left: 0;
+  }
+
+  .overview-panel--backup {
+    border-top: 1px solid var(--app-border);
   }
 }
 
@@ -1159,6 +1275,11 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   .overview-panel--players {
     min-height: 0;
     grid-column: auto;
+  }
+
+  .overview-panel + .overview-panel {
+    border-top: 1px solid var(--app-border);
+    border-left: 0;
   }
 
   .host-reading {

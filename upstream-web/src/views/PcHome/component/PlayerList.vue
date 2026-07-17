@@ -386,7 +386,7 @@ const filteredPlayers = computed(() => {
 }
 
 .player-row-item:focus-visible .player-row {
-  box-shadow: 0 0 0 2px rgb(15 118 110 / 35%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent) 35%, transparent);
 }
 
 .player-row {
@@ -405,22 +405,13 @@ const filteredPlayers = computed(() => {
     box-shadow 0.18s ease;
 
   &:hover {
-    background: rgb(15 118 110 / 7%);
+    background: color-mix(in srgb, var(--app-accent) 7%, transparent);
   }
 
   &.is-selected {
-    border-color: rgb(15 118 110 / 42%);
-    background: rgb(15 118 110 / 10%);
-    box-shadow: inset 3px 0 0 var(--app-accent);
+    border-color: color-mix(in srgb, var(--app-accent) 42%, var(--app-border));
+    background: var(--app-accent-soft);
   }
-}
-
-.is-dark .player-row:hover {
-  background: rgb(52 179 165 / 11%);
-}
-
-.is-dark .player-row.is-selected {
-  background: rgb(52 179 165 / 16%);
 }
 
 .player-row-main {
@@ -474,18 +465,19 @@ const filteredPlayers = computed(() => {
   border-radius: 50%;
 
   &.is-online {
-    background: #18a058;
-    box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.14);
+    background: var(--app-success);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--app-success) 14%, transparent);
   }
 
   &.is-offline {
-    background: #d03050;
+    background: var(--app-danger);
   }
 }
 
 .last-online {
   margin-top: 5px;
-  color: rgba(24, 24, 28, 0.45);
+  color: var(--app-ink-muted);
   font-size: 12px;
   line-height: 1.25;
 }

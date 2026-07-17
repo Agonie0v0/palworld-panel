@@ -264,18 +264,19 @@ const filteredPlayers = computed(() => {
   border-radius: 50%;
 
   &.is-online {
-    background: #18a058;
-    box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.14);
+    background: var(--app-success);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--app-success) 14%, transparent);
   }
 
   &.is-offline {
-    background: #d03050;
+    background: var(--app-danger);
   }
 }
 
 .last-online {
   margin-top: 8px;
-  color: rgba(24, 24, 28, 0.42);
+  color: var(--app-ink-muted);
   font-size: 12px;
 }
 

@@ -278,7 +278,7 @@ onMounted(async () => {
 }
 
 .guild-row-item:focus-visible .guild-row {
-  box-shadow: 0 0 0 2px rgb(15 118 110 / 35%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent) 35%, transparent);
 }
 
 .guild-row {
@@ -298,21 +298,12 @@ onMounted(async () => {
 }
 
 .guild-row:hover {
-  background: rgb(15 118 110 / 7%);
+  background: color-mix(in srgb, var(--app-accent) 7%, transparent);
 }
 
 .guild-row.is-selected {
-  border-color: rgb(15 118 110 / 42%);
-  background: rgb(15 118 110 / 10%);
-  box-shadow: inset 3px 0 0 var(--app-accent);
-}
-
-.is-dark .guild-row:hover {
-  background: rgb(52 179 165 / 11%);
-}
-
-.is-dark .guild-row.is-selected {
-  background: rgb(52 179 165 / 16%);
+  border-color: color-mix(in srgb, var(--app-accent) 42%, var(--app-border));
+  background: var(--app-accent-soft);
 }
 
 .guild-row-main {
