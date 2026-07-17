@@ -4,9 +4,11 @@ import { useI18n } from "vue-i18n";
 import { useMessage } from "naive-ui";
 import ApiService from "@/service/api";
 import whitelistStore from "@/stores/model/whitelist";
+import ToolSurface from "@/components/ToolSurface.vue";
 
 const props = defineProps({
   show: Boolean,
+  embedded: { type: Boolean, default: false },
   players: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["update:show", "updated"]);
@@ -88,12 +90,11 @@ watch(
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
-    style="width: 94%; max-width: 780px"
     :title="$t('modal.whitelist')"
-    :mask-closable="false"
+    width="min(94vw, 780px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <n-spin :show="loading">
@@ -134,7 +135,7 @@ watch(
         </n-space>
       </n-space>
     </n-spin>
-    <template #footer>
+    <div class="whitelist-actions">
       <n-flex justify="space-between">
         <n-button
           @click="rows.unshift({ name: '', player_uid: '', steam_id: '' })"
@@ -146,6 +147,10 @@ watch(
           </n-button>
         </n-flex>
       </n-flex>
-    </template>
-  </n-modal>
+    </div>
+  </tool-surface>
 </template>
+
+<style scoped>
+.whitelist-actions { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--app-border); }
+</style>

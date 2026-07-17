@@ -19,13 +19,7 @@ import {
 } from "@vicons/ionicons5";
 import { GuiManagement } from "@vicons/carbon";
 import { BroadcastTower } from "@vicons/fa";
-import {
-  Activity,
-  BrandSteam,
-  Database,
-  Dna,
-  Package,
-} from "@vicons/tabler";
+import { Activity, BrandSteam, Database, Dna, Package } from "@vicons/tabler";
 import { computed, onMounted, ref } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
@@ -88,12 +82,30 @@ const sidebarFpsPercent = computed(() =>
 );
 const currentViewLabel = computed(() => {
   const labels = {
-    overview: "button.overview",
-    players: "button.players",
-    guilds: "button.guilds",
-    map: "button.map",
+    overview: () => t("button.overview"),
+    players: () => t("button.players"),
+    guilds: () => t("button.guilds"),
+    map: () => t("button.map"),
+    operations: () => t("operations.title"),
+    "game-settings": () => t("gameSettings.title"),
+    advanced: () =>
+      locale.value === "zh" ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center",
+    "save-sources": () =>
+      locale.value === "zh" ? "\u5b58\u6863\u6e90" : "Save sources",
+    mods: () => (locale.value === "zh" ? "\u6a21\u7ec4\u7ba1\u7406" : "Mods"),
+    "world-data": () =>
+      locale.value === "zh" ? "\u4e16\u754c\u6570\u636e" : "World data",
+    breeding: () =>
+      locale.value === "zh" ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4" : "Breeding lab",
+    workshop: () => "Workshop",
+    rcon: () => t("modal.rcon"),
+    backup: () => t("button.backup"),
+    whitelist: () => t("modal.whitelist"),
+    broadcast: () => t("modal.broadcast"),
+    access: () =>
+      locale.value === "zh" ? "\u8d26\u53f7\u6743\u9650" : "Access",
   };
-  return t(labels[currentDisplay.value] || labels.players);
+  return (labels[currentDisplay.value] || labels.players)();
 });
 
 const isLogin = ref(false);
@@ -206,109 +218,50 @@ const handleLogin = async () => {
   isLogin.value = true;
   currentDisplay.value = "overview";
 };
-const showRconDrawer = ref(false);
-const showOperationsCenter = ref(false);
-const showSaveSources = ref(false);
-const showMods = ref(false);
-const showAccessManager = ref(false);
-const showWorldData = ref(false);
-const showBreedingLab = ref(false);
-const showWorkshop = ref(false);
-const handleRconDrawer = () => {
-  if (checkAuthToken()) {
-    showRconDrawer.value = true;
-  } else {
-    message.error(t("message.requireauth"));
-    showLoginModal.value = true;
-  }
-};
+const handleRconDrawer = () => selectWorkspace("rcon");
 
-const handleToolAction = (key) => {
-  if (key === "operations") {
-    if (checkAuthToken()) showServerOperations.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "settings") {
+const selectWorkspace = (key) => {
+  if (key === "settings") {
     if (checkAuthToken()) emit("open-config");
     else {
       message.error(t("message.requireauth"));
       showLoginModal.value = true;
     }
-  } else if (key === "game-settings") {
-    if (checkAuthToken()) showGameSettings.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "advanced") {
-    if (checkAuthToken()) showOperationsCenter.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "save-sources") {
-    if (checkAuthToken()) showSaveSources.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "mods") {
-    if (checkAuthToken()) showMods.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "access") {
-    if (checkAuthToken()) showAccessManager.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "world-data") {
-    if (checkAuthToken()) showWorldData.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "breeding") {
-    if (checkAuthToken()) showBreedingLab.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "workshop") {
-    if (checkAuthToken()) showWorkshop.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "palconf") {
-    toPalConf();
-  } else if (key === "whitelist") {
-    handleWhiteList();
-  } else if (key === "rcon") {
-    handleRconDrawer();
-  } else if (key === "broadcast") {
-    handleStartBrodcast();
-  } else if (key === "shutdown") {
-    handleShutdown();
+    return;
   }
+  if (key === "palconf") {
+    toPalConf();
+    return;
+  }
+  if (key === "shutdown") {
+    handleShutdown();
+    return;
+  }
+  const protectedViews = new Set([
+    "operations",
+    "game-settings",
+    "advanced",
+    "save-sources",
+    "mods",
+    "access",
+    "world-data",
+    "breeding",
+    "workshop",
+    "rcon",
+    "backup",
+    "whitelist",
+    "broadcast",
+  ]);
+  if (protectedViews.has(key) && !checkAuthToken()) {
+    message.error(t("message.requireauth"));
+    showLoginModal.value = true;
+    return;
+  }
+  currentDisplay.value = key;
 };
 
 // 白名单
-const showWhiteListModal = ref(false);
-const showServerOperations = ref(false);
-const showGameSettings = ref(false);
-const handleWhiteList = () => {
-  if (checkAuthToken()) {
-    showWhiteListModal.value = true;
-  } else {
-    message.error(t("message.requireauth"));
-    showLoginModal.value = true;
-  }
-};
+const handleWhiteList = () => selectWorkspace("whitelist");
 const getWhiteList = async () => {
   if (checkAuthToken()) {
     const { data, statusCode } = await new ApiService().getWhitelist();
@@ -345,29 +298,20 @@ const handleShutdown = () => {
   }
 };
 
-const toPlayers = async () => {
-  if (currentDisplay.value === "players") {
-    return;
-  }
-  currentDisplay.value = "players";
+const toPlayers = () => {
+  selectWorkspace("players");
   playerToGuildStore().setUpdateStatus("players");
 };
 const toOverview = () => {
-  currentDisplay.value = "overview";
+  selectWorkspace("overview");
 };
-const toGuilds = async () => {
-  if (currentDisplay.value === "guilds") {
-    return;
-  }
-  currentDisplay.value = "guilds";
+const toGuilds = () => {
+  selectWorkspace("guilds");
   playerToGuildStore().setUpdateStatus("guilds");
 };
 
-const toMap = async () => {
-  if (currentDisplay.value === "map") {
-    return;
-  }
-  currentDisplay.value = "map";
+const toMap = () => {
+  selectWorkspace("map");
   playerToGuildStore().setUpdateStatus("map");
 };
 
@@ -418,15 +362,7 @@ const isTokenExpired = (token) => {
   }
 };
 
-const backupModal = ref(false);
-const handleBackupList = () => {
-  if (checkAuthToken()) {
-    backupModal.value = true;
-  } else {
-    message.error(t("message.requireauth"));
-    showLoginModal.value = true;
-  }
-};
+const handleBackupList = () => selectWorkspace("backup");
 
 onMounted(async () => {
   locale.value = localStorage.getItem("locale");
@@ -557,6 +493,214 @@ onMounted(async () => {
         </button>
       </nav>
 
+      <template v-if="canOperate">
+        <div class="ops-nav-label ops-nav-label--group">
+          {{ locale === "zh" ? "\u670d\u52a1\u5668" : "Server" }}
+        </div>
+        <nav
+          class="ops-nav ops-nav--list"
+          :aria-label="locale === 'zh' ? '\u670d\u52a1\u5668' : 'Server'"
+        >
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'operations' }"
+            @click="selectWorkspace('operations')"
+          >
+            <n-icon><GuiManagement /></n-icon
+            ><span>{{ $t("operations.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'game-settings' }"
+            @click="selectWorkspace('game-settings')"
+          >
+            <n-icon><ConstructOutline /></n-icon
+            ><span>{{ $t("gameSettings.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'rcon' }"
+            @click="selectWorkspace('rcon')"
+          >
+            <n-icon><Terminal /></n-icon><span>{{ $t("modal.rcon") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'broadcast' }"
+            @click="selectWorkspace('broadcast')"
+          >
+            <n-icon><BroadcastTower /></n-icon
+            ><span>{{ $t("modal.broadcast") }}</span>
+          </button>
+        </nav>
+
+        <div class="ops-nav-label ops-nav-label--group">
+          {{
+            locale === "zh"
+              ? "\u6570\u636e\u4e0e\u4fdd\u62a4"
+              : "Data & protection"
+          }}
+        </div>
+        <nav
+          class="ops-nav ops-nav--list"
+          :aria-label="
+            locale === 'zh'
+              ? '\u6570\u636e\u4e0e\u4fdd\u62a4'
+              : 'Data and protection'
+          "
+        >
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'backup' }"
+            @click="selectWorkspace('backup')"
+          >
+            <n-icon><ArchiveOutlined /></n-icon
+            ><span>{{ $t("button.backup") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'save-sources' }"
+            @click="selectWorkspace('save-sources')"
+          >
+            <n-icon><Database /></n-icon
+            ><span>{{
+              locale === "zh" ? "\u5b58\u6863\u6e90" : "Save sources"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'world-data' }"
+            @click="selectWorkspace('world-data')"
+          >
+            <n-icon><Database /></n-icon
+            ><span>{{
+              locale === "zh" ? "\u4e16\u754c\u6570\u636e" : "World data"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'whitelist' }"
+            @click="selectWorkspace('whitelist')"
+          >
+            <n-icon><ShieldCheckmarkSharp /></n-icon
+            ><span>{{ $t("modal.whitelist") }}</span>
+          </button>
+        </nav>
+
+        <div class="ops-nav-label ops-nav-label--group">
+          {{
+            locale === "zh"
+              ? "\u6269\u5c55\u4e0e\u81ea\u52a8\u5316"
+              : "Extensions & automation"
+          }}
+        </div>
+        <nav
+          class="ops-nav ops-nav--list"
+          :aria-label="
+            locale === 'zh'
+              ? '\u6269\u5c55\u4e0e\u81ea\u52a8\u5316'
+              : 'Extensions and automation'
+          "
+        >
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'advanced' }"
+            @click="selectWorkspace('advanced')"
+          >
+            <n-icon><Activity /></n-icon
+            ><span>{{
+              locale === "zh" ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'breeding' }"
+            @click="selectWorkspace('breeding')"
+          >
+            <n-icon><Dna /></n-icon
+            ><span>{{
+              locale === "zh"
+                ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4"
+                : "Breeding lab"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'mods' }"
+            @click="selectWorkspace('mods')"
+          >
+            <n-icon><Package /></n-icon
+            ><span>{{
+              locale === "zh" ? "\u6a21\u7ec4\u7ba1\u7406" : "Mods"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'workshop' }"
+            @click="selectWorkspace('workshop')"
+          >
+            <n-icon><BrandSteam /></n-icon><span>Workshop</span>
+          </button>
+        </nav>
+
+        <div v-if="isAdmin" class="ops-nav-label ops-nav-label--group">
+          {{
+            locale === "zh"
+              ? "\u9762\u677f\u7ba1\u7406"
+              : "Panel administration"
+          }}
+        </div>
+        <nav
+          v-if="isAdmin"
+          class="ops-nav ops-nav--list"
+          :aria-label="
+            locale === 'zh'
+              ? '\u9762\u677f\u7ba1\u7406'
+              : 'Panel administration'
+          "
+        >
+          <button
+            type="button"
+            class="ops-menu-button"
+            @click="selectWorkspace('settings')"
+          >
+            <n-icon><Settings /></n-icon
+            ><span>{{ $t("configuration.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'access' }"
+            @click="selectWorkspace('access')"
+          >
+            <n-icon><AdminPanelSettingsOutlined /></n-icon
+            ><span>{{
+              locale === "zh" ? "\u8d26\u53f7\u6743\u9650" : "Access"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button ops-menu-button--danger"
+            @click="selectWorkspace('shutdown')"
+          >
+            <n-icon><SettingsPowerRound /></n-icon
+            ><span>{{ $t("button.shutdown") }}</span>
+          </button>
+        </nav>
+      </template>
+
       <div class="ops-sidebar-footer">
         <div class="ops-sidebar-preferences">
           <n-button
@@ -646,7 +790,7 @@ onMounted(async () => {
       </header>
 
       <section
-        v-if="canOperate"
+        v-if="false"
         class="ops-command-shelf"
         :aria-label="$t('button.tools')"
       >
@@ -806,6 +950,69 @@ onMounted(async () => {
           />
           <guild-list v-if="currentDisplay === 'guilds'" :guilds="guildList" />
           <map-view v-if="currentDisplay === 'map'" />
+          <server-operations
+            v-if="currentDisplay === 'operations'"
+            :show="true"
+            embedded
+          />
+          <game-settings-manager
+            v-if="currentDisplay === 'game-settings'"
+            :show="true"
+            embedded
+          />
+          <operations-center
+            v-if="currentDisplay === 'advanced'"
+            :show="true"
+            embedded
+          />
+          <save-source-manager
+            v-if="currentDisplay === 'save-sources'"
+            :show="true"
+            embedded
+          />
+          <mod-manager v-if="currentDisplay === 'mods'" :show="true" embedded />
+          <access-manager
+            v-if="currentDisplay === 'access'"
+            :show="true"
+            embedded
+          />
+          <world-data-manager
+            v-if="currentDisplay === 'world-data'"
+            :show="true"
+            embedded
+          />
+          <breeding-lab
+            v-if="currentDisplay === 'breeding'"
+            :show="true"
+            embedded
+          />
+          <workshop-manager
+            v-if="currentDisplay === 'workshop'"
+            :show="true"
+            embedded
+          />
+          <rcon-manager
+            v-if="currentDisplay === 'rcon'"
+            :show="true"
+            embedded
+          />
+          <backup-manager
+            v-if="currentDisplay === 'backup'"
+            :show="true"
+            embedded
+          />
+          <whitelist-manager
+            v-if="currentDisplay === 'whitelist'"
+            :show="true"
+            embedded
+            :players="playerList"
+            @updated="getSonWhitelistStatus"
+          />
+          <broadcast-composer
+            v-if="currentDisplay === 'broadcast'"
+            :show="true"
+            embedded
+          />
         </template>
       </section>
     </main>
@@ -864,24 +1071,7 @@ onMounted(async () => {
     </template>
   </n-modal>
 
-  <rcon-manager v-model:show="showRconDrawer" />
-  <broadcast-composer v-model:show="showBroadcastModal" />
   <shutdown-dialog v-model:show="showShutdownDialog" />
-  <backup-manager v-model:show="backupModal" />
-  <server-operations v-model:show="showServerOperations" />
-  <game-settings-manager v-model:show="showGameSettings" />
-  <operations-center v-model:show="showOperationsCenter" />
-  <save-source-manager v-model:show="showSaveSources" />
-  <mod-manager v-model:show="showMods" />
-  <access-manager v-model:show="showAccessManager" />
-  <world-data-manager v-model:show="showWorldData" />
-  <breeding-lab v-model:show="showBreedingLab" />
-  <workshop-manager v-model:show="showWorkshop" />
-  <whitelist-manager
-    v-model:show="showWhiteListModal"
-    :players="playerList"
-    @updated="getSonWhitelistStatus"
-  />
 </template>
 
 <style scoped>

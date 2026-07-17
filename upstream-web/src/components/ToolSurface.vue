@@ -1,0 +1,122 @@
+<script setup>
+const props = defineProps({
+  show: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
+  title: { type: String, default: "" },
+  width: { type: String, default: "min(94vw, 1180px)" },
+});
+
+const emit = defineEmits(["update:show"]);
+
+const close = () => emit("update:show", false);
+</script>
+
+<template>
+  <section v-if="embedded" class="tool-surface" :aria-label="title">
+    <header class="tool-surface__header">
+      <div class="tool-surface__heading">
+        <h2>{{ title }}</h2>
+        <div v-if="$slots.description" class="tool-surface__description">
+          <slot name="description" />
+        </div>
+      </div>
+      <div v-if="$slots['header-extra']" class="tool-surface__actions">
+        <slot name="header-extra" />
+      </div>
+    </header>
+    <div class="tool-surface__body">
+      <slot />
+    </div>
+  </section>
+
+  <n-modal
+    v-else
+    :show="props.show"
+    preset="card"
+    :title="title"
+    :style="{ width }"
+    :mask-closable="false"
+    closable
+    @update:show="emit('update:show', $event)"
+  >
+    <template v-if="$slots['header-extra']" #header-extra>
+      <slot name="header-extra" />
+    </template>
+    <slot />
+  </n-modal>
+</template>
+
+<style scoped>
+.tool-surface {
+  min-width: 0;
+  min-height: 0;
+  color: var(--app-ink);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+}
+
+.tool-surface__header {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.tool-surface__heading {
+  min-width: 0;
+}
+
+.tool-surface__heading h2 {
+  overflow: hidden;
+  color: var(--app-ink);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-surface__description {
+  margin-top: 4px;
+  color: var(--app-ink-muted);
+  font-size: 12px;
+}
+
+.tool-surface__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-surface__body {
+  min-width: 0;
+  padding: 24px;
+}
+
+@media (min-width: 1600px) and (min-height: 900px) {
+  .tool-surface__header {
+    min-height: 76px;
+    padding: 16px 32px;
+  }
+
+  .tool-surface__heading h2 {
+    font-size: 19px;
+  }
+
+  .tool-surface__body {
+    padding: 28px;
+  }
+}
+
+@media (max-width: 700px) {
+  .tool-surface__header,
+  .tool-surface__body {
+    padding: 16px;
+  }
+}
+</style>

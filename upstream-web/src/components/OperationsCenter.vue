@@ -14,8 +14,12 @@ import {
   Trash,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 
-const props = defineProps({ show: { type: Boolean, default: false } });
+const props = defineProps({
+  show: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
+});
 const emit = defineEmits(["update:show"]);
 const api = new ApiService();
 const message = useMessage();
@@ -223,12 +227,12 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
     class="advanced-modal"
     :title="copy.title"
-    :bordered="false"
+    width="min(94vw, 1180px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
@@ -402,11 +406,12 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
         />
       </n-tab-pane>
     </n-tabs>
-  </n-modal>
+  </tool-surface>
 
   <n-modal
     v-model:show="showSchedule"
     preset="card"
+    :mask-closable="false"
     class="schedule-modal"
     :title="copy.addSchedule"
     :bordered="false"

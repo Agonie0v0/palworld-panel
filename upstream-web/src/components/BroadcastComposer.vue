@@ -3,8 +3,9 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useMessage } from "naive-ui";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 
-const props = defineProps({ show: Boolean });
+const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
 const { t } = useI18n();
 const message = useMessage();
@@ -46,11 +47,11 @@ watch(
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
-    style="width: 92%; max-width: 620px"
     :title="$t('modal.broadcast')"
+    width="min(92vw, 620px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <n-space vertical size="large">
@@ -81,7 +82,7 @@ watch(
         {{ content || $t("broadcast.previewEmpty") }}
       </n-alert>
     </n-space>
-    <template #footer>
+    <div class="broadcast-actions">
       <n-flex justify="end">
         <n-button @click="close">{{ $t("button.cancel") }}</n-button>
         <n-button
@@ -93,6 +94,10 @@ watch(
           {{ $t("button.broadcast") }}
         </n-button>
       </n-flex>
-    </template>
-  </n-modal>
+    </div>
+  </tool-surface>
 </template>
+
+<style scoped>
+.broadcast-actions { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--app-border); }
+</style>

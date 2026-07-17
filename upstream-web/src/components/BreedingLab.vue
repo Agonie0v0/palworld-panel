@@ -16,8 +16,9 @@ import {
   X,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 
-const props = defineProps({ show: { type: Boolean, default: false } });
+const props = defineProps({ show: { type: Boolean, default: false }, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
@@ -400,7 +401,7 @@ onBeforeUnmount(() => clearInterval(pollTimer));
 </script>
 
 <template>
-  <n-modal :show="show" preset="card" class="breeding-modal" :title="copy.title" :bordered="false" @update:show="emit('update:show', $event)">
+  <tool-surface :show="show" class="breeding-modal" :title="copy.title" width="min(94vw, 1180px)" :embedded="embedded" @update:show="emit('update:show', $event)">
     <template #header-extra>
       <n-button quaternary circle :loading="loading" :aria-label="copy.title" @click="load"><template #icon><n-icon><Refresh /></n-icon></template></n-button>
     </template>
@@ -543,7 +544,7 @@ onBeforeUnmount(() => clearInterval(pollTimer));
         </div>
       </n-tab-pane>
     </n-tabs>
-  </n-modal>
+  </tool-surface>
 </template>
 
 <style scoped>

@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useDialog, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 import itemMap from "@/assets/items.json";
 import palMap from "@/assets/pal.json";
 import {
@@ -13,7 +14,7 @@ import {
   resolveRconTemplate,
 } from "@/utils/rconTemplate";
 
-const props = defineProps({ show: Boolean });
+const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
 const { t, locale } = useI18n();
 const message = useMessage();
@@ -32,8 +33,6 @@ const commands = ref([]);
 const tasks = ref([]);
 const players = ref([]);
 const commandContent = ref({});
-const drawerWidth = computed(() => Math.min(680, window.innerWidth));
-
 const selectedPlayerUid = ref(null);
 const selectedItem = ref(null);
 const selectedPal = ref(null);
@@ -394,8 +393,7 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
 </script>
 
 <template>
-  <n-drawer v-model:show="visible" :width="drawerWidth" placement="right">
-    <n-drawer-content :title="$t('modal.rcon')" closable>
+  <tool-surface :show="visible" :embedded="embedded" :title="$t('modal.rcon')" width="min(94vw, 1080px)" @update:show="visible = $event">
       <n-spin :show="loading">
         <n-card size="small" :title="$t('rconManager.materialTitle')" class="mb-4">
           <n-grid cols="1 700:3" :x-gap="12" :y-gap="12">
@@ -552,12 +550,12 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
           </n-tab-pane>
         </n-tabs>
       </n-spin>
-    </n-drawer-content>
-  </n-drawer>
+  </tool-surface>
 
   <n-modal
     v-model:show="commandModal"
     preset="card"
+    :mask-closable="false"
     :title="editingCommandUUID ? $t('rconManager.editCommand') : $t('button.addRcon')"
     style="width: min(92vw, 620px)"
   >
@@ -601,6 +599,7 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
   <n-modal
     v-model:show="taskModal"
     preset="card"
+    :mask-closable="false"
     :title="editingTaskUUID ? $t('rconManager.editTask') : $t('rconManager.addTask')"
     style="width: min(92vw, 620px)"
   >

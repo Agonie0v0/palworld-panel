@@ -4,12 +4,13 @@ import { DocumentImport } from "@vicons/carbon";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 import {
   formatPalworldSetting,
   parsePalworldSettings,
 } from "@/utils/palworldSettings";
 
-const props = defineProps({ show: Boolean });
+const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show", "saved"]);
 const { t } = useI18n();
 const message = useMessage();
@@ -198,18 +199,18 @@ watch(importText, parseImport);
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
-    style="width: 94%; max-width: 920px"
     :title="$t('gameSettings.title')"
+    width="min(94vw, 920px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <n-spin :show="loading">
       <n-alert type="info" :bordered="false" class="mb-4">
         {{ $t("gameSettings.restartHint") }}
       </n-alert>
-      <n-scrollbar style="max-height: 66vh" trigger="none">
+      <n-scrollbar :style="embedded ? undefined : 'max-height: 66vh'" trigger="none">
         <n-form label-placement="top" class="pr-3">
           <n-collapse :default-expanded-names="['basic', 'network', 'rates']">
             <n-collapse-item :title="$t('gameSettings.basic')" name="basic">
@@ -295,7 +296,7 @@ watch(importText, parseImport);
         </n-form>
       </n-scrollbar>
     </n-spin>
-    <template #footer>
+    <div class="settings-footer">
       <n-flex justify="space-between" align="center" class="settings-footer">
         <n-button secondary @click="openImport">
           <template #icon><n-icon><DocumentImport /></n-icon></template>
@@ -306,13 +307,14 @@ watch(importText, parseImport);
           <n-button type="primary" :loading="saving" @click="save">{{ $t("button.save") }}</n-button>
         </n-flex>
       </n-flex>
-    </template>
-  </n-modal>
+    </div>
+  </tool-surface>
 
   <n-drawer
     v-model:show="importVisible"
     placement="right"
     width="min(620px, 100vw)"
+    :mask-closable="false"
   >
     <n-drawer-content :title="$t('gameSettings.importTitle')" closable>
       <n-space vertical :size="16">

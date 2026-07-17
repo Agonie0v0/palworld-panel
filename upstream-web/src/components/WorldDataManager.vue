@@ -4,10 +4,14 @@ import { NTag } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import { Box, BuildingCommunity, Paw, Refresh, Search } from "@vicons/tabler";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 import itemCatalog from "@/assets/items.json";
 import palCatalog from "@/assets/pal.json";
 
-const props = defineProps({ show: { type: Boolean, default: false } });
+const props = defineProps({
+  show: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
+});
 const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
@@ -230,12 +234,12 @@ watch(
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
     class="world-data-modal"
     :title="copy.title"
-    :bordered="false"
+    width="min(94vw, 1180px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
@@ -300,7 +304,7 @@ watch(
         />
       </n-tab-pane>
     </n-tabs>
-  </n-modal>
+  </tool-surface>
 </template>
 
 <style scoped>

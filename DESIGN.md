@@ -31,9 +31,11 @@ Letter spacing remains zero. Data uses tabular numerals where possible.
 
 ## Structure
 
-- Sidebar: identity, managed-server state, primary navigation, and preferences.
+- Sidebar: identity, managed-server state, grouped primary navigation, and preferences.
 - Workspace header: current view and a compact live telemetry strip.
-- Command shelf: all server tools remain one click away across the desktop.
+- Desktop tools: server, data protection, extensions, automation, and panel
+  administration are persistent workspace views. The sidebar keeps them one click
+  away without taking focus from the active task.
 - Overview: an asymmetric control room with world pulse, host telemetry, and an
   operations band.
 - Mobile: preserve the bottom navigation and use a bottom tool drawer.
@@ -44,6 +46,9 @@ records, dialogs, and framed tools rather than every page section.
 ## Interaction
 
 - Active navigation uses teal and a filled icon well.
+- Primary management tools do not close from a click on the backdrop. Large tools
+  stay in the workspace on desktop; dialogs are reserved for confirmations and
+  short create or edit flows.
 - Success, warning, and danger colors never act as decoration.
 - Destructive controls keep a coral treatment and require confirmation.
 - Motion is limited to state changes and the world-state rail entrance.

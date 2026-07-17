@@ -13,8 +13,9 @@ import {
   SystemUpdateAltRound,
 } from "@vicons/material";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 
-const props = defineProps({ show: Boolean });
+const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
 const { t } = useI18n();
 const message = useMessage();
@@ -205,12 +206,12 @@ const maintenance = (operation) => {
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
     class="server-operations-modal"
-    style="width: 94%; max-width: 980px"
     :title="$t('operations.title')"
+    width="min(94vw, 980px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
@@ -219,7 +220,7 @@ const maintenance = (operation) => {
       </n-button>
     </template>
 
-    <n-scrollbar style="max-height: min(74vh, 760px)" trigger="none">
+    <n-scrollbar :style="embedded ? undefined : 'max-height: min(74vh, 760px)'" trigger="none">
       <div class="operations-modal-body">
       <n-tabs type="line" animated>
         <n-tab-pane name="service" :tab="$t('operations.service')">
@@ -411,7 +412,7 @@ const maintenance = (operation) => {
       </n-tabs>
       </div>
     </n-scrollbar>
-  </n-modal>
+  </tool-surface>
 </template>
 
 <style scoped>

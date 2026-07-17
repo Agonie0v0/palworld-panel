@@ -4,8 +4,12 @@ import { useDialog, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import { Copy, Key, Refresh, Trash, UserPlus } from "@vicons/tabler";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 
-const props = defineProps({ show: { type: Boolean, default: false } });
+const props = defineProps({
+  show: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
+});
 const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
@@ -228,12 +232,12 @@ watch(
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
     class="access-modal"
     :title="copy.title"
-    :bordered="false"
+    width="min(94vw, 980px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
@@ -347,11 +351,12 @@ watch(
         </div>
       </n-tab-pane>
     </n-tabs>
-  </n-modal>
+  </tool-surface>
 
   <n-modal
     v-model:show="showUserForm"
     preset="card"
+    :mask-closable="false"
     class="access-form-modal"
     :title="userForm.id ? copy.save : copy.addUser"
   >
@@ -386,6 +391,7 @@ watch(
   <n-modal
     v-model:show="showKeyForm"
     preset="card"
+    :mask-closable="false"
     class="access-form-modal"
     :title="copy.addKey"
   >

@@ -12,8 +12,12 @@ import {
   Upload,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
+import ToolSurface from "@/components/ToolSurface.vue";
 
-const props = defineProps({ show: { type: Boolean, default: false } });
+const props = defineProps({
+  show: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
+});
 const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
@@ -229,12 +233,12 @@ watch(
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
     class="save-source-modal"
     :title="copy.title"
-    :bordered="false"
+    width="min(94vw, 1080px)"
+    :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
@@ -367,7 +371,7 @@ watch(
         </article>
       </div>
     </n-spin>
-  </n-modal>
+  </tool-surface>
 </template>
 
 <style scoped>
