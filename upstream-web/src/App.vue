@@ -1,16 +1,11 @@
 <script setup>
-import { zhCN, dateZhCN, jaJP, dateJaJP, darkTheme } from "naive-ui";
+import { zhCN, dateZhCN, darkTheme } from "naive-ui";
 import pageStore from "@/stores/model/page.js";
-import { onBeforeUnmount, onMounted } from "vue";
+import themeStore from "@/stores/model/theme.js";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-const isDarkMode = ref(
-  window.matchMedia("(prefers-color-scheme: dark)").matches,
-);
-
-const updateDarkMode = (e) => {
-  isDarkMode.value = e.matches;
-};
-let mediaQuery;
+const theme = themeStore();
+const isDarkMode = computed(() => theme.isDark);
 
 const themeOverrides = {
   common: {
@@ -42,9 +37,7 @@ let getScreenWidth = function () {
 };
 
 onMounted(() => {
-  mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  mediaQuery.addEventListener("change", updateDarkMode);
-  isDarkMode.value = mediaQuery.matches;
+  theme.init();
   getScreenWidth();
   window.onresize = function () {
     getScreenWidth();
@@ -56,12 +49,14 @@ onMounted(() => {
     if (locale.value == "zh") {
       uiLocale.value = zhCN;
       uiDateLocale.value = dateZhCN;
-    } else if (locale.value == "ja") {
-      uiLocale.value = jaJP;
-      uiDateLocale.value = dateJaJP;
     } else if (locale.value == "en") {
       uiLocale.value = null;
       uiDateLocale.value = null;
+    } else {
+      localStorage.setItem("locale", "zh");
+      locale.value = "zh";
+      uiLocale.value = zhCN;
+      uiDateLocale.value = dateZhCN;
     }
   } else {
     localStorage.setItem("locale", "zh");
@@ -72,7 +67,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  mediaQuery?.removeEventListener("change", updateDarkMode);
   window.onresize = null;
 });
 </script>

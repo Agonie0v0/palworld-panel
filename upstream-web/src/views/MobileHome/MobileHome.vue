@@ -1,13 +1,25 @@
 <script setup>
 import {
   AdminPanelSettingsOutlined,
+  ArchiveOutlined,
   DashboardOutlined,
   PublicRound,
+  SettingsPowerRound,
   SupervisedUserCircleRound,
 } from "@vicons/material";
 import { ChevronsLeft } from "@vicons/tabler";
-import { GameController, LanguageSharp } from "@vicons/ionicons5";
+import {
+  ConstructOutline,
+  GameController,
+  LanguageSharp,
+  MoonOutline,
+  Settings,
+  ShieldCheckmarkSharp,
+  SunnyOutline,
+  Terminal,
+} from "@vicons/ionicons5";
 import { GuiManagement } from "@vicons/carbon";
+import { BroadcastTower } from "@vicons/fa";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
@@ -28,12 +40,14 @@ import ServerOperations from "@/components/ServerOperations.vue";
 import GameSettingsManager from "@/components/GameSettingsManager.vue";
 import MapView from "@/views/PcHome/component/MapView.vue";
 import playerToGuildStore from "@/stores/model/playerToGuild";
+import themeStore from "@/stores/model/theme.js";
 
 const emit = defineEmits(["open-config"]);
 
 const { t, locale } = useI18n();
 
 const message = useMessage();
+const theme = themeStore();
 
 const PALWORLD_TOKEN = "palworld_token";
 
@@ -51,6 +65,8 @@ const playerPalsList = ref([]);
 const currentPlayerPalsList = ref([]);
 const guildInfo = ref({});
 const languageOptions = ref([]);
+const showMobileTools = ref(false);
+const pendingAdminAction = ref("");
 const onlineCount = computed(
   () =>
     serverMetrics.value?.current_player_num ??
@@ -76,16 +92,7 @@ const asArray = (value) => (Array.isArray(value) ? value : []);
 
 const handleSelectLanguage = (key) => {
   message.info(t("message.changelanguage"));
-  if (key === "zh") {
-    localStorage.setItem("locale", "zh");
-    // locale.value = "zh";
-  } else if (key === "ja") {
-    localStorage.setItem("locale", "ja");
-    // locale.value = "ja";
-  } else {
-    localStorage.setItem("locale", "en");
-    // locale.value = "en";
-  }
+  localStorage.setItem("locale", key === "zh" ? "zh" : "en");
   setTimeout(() => {
     location.reload();
   }, 1000);
@@ -270,24 +277,7 @@ const openAuthenticated = (target) => {
   }
 };
 
-const adminOptions = computed(() => [
-  { label: t("operations.title"), key: "operations" },
-  { label: t("configuration.title"), key: "settings" },
-  { label: t("gameSettings.title"), key: "game-settings" },
-  { label: t("button.rcon"), key: "rcon" },
-  { label: t("button.backup"), key: "backup" },
-  { label: t("button.whitelist"), key: "whitelist" },
-  { label: t("button.broadcast"), key: "broadcast" },
-  { label: t("button.palconf"), key: "palconf" },
-  { type: "divider", key: "divider" },
-  {
-    label: t("button.shutdown"),
-    key: "shutdown",
-    props: { style: "color: #d03050" },
-  },
-]);
-
-const handleAdminAction = (key) => {
+const executeAdminAction = (key) => {
   if (key === "operations") openAuthenticated(showServerOperations);
   if (key === "game-settings") openAuthenticated(showGameSettings);
   if (key === "settings") {
@@ -316,6 +306,18 @@ const handleAdminAction = (key) => {
       "noopener,noreferrer",
     );
   }
+};
+
+const handleAdminAction = (key) => {
+  pendingAdminAction.value = key;
+  showMobileTools.value = false;
+};
+
+const handleToolsClosed = () => {
+  if (!pendingAdminAction.value) return;
+  const action = pendingAdminAction.value;
+  pendingAdminAction.value = "";
+  executeAdminAction(action);
 };
 
 const toPlayers = async () => {
@@ -426,11 +428,6 @@ onMounted(async () => {
       key: "en",
       disabled: locale.value == "en",
     },
-    {
-      label: "日本語",
-      key: "ja",
-      disabled: locale.value == "ja",
-    },
   ];
   localeLowerPalMap.value = Object.keys(palMap[locale.value]).reduce(
     (acc, key) => {
@@ -463,6 +460,22 @@ onBeforeUnmount(() => {
           <div class="mobile-brand-title">{{ $t("title") }}</div>
         </div>
         <div class="mobile-header-actions">
+          <n-button
+            circle
+            quaternary
+            size="small"
+            :aria-label="
+              $t(theme.isDark ? 'button.lightMode' : 'button.darkMode')
+            "
+            @click="theme.toggle"
+          >
+            <template #icon>
+              <n-icon>
+                <SunnyOutline v-if="theme.isDark" />
+                <MoonOutline v-else />
+              </n-icon>
+            </template>
+          </n-button>
           <n-dropdown
             trigger="click"
             :options="languageOptions"
@@ -479,23 +492,13 @@ onBeforeUnmount(() => {
               ></template>
             </n-button>
           </n-dropdown>
-          <n-dropdown
+          <div
             v-if="isLogin"
-            trigger="click"
-            :options="adminOptions"
-            @select="handleAdminAction"
+            class="mobile-auth-indicator"
+            :title="$t('status.authenticated')"
           >
-            <n-button
-              circle
-              secondary
-              size="small"
-              :aria-label="$t('button.management')"
-            >
-              <template #icon
-                ><n-icon><GuiManagement /></n-icon
-              ></template>
-            </n-button>
-          </n-dropdown>
+            <n-icon><AdminPanelSettingsOutlined /></n-icon>
+          </div>
           <n-button
             v-else
             type="primary"
@@ -553,10 +556,6 @@ onBeforeUnmount(() => {
           :server-info="serverInfo"
           :server-metrics="serverMetrics"
           :players="playerList"
-          @open-rcon="openAuthenticated(showRconDrawer)"
-          @open-backup="openAuthenticated(showBackupManager)"
-          @open-broadcast="handleStartBrodcast"
-          @open-config="handleAdminAction('config')"
         />
         <map-view v-if="currentDisplay === 'map'" />
         <div v-if="!isShowDetail">
@@ -626,8 +625,103 @@ onBeforeUnmount(() => {
         <n-icon size="21"><PublicRound /></n-icon>
         <span>{{ $t("button.map") }}</span>
       </button>
+      <button
+        v-if="isLogin"
+        type="button"
+        class="mobile-nav-button"
+        :class="{ 'is-active': showMobileTools }"
+        @click="showMobileTools = true"
+      >
+        <n-icon size="21"><GuiManagement /></n-icon>
+        <span>{{ $t("button.tools") }}</span>
+      </button>
     </nav>
   </div>
+  <n-drawer
+    v-model:show="showMobileTools"
+    placement="bottom"
+    height="min(470px, 82dvh)"
+    class="mobile-tools-drawer"
+    @after-leave="handleToolsClosed"
+  >
+    <n-drawer-content :title="$t('button.tools')" closable>
+      <p class="mobile-tools-intro">{{ $t("overview.toolsHint") }}</p>
+      <div class="mobile-tool-grid">
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('operations')"
+        >
+          <n-icon><GuiManagement /></n-icon>
+          <span>{{ $t("operations.title") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('settings')"
+        >
+          <n-icon><Settings /></n-icon>
+          <span>{{ $t("configuration.title") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('game-settings')"
+        >
+          <n-icon><ConstructOutline /></n-icon>
+          <span>{{ $t("gameSettings.title") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('palconf')"
+        >
+          <n-icon><Settings /></n-icon>
+          <span>{{ $t("button.palconf") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('rcon')"
+        >
+          <n-icon><Terminal /></n-icon>
+          <span>{{ $t("button.rcon") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('backup')"
+        >
+          <n-icon><ArchiveOutlined /></n-icon>
+          <span>{{ $t("button.backup") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('whitelist')"
+        >
+          <n-icon><ShieldCheckmarkSharp /></n-icon>
+          <span>{{ $t("button.whitelist") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('broadcast')"
+        >
+          <n-icon><BroadcastTower /></n-icon>
+          <span>{{ $t("button.broadcast") }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button mobile-tool-button--danger"
+          @click="handleAdminAction('shutdown')"
+        >
+          <n-icon><SettingsPowerRound /></n-icon>
+          <span>{{ $t("button.shutdown") }}</span>
+        </button>
+      </div>
+    </n-drawer-content>
+  </n-drawer>
   <!-- 登录 modal -->
   <n-modal
     v-model:show="showLoginModal"

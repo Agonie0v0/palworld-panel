@@ -2,9 +2,6 @@
 import { computed, onMounted, ref } from "vue";
 import dayjs from "dayjs";
 import { useI18n } from "vue-i18n";
-import { ArchiveOutlined } from "@vicons/material";
-import { Settings, Terminal } from "@vicons/ionicons5";
-import { BroadcastTower } from "@vicons/fa";
 import { Refresh } from "@vicons/tabler";
 import ApiService from "@/service/api";
 
@@ -13,12 +10,7 @@ const props = defineProps({
   serverMetrics: { type: Object, default: () => ({}) },
   players: { type: Array, default: () => [] },
 });
-const emit = defineEmits([
-  "open-rcon",
-  "open-backup",
-  "open-broadcast",
-  "open-config",
-]);
+
 const { t } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
@@ -40,6 +32,24 @@ const nextTask = computed(
       .filter((task) => task.next_run_at)
       .sort((a, b) => new Date(a.next_run_at) - new Date(b.next_run_at))[0],
 );
+const serverOnline = computed(() => Boolean(props.serverInfo?.name));
+const currentPlayers = computed(() =>
+  Number(
+    props.serverMetrics?.current_player_num ?? onlinePlayers.value.length ?? 0,
+  ),
+);
+const maxPlayers = computed(() =>
+  Number(props.serverMetrics?.max_player_num || 0),
+);
+const playerPercent = computed(() =>
+  maxPlayers.value > 0
+    ? Math.min(100, Math.round((currentPlayers.value / maxPlayers.value) * 100))
+    : 0,
+);
+const fps = computed(() => Number(props.serverMetrics?.server_fps || 0));
+const fpsPercent = computed(() =>
+  Math.min(100, Math.max(0, Math.round((fps.value / 60) * 100))),
+);
 const uptime = computed(() => {
   const seconds = Number(props.serverMetrics?.uptime || 0);
   const days = Math.floor(seconds / 86400);
@@ -49,9 +59,21 @@ const uptime = computed(() => {
     : t("overview.uptimeHours", { hours });
 });
 const healthType = computed(() => {
-  if (!props.serverInfo?.name) return "warning";
-  const fps = Number(props.serverMetrics?.server_fps || 0);
-  return fps > 0 && fps < 30 ? "warning" : "success";
+  if (!serverOnline.value) return "warning";
+  return fps.value > 0 && fps.value < 30 ? "warning" : "success";
+});
+const fpsTone = computed(() => {
+  if (!serverOnline.value || fps.value < 30) return "is-warning";
+  return "is-success";
+});
+const latestBackupAge = computed(() => {
+  if (!latestBackup.value?.save_time) return t("overview.never");
+  const hours = Math.max(
+    0,
+    dayjs().diff(dayjs(latestBackup.value.save_time), "hour"),
+  );
+  if (hours < 24) return t("overview.hoursAgo", { hours });
+  return t("overview.daysAgo", { days: Math.floor(hours / 24) });
 });
 
 const loadOverview = async () => {
@@ -80,100 +102,129 @@ onMounted(loadOverview);
   <n-scrollbar class="overview-scroll">
     <div class="overview-page">
       <header class="overview-header">
-        <h2>{{ $t("overview.title") }}</h2>
+        <div>
+          <h2>{{ $t("overview.title") }}</h2>
+          <p>{{ $t("overview.subtitle") }}</p>
+        </div>
         <n-button secondary :loading="loading" @click="loadOverview">
-          <template #icon
-            ><n-icon><Refresh /></n-icon
-          ></template>
+          <template #icon>
+            <n-icon><Refresh /></n-icon>
+          </template>
           {{ $t("overview.refresh") }}
         </n-button>
       </header>
 
-      <section class="overview-metrics" :aria-label="$t('overview.title')">
-        <div class="overview-metric overview-metric--status">
-          <span class="overview-metric-label">{{
-            $t("overview.serverStatus")
-          }}</span>
-          <div class="overview-status-value">
-            <n-badge dot :type="healthType" />
-            <strong>{{
-              serverInfo?.name || $t("status.serverUnavailable")
-            }}</strong>
+      <section class="overview-pulse" :aria-label="$t('overview.pulse')">
+        <div class="overview-pulse-identity">
+          <div class="overview-pulse-heading">
+            <span class="overview-pulse-label">{{ $t("overview.pulse") }}</span>
+            <n-tag :type="healthType" size="small" :bordered="false">
+              {{
+                serverOnline
+                  ? $t("status.online")
+                  : $t("status.serverUnavailable")
+              }}
+            </n-tag>
           </div>
-          <span class="overview-metric-note">{{
-            serverInfo?.version || "Unknown"
-          }}</span>
-        </div>
-        <div class="overview-metric">
-          <span class="overview-metric-label">{{
-            $t("overview.onlinePlayers")
-          }}</span>
-          <strong class="overview-metric-value">
-            {{ serverMetrics?.current_player_num ?? onlinePlayers.length }}
-            <small>/ {{ serverMetrics?.max_player_num ?? "—" }}</small>
-          </strong>
-          <span class="overview-metric-note">{{
-            $t("overview.totalPlayers", { count: players.length })
-          }}</span>
-        </div>
-        <div class="overview-metric">
-          <span class="overview-metric-label">{{ $t("item.serverFps") }}</span>
-          <strong class="overview-metric-value">{{
-            serverMetrics?.server_fps ?? "—"
+          <strong>{{
+            serverInfo?.name || $t("status.serverUnavailable")
           }}</strong>
-          <span class="overview-metric-note">
-            {{ $t("item.serverFrameTime") }}:
-            {{ serverMetrics?.server_frame_time ?? "—" }} ms
-          </span>
+          <span>{{ serverInfo?.version || "Unknown" }}</span>
+          <dl class="overview-pulse-meta">
+            <div>
+              <dt>{{ $t("item.serverUptime") }}</dt>
+              <dd>{{ uptime }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("item.serverDays") }}</dt>
+              <dd>{{ serverMetrics?.days ?? "—" }}</dd>
+            </div>
+          </dl>
         </div>
-        <div class="overview-metric">
-          <span class="overview-metric-label">{{
-            $t("item.serverUptime")
-          }}</span>
-          <strong class="overview-metric-value overview-metric-value--text">{{
-            uptime
-          }}</strong>
-          <span class="overview-metric-note">
-            {{ $t("item.serverDays") }}: {{ serverMetrics?.days ?? "—" }}
-          </span>
-        </div>
-      </section>
 
-      <section class="overview-action-band">
-        <h3>{{ $t("overview.operations") }}</h3>
-        <div class="overview-actions">
-          <n-button type="primary" @click="emit('open-rcon')">
-            <template #icon
-              ><n-icon><Terminal /></n-icon
-            ></template>
-            {{ $t("button.rcon") }}
-          </n-button>
-          <n-button secondary @click="emit('open-backup')">
-            <template #icon
-              ><n-icon><ArchiveOutlined /></n-icon
-            ></template>
-            {{ $t("button.backup") }}
-          </n-button>
-          <n-button secondary @click="emit('open-broadcast')">
-            <template #icon
-              ><n-icon><BroadcastTower /></n-icon
-            ></template>
-            {{ $t("button.broadcast") }}
-          </n-button>
-          <n-button secondary @click="emit('open-config')">
-            <template #icon
-              ><n-icon><Settings /></n-icon
-            ></template>
-            {{ $t("configuration.title") }}
-          </n-button>
+        <div class="overview-pulse-readings">
+          <div class="overview-reading" :class="fpsTone">
+            <div class="overview-reading-head">
+              <span>{{ $t("item.serverFps") }}</span>
+              <strong>{{ serverMetrics?.server_fps ?? "—" }}</strong>
+            </div>
+            <div class="overview-meter" aria-hidden="true">
+              <span :style="{ width: `${fpsPercent}%` }"></span>
+            </div>
+            <small>{{
+              $t("overview.fpsTarget", { percent: fpsPercent })
+            }}</small>
+          </div>
+
+          <div class="overview-reading is-info">
+            <div class="overview-reading-head">
+              <span>{{ $t("overview.onlinePlayers") }}</span>
+              <strong>
+                {{ currentPlayers }}
+                <small>/ {{ maxPlayers || "—" }}</small>
+              </strong>
+            </div>
+            <div class="overview-meter" aria-hidden="true">
+              <span :style="{ width: `${playerPercent}%` }"></span>
+            </div>
+            <small>{{
+              $t("overview.capacityUsed", { percent: playerPercent })
+            }}</small>
+          </div>
+
+          <div class="overview-reading is-backup">
+            <div class="overview-reading-head">
+              <span>{{ $t("overview.backupStatus") }}</span>
+              <strong>{{ backups.length }}</strong>
+            </div>
+            <div class="overview-backup-time">{{ latestBackupAge }}</div>
+            <small>{{
+              latestBackup
+                ? formatTime(latestBackup.save_time)
+                : $t("overview.noBackupShort")
+            }}</small>
+          </div>
         </div>
       </section>
 
       <div class="overview-detail-grid">
+        <section class="overview-panel overview-panel--players">
+          <header class="overview-panel-header">
+            <div>
+              <h3>{{ $t("overview.onlineNow") }}</h3>
+              <p>
+                {{ $t("overview.totalPlayers", { count: players.length }) }}
+              </p>
+            </div>
+            <span class="overview-count overview-count--players">
+              {{ onlinePlayers.length }}
+            </span>
+          </header>
+          <n-empty
+            v-if="onlinePlayers.length === 0"
+            size="small"
+            :description="$t('overview.noOnlinePlayers')"
+          />
+          <ul v-else class="overview-player-list">
+            <li
+              v-for="player in onlinePlayers.slice(0, 8)"
+              :key="player.player_uid"
+            >
+              <span>{{ player.nickname }}</span>
+              <n-tag size="small" type="success">Lv.{{ player.level }}</n-tag>
+            </li>
+          </ul>
+        </section>
+
         <section class="overview-panel overview-panel--automation">
           <header class="overview-panel-header">
-            <h3>{{ $t("overview.automation") }}</h3>
-            <span>{{ activeTasks.length }}</span>
+            <div>
+              <h3>{{ $t("overview.automation") }}</h3>
+              <p>{{ $t("overview.automationHint") }}</p>
+            </div>
+            <span class="overview-count overview-count--tasks">
+              {{ activeTasks.length }}
+            </span>
           </header>
           <dl class="overview-definition-list">
             <div>
@@ -191,31 +242,15 @@ onMounted(loadOverview);
           </dl>
         </section>
 
-        <section class="overview-panel overview-panel--players">
-          <header class="overview-panel-header">
-            <h3>{{ $t("overview.onlineNow") }}</h3>
-            <span>{{ onlinePlayers.length }}</span>
-          </header>
-          <n-empty
-            v-if="onlinePlayers.length === 0"
-            size="small"
-            :description="$t('overview.noOnlinePlayers')"
-          />
-          <ul v-else class="overview-player-list">
-            <li
-              v-for="player in onlinePlayers.slice(0, 6)"
-              :key="player.player_uid"
-            >
-              <span>{{ player.nickname }}</span>
-              <n-tag size="small" type="success">Lv.{{ player.level }}</n-tag>
-            </li>
-          </ul>
-        </section>
-
         <section class="overview-panel overview-panel--backup">
           <header class="overview-panel-header">
-            <h3>{{ $t("overview.backupStatus") }}</h3>
-            <span>{{ backups.length }}</span>
+            <div>
+              <h3>{{ $t("overview.backupStatus") }}</h3>
+              <p>{{ $t("overview.backupHint") }}</p>
+            </div>
+            <span class="overview-count overview-count--backup">
+              {{ backups.length }}
+            </span>
           </header>
           <n-empty
             v-if="!latestBackup"
@@ -250,21 +285,20 @@ onMounted(loadOverview);
 }
 
 .overview-header,
-.overview-panel-header,
-.overview-status-value,
-.overview-actions {
+.overview-pulse-heading,
+.overview-reading-head,
+.overview-panel-header {
   display: flex;
   align-items: center;
 }
 
 .overview-header {
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   margin-bottom: 18px;
 }
 
 .overview-header h2,
-.overview-action-band h3,
 .overview-panel-header h3 {
   color: var(--app-ink);
   letter-spacing: 0;
@@ -274,111 +308,158 @@ onMounted(loadOverview);
   font-size: 20px;
 }
 
-.overview-metrics {
+.overview-header p,
+.overview-panel-header p {
+  color: var(--app-ink-muted);
+}
+
+.overview-header p {
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.overview-pulse {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(250px, 0.8fr) minmax(0, 2.2fr);
   overflow: hidden;
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: 8px;
 }
 
-.overview-metric {
+.overview-pulse-identity {
   min-width: 0;
-  min-height: 132px;
-  padding: 20px;
+  padding: 22px;
+  background: var(--app-accent-soft);
+  border-right: 1px solid var(--app-border);
 }
 
-.overview-metric + .overview-metric {
+.overview-pulse-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.overview-pulse-label {
+  color: var(--app-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.overview-pulse-identity > strong,
+.overview-pulse-identity > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-pulse-identity > strong {
+  margin-top: 22px;
+  color: var(--app-ink);
+  font-size: 21px;
+}
+
+.overview-pulse-identity > span {
+  margin-top: 4px;
+  color: var(--app-ink-secondary);
+  font-size: 12px;
+}
+
+.overview-pulse-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.overview-pulse-meta dt {
+  color: var(--app-ink-muted);
+  font-size: 11px;
+}
+
+.overview-pulse-meta dd {
+  margin-top: 3px;
+  color: var(--app-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.overview-pulse-readings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.overview-reading {
+  min-width: 0;
+  padding: 24px 20px;
+}
+
+.overview-reading + .overview-reading {
   border-left: 1px solid var(--app-border);
 }
 
-.overview-metric-label,
-.overview-metric-note {
-  display: block;
-  color: var(--app-ink-muted);
+.overview-reading-head {
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.overview-metric-label {
-  margin-bottom: 12px;
+.overview-reading-head > span,
+.overview-reading > small {
+  color: var(--app-ink-muted);
   font-size: 12px;
-  font-weight: 600;
 }
 
-.overview-metric-value {
-  display: block;
-  overflow: hidden;
+.overview-reading-head strong {
   color: var(--app-ink);
-  font-size: 30px;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 25px;
 }
 
-.overview-metric-value small {
+.overview-reading-head strong small {
   color: var(--app-ink-muted);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 500;
 }
 
-.overview-metric-value--text {
-  font-size: 22px;
-}
-
-.overview-metric-note {
-  margin-top: 9px;
+.overview-meter {
+  height: 7px;
+  margin: 28px 0 12px;
   overflow: hidden;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--app-surface-muted);
+  border-radius: 4px;
 }
 
-.overview-status-value {
-  min-width: 0;
-  gap: 9px;
+.overview-meter span {
+  display: block;
+  height: 100%;
+  background: var(--app-success);
+  border-radius: inherit;
 }
 
-.overview-status-value strong {
-  overflow: hidden;
-  color: var(--app-ink);
-  font-size: 17px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.overview-reading.is-warning .overview-meter span {
+  background: var(--app-warning);
 }
 
-.overview-action-band {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin-top: 18px;
-  padding: 15px 18px;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
+.overview-reading.is-info .overview-meter span {
+  background: var(--app-info);
 }
 
-.overview-action-band h3,
-.overview-panel-header h3 {
-  font-size: 14px;
-}
-
-.overview-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+.overview-backup-time {
+  margin: 20px 0 7px;
+  color: var(--app-success);
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .overview-detail-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1.2fr 1fr 1fr;
   gap: 16px;
   margin-top: 16px;
 }
 
 .overview-panel {
   min-width: 0;
-  min-height: 230px;
+  min-height: 245px;
   padding: 18px;
   background: var(--app-surface);
   border: 1px solid var(--app-border);
@@ -387,16 +468,42 @@ onMounted(loadOverview);
 
 .overview-panel-header {
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding-bottom: 13px;
   border-bottom: 1px solid var(--app-border);
 }
 
-.overview-panel-header > span {
-  color: var(--app-accent);
+.overview-panel-header h3 {
+  font-size: 14px;
+}
+
+.overview-panel-header p {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.overview-count {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  color: var(--app-info);
+  background: var(--app-info-soft);
+  border-radius: 6px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
+}
+
+.overview-count--tasks {
+  color: var(--app-warning);
+  background: var(--app-warning-soft);
+}
+
+.overview-count--backup {
+  color: var(--app-success);
+  background: var(--app-success-soft);
 }
 
 .overview-definition-list {
@@ -406,7 +513,7 @@ onMounted(loadOverview);
 .overview-definition-list > div,
 .overview-player-list li {
   display: flex;
-  min-height: 45px;
+  min-height: 47px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -447,23 +554,20 @@ onMounted(loadOverview);
 }
 
 @media (max-width: 1080px) {
-  .overview-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .overview-pulse {
+    grid-template-columns: 1fr;
   }
 
-  .overview-metric:nth-child(3) {
-    border-left: 0;
-  }
-
-  .overview-metric:nth-child(n + 3) {
-    border-top: 1px solid var(--app-border);
+  .overview-pulse-identity {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
   }
 
   .overview-detail-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .overview-panel--automation {
+  .overview-panel--players {
     grid-column: 1 / -1;
   }
 }
@@ -474,41 +578,33 @@ onMounted(loadOverview);
   }
 
   .overview-header {
-    margin-bottom: 14px;
+    align-items: flex-start;
   }
 
-  .overview-metrics,
+  .overview-header p {
+    max-width: 30ch;
+  }
+
+  .overview-pulse-readings,
   .overview-detail-grid {
     grid-template-columns: 1fr;
   }
 
-  .overview-metric {
-    min-height: 116px;
-    padding: 16px;
-    border-left: 0 !important;
+  .overview-reading + .overview-reading {
     border-top: 1px solid var(--app-border);
+    border-left: 0;
   }
 
-  .overview-metric:first-child {
-    border-top: 0;
+  .overview-reading {
+    padding: 18px;
   }
 
-  .overview-action-band {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .overview-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .overview-detail-grid {
-    gap: 12px;
+  .overview-meter {
+    margin-top: 18px;
   }
 
   .overview-panel,
-  .overview-panel--automation {
+  .overview-panel--players {
     min-height: 0;
     grid-column: auto;
   }

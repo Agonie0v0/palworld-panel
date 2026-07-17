@@ -13,11 +13,14 @@ import {
   ShieldCheckmarkSharp,
   Terminal,
   Settings,
+  ConstructOutline,
+  MoonOutline,
+  SunnyOutline,
 } from "@vicons/ionicons5";
 import { GuiManagement } from "@vicons/carbon";
 import { BroadcastTower } from "@vicons/fa";
 import { computed, onMounted, ref } from "vue";
-import { NIcon, useMessage } from "naive-ui";
+import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
 import PlayerList from "./component/PlayerList.vue";
@@ -35,7 +38,7 @@ import whitelistStore from "@/stores/model/whitelist";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import { watch } from "vue";
 import userStore from "@/stores/model/user";
-import { h } from "vue";
+import themeStore from "@/stores/model/theme.js";
 
 const emit = defineEmits(["open-config"]);
 
@@ -43,6 +46,7 @@ const { t, locale } = useI18n();
 
 const message = useMessage();
 const PALWORLD_TOKEN = "palworld_token";
+const theme = themeStore();
 
 const loading = ref(false);
 const serverInfo = ref({});
@@ -73,16 +77,7 @@ const isLogin = ref(false);
 
 const handleSelectLanguage = (key) => {
   message.info(t("message.changelanguage"));
-  if (key === "zh") {
-    localStorage.setItem("locale", "zh");
-    // locale.value = "zh";
-  } else if (key === "ja") {
-    localStorage.setItem("locale", "ja");
-    // locale.value = "ja";
-  } else {
-    localStorage.setItem("locale", "en");
-    // locale.value = "en";
-  }
+  localStorage.setItem("locale", key === "zh" ? "zh" : "en");
   setTimeout(() => {
     location.reload();
   }, 1000);
@@ -190,99 +185,7 @@ const handleRconDrawer = () => {
   }
 };
 
-// 控制中心（下拉菜单）
-// 包含：白名单管理、RCON 命令、游戏内广播、关闭服务器
-const renderIcon = (icon, color = "#666") => {
-  return () => {
-    return h(
-      NIcon,
-      {
-        color: color,
-      },
-      {
-        default: () => h(icon),
-      },
-    );
-  };
-};
-const controlCenterOption = [
-  {
-    label: () => t("operations.title"),
-    key: "operations",
-    icon: renderIcon(GuiManagement),
-  },
-  {
-    label: () => t("configuration.title"),
-    key: "settings",
-    icon: renderIcon(Settings),
-  },
-  {
-    label: () => t("gameSettings.title"),
-    key: "game-settings",
-    icon: renderIcon(Settings),
-  },
-  // {
-  //   label: () => {
-  //     return h("div", null, {
-  //       default: () => t("button.backup"),
-  //     });
-  //   },
-  //   key: "backup",
-  //   icon: renderIcon(ArchiveOutlined),
-  // },
-  {
-    label: () => {
-      return h("div", null, {
-        default: () => t("button.palconf"),
-      });
-    },
-    key: "palconf",
-    icon: renderIcon(Settings),
-  },
-  {
-    label: () => {
-      return h("div", null, {
-        default: () => t("button.whitelist"),
-      });
-    },
-    key: "whitelist",
-    icon: renderIcon(ShieldCheckmarkSharp),
-  },
-  // {
-  //   label: () => {
-  //     return h("div", null, {
-  //       default: () => t("button.rcon"),
-  //     });
-  //   },
-  //   key: "rcon",
-  //   icon: renderIcon(Terminal),
-  // },
-  {
-    label: () => {
-      return h("div", null, {
-        default: () => t("button.broadcast"),
-      });
-    },
-    key: "broadcast",
-    icon: renderIcon(BroadcastTower),
-  },
-  {
-    label: () => {
-      return h(
-        "div",
-        {
-          style: { color: "#cc2d48" },
-        },
-        {
-          default: () => t("button.shutdown"),
-        },
-      );
-    },
-    key: "shutdown",
-    icon: renderIcon(SettingsPowerRound, "#cc2d48"),
-  },
-];
-const handleSelectControlCenter = (key) => {
+const handleToolAction = (key) => {
   if (key === "operations") {
     if (checkAuthToken()) showServerOperations.value = true;
     else {
@@ -311,8 +214,6 @@ const handleSelectControlCenter = (key) => {
     handleStartBrodcast();
   } else if (key === "shutdown") {
     handleShutdown();
-  } else {
-    message.error("错误");
   }
 };
 
@@ -456,11 +357,6 @@ onMounted(async () => {
       key: "en",
       disabled: locale.value == "en",
     },
-    {
-      label: "日本語",
-      key: "ja",
-      disabled: locale.value == "ja",
-    },
   ];
   loading.value = true;
   checkAuthToken();
@@ -517,6 +413,16 @@ onMounted(async () => {
           {{ serverInfo?.version || "Unknown" }} · {{ $t("item.serverFps") }}
           {{ serverMetrics?.server_fps ?? 0 }}
         </div>
+        <div class="ops-server-stats">
+          <span>
+            <strong>{{ onlineCount }}</strong>
+            {{ $t("status.online") }}
+          </span>
+          <span>
+            <strong>{{ playerList.length }}</strong>
+            {{ $t("button.players") }}
+          </span>
+        </div>
       </div>
 
       <div class="ops-nav-label">{{ $t("button.management") }}</div>
@@ -568,62 +474,121 @@ onMounted(async () => {
         </n-button>
       </nav>
 
-      <div class="ops-sidebar-spacer"></div>
-
-      <div v-if="isLogin" class="ops-sidebar-actions">
-        <n-button
-          quaternary
-          block
-          class="ops-sidebar-action-button"
-          @click="handleBackupList"
-        >
-          <template #icon
-            ><n-icon><ArchiveOutlined /></n-icon
-          ></template>
-          {{ $t("button.backup") }}
-        </n-button>
-        <n-button
-          quaternary
-          block
-          class="ops-sidebar-action-button"
-          @click="handleRconDrawer"
-        >
-          <template #icon
-            ><n-icon><Terminal /></n-icon
-          ></template>
-          {{ $t("button.rcon") }}
-        </n-button>
-        <n-dropdown
-          trigger="click"
-          :options="controlCenterOption"
-          @select="handleSelectControlCenter"
-        >
-          <n-button type="primary" block>
-            <template #icon
-              ><n-icon><GuiManagement /></n-icon
-            ></template>
-            {{ $t("button.controlCenter") }}
-          </n-button>
-        </n-dropdown>
+      <div v-if="isLogin" class="ops-tools-section">
+        <div class="ops-nav-label ops-nav-label--tools">
+          {{ $t("button.tools") }}
+        </div>
+        <div class="ops-tool-grid">
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleToolAction('operations')"
+          >
+            <n-icon><GuiManagement /></n-icon>
+            <span>{{ $t("operations.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleToolAction('settings')"
+          >
+            <n-icon><Settings /></n-icon>
+            <span>{{ $t("configuration.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleToolAction('game-settings')"
+          >
+            <n-icon><ConstructOutline /></n-icon>
+            <span>{{ $t("gameSettings.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleToolAction('palconf')"
+          >
+            <n-icon><Settings /></n-icon>
+            <span>{{ $t("button.palconf") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleRconDrawer"
+          >
+            <n-icon><Terminal /></n-icon>
+            <span>{{ $t("button.rcon") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleBackupList"
+          >
+            <n-icon><ArchiveOutlined /></n-icon>
+            <span>{{ $t("button.backup") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleWhiteList"
+          >
+            <n-icon><ShieldCheckmarkSharp /></n-icon>
+            <span>{{ $t("button.whitelist") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button"
+            @click="handleStartBrodcast"
+          >
+            <n-icon><BroadcastTower /></n-icon>
+            <span>{{ $t("button.broadcast") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-tool-button ops-tool-button--danger"
+            @click="handleShutdown"
+          >
+            <n-icon><SettingsPowerRound /></n-icon>
+            <span>{{ $t("button.shutdown") }}</span>
+          </button>
+        </div>
       </div>
 
       <div class="ops-sidebar-footer">
-        <n-dropdown
-          trigger="click"
-          :options="languageOptions"
-          @select="handleSelectLanguage"
-        >
+        <div class="ops-sidebar-preferences">
           <n-button
             quaternary
             circle
-            :aria-label="$t('button.language')"
-            style="color: var(--app-sidebar-ink)"
+            class="ops-preference-button"
+            :aria-label="
+              $t(theme.isDark ? 'button.lightMode' : 'button.darkMode')
+            "
+            @click="theme.toggle"
           >
-            <template #icon
-              ><n-icon><LanguageSharp /></n-icon
-            ></template>
+            <template #icon>
+              <n-icon>
+                <SunnyOutline v-if="theme.isDark" />
+                <MoonOutline v-else />
+              </n-icon>
+            </template>
           </n-button>
-        </n-dropdown>
+          <n-dropdown
+            trigger="click"
+            :options="languageOptions"
+            @select="handleSelectLanguage"
+          >
+            <n-button
+              quaternary
+              circle
+              class="ops-preference-button"
+              :aria-label="$t('button.language')"
+            >
+              <template #icon
+                ><n-icon><LanguageSharp /></n-icon
+              ></template>
+            </n-button>
+          </n-dropdown>
+        </div>
         <n-button
           v-if="!isLogin"
           type="primary"
@@ -680,10 +645,6 @@ onMounted(async () => {
             :server-info="serverInfo"
             :server-metrics="serverMetrics"
             :players="playerList"
-            @open-rcon="handleRconDrawer"
-            @open-backup="handleBackupList"
-            @open-broadcast="handleStartBrodcast"
-            @open-config="handleSelectControlCenter('settings')"
           />
           <player-list
             v-if="currentDisplay === 'players'"
