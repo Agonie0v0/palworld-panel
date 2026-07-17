@@ -452,8 +452,13 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="ops-nav-label">{{ $t("button.management") }}</div>
-      <nav class="ops-nav" :aria-label="$t('button.management')">
+      <div class="ops-nav-label">
+        {{ locale === "zh" ? "\u72b6\u6001\u4e0e\u73a9\u5bb6" : "Status & players" }}
+      </div>
+      <nav
+        class="ops-nav"
+        :aria-label="locale === 'zh' ? '\u72b6\u6001\u4e0e\u73a9\u5bb6' : 'Status and players'"
+      >
         <button
           v-if="isLogin"
           type="button"
@@ -495,11 +500,11 @@ onMounted(async () => {
 
       <template v-if="canOperate">
         <div class="ops-nav-label ops-nav-label--group">
-          {{ locale === "zh" ? "\u5e38\u7528\u5de5\u5177" : "Common tools" }}
+          {{ locale === "zh" ? "\u65e5\u5e38\u670d\u52a1\u5668" : "Daily server" }}
         </div>
         <nav
           class="ops-nav ops-nav--list"
-          :aria-label="locale === 'zh' ? '\u5e38\u7528\u5de5\u5177' : 'Common tools'"
+          :aria-label="locale === 'zh' ? '\u65e5\u5e38\u670d\u52a1\u5668' : 'Daily server'"
         >
           <button
             type="button"
@@ -560,21 +565,30 @@ onMounted(async () => {
             <n-icon><BroadcastTower /></n-icon
             ><span>{{ $t("modal.broadcast") }}</span>
           </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'whitelist' }"
+            @click="selectWorkspace('whitelist')"
+          >
+            <n-icon><ShieldCheckmarkSharp /></n-icon
+            ><span>{{ $t("modal.whitelist") }}</span>
+          </button>
         </nav>
 
         <div class="ops-nav-label ops-nav-label--group">
           {{
             locale === "zh"
-              ? "\u6570\u636e\u4e0e\u4fdd\u62a4"
-              : "Data & protection"
+              ? "\u5b58\u6863\u4e0e\u5907\u4efd"
+              : "Saves & backups"
           }}
         </div>
         <nav
           class="ops-nav ops-nav--list"
           :aria-label="
             locale === 'zh'
-              ? '\u6570\u636e\u4e0e\u4fdd\u62a4'
-              : 'Data and protection'
+              ? '\u5b58\u6863\u4e0e\u5907\u4efd'
+              : 'Saves and backups'
           "
         >
           <button
@@ -608,30 +622,21 @@ onMounted(async () => {
               locale === "zh" ? "\u4e16\u754c\u6570\u636e" : "World data"
             }}</span>
           </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'whitelist' }"
-            @click="selectWorkspace('whitelist')"
-          >
-            <n-icon><ShieldCheckmarkSharp /></n-icon
-            ><span>{{ $t("modal.whitelist") }}</span>
-          </button>
         </nav>
 
         <div class="ops-nav-label ops-nav-label--group">
           {{
             locale === "zh"
-              ? "\u6269\u5c55\u4e0e\u81ea\u52a8\u5316"
-              : "Extensions & automation"
+              ? "\u7ef4\u62a4\u4e0e\u6269\u5c55"
+              : "Maintenance & extensions"
           }}
         </div>
         <nav
           class="ops-nav ops-nav--list"
           :aria-label="
             locale === 'zh'
-              ? '\u6269\u5c55\u4e0e\u81ea\u52a8\u5316'
-              : 'Extensions and automation'
+              ? '\u7ef4\u62a4\u4e0e\u6269\u5c55'
+              : 'Maintenance and extensions'
           "
         >
           <button
@@ -658,8 +663,8 @@ onMounted(async () => {
         <div v-if="isAdmin" class="ops-nav-label ops-nav-label--group">
           {{
             locale === "zh"
-              ? "\u9762\u677f\u7ba1\u7406"
-              : "Panel administration"
+              ? "\u9762\u677f\u4e0e\u6743\u9650"
+              : "Panel & access"
           }}
         </div>
         <nav
@@ -667,8 +672,8 @@ onMounted(async () => {
           class="ops-nav ops-nav--list"
           :aria-label="
             locale === 'zh'
-              ? '\u9762\u677f\u7ba1\u7406'
-              : 'Panel administration'
+              ? '\u9762\u677f\u4e0e\u6743\u9650'
+              : 'Panel and access'
           "
         >
           <button
