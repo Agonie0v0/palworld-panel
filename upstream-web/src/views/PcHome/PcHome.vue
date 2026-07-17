@@ -1,25 +1,11 @@
 <script setup>
-import {
-  AdminPanelSettingsOutlined,
-  SupervisedUserCircleRound,
-  SettingsPowerRound,
-  ArchiveOutlined,
-  PublicRound,
-  DashboardOutlined,
-} from "@vicons/material";
+import { AdminPanelSettingsOutlined } from "@vicons/material";
 import {
   GameController,
   LanguageSharp,
-  ShieldCheckmarkSharp,
-  Terminal,
-  Settings,
-  ConstructOutline,
   MoonOutline,
   SunnyOutline,
 } from "@vicons/ionicons5";
-import { GuiManagement } from "@vicons/carbon";
-import { BroadcastTower } from "@vicons/fa";
-import { Activity, BrandSteam, Database, Dna, Package } from "@vicons/tabler";
 import { computed, onMounted, ref } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
@@ -219,8 +205,6 @@ const handleLogin = async () => {
   isLogin.value = true;
   currentDisplay.value = "overview";
 };
-const handleRconDrawer = () => selectWorkspace("rcon");
-
 const selectWorkspace = (key) => {
   if (key === "settings") {
     if (checkAuthToken()) emit("open-config");
@@ -262,7 +246,6 @@ const selectWorkspace = (key) => {
 };
 
 // 白名单
-const handleWhiteList = () => selectWorkspace("whitelist");
 const getWhiteList = async () => {
   if (checkAuthToken()) {
     const { data, statusCode } = await new ApiService().getWhitelist();
@@ -279,16 +262,6 @@ const getSonWhitelistStatus = () => {
 };
 
 // 广播
-const showBroadcastModal = ref(false);
-const handleStartBrodcast = () => {
-  // 开始广播
-  if (checkAuthToken()) {
-    showBroadcastModal.value = true;
-  } else {
-    message.error(t("message.requireauth"));
-    showLoginModal.value = true;
-  }
-};
 const showShutdownDialog = ref(false);
 const handleShutdown = () => {
   if (checkAuthToken()) {
@@ -370,8 +343,6 @@ const isTokenExpired = (token) => {
     return false;
   }
 };
-
-const handleBackupList = () => selectWorkspace("backup");
 
 onMounted(async () => {
   locale.value = localStorage.getItem("locale");
@@ -468,263 +439,6 @@ onMounted(async () => {
         :is-login="isLogin"
         @select="handleSidebarNavigation"
       />
-
-      <template v-if="false">
-      <div class="ops-nav-label">
-        {{ locale === "zh" ? "\u72b6\u6001\u4e0e\u73a9\u5bb6" : "Status & players" }}
-      </div>
-      <nav
-        class="ops-nav"
-        :aria-label="locale === 'zh' ? '\u72b6\u6001\u4e0e\u73a9\u5bb6' : 'Status and players'"
-      >
-        <button
-          v-if="isLogin"
-          type="button"
-          class="ops-menu-button"
-          :class="{ 'is-active': currentDisplay === 'overview' }"
-          @click="toOverview"
-        >
-          <n-icon><DashboardOutlined /></n-icon>
-          <span>{{ $t("button.overview") }}</span>
-        </button>
-        <button
-          type="button"
-          class="ops-menu-button"
-          :class="{ 'is-active': currentDisplay === 'players' }"
-          @click="toPlayers"
-        >
-          <n-icon><GameController /></n-icon>
-          <span>{{ $t("button.players") }}</span>
-        </button>
-        <button
-          type="button"
-          class="ops-menu-button"
-          :class="{ 'is-active': currentDisplay === 'guilds' }"
-          @click="toGuilds"
-        >
-          <n-icon><SupervisedUserCircleRound /></n-icon>
-          <span>{{ $t("button.guilds") }}</span>
-        </button>
-        <button
-          type="button"
-          class="ops-menu-button"
-          :class="{ 'is-active': currentDisplay === 'map' }"
-          @click="toMap"
-        >
-          <n-icon><PublicRound /></n-icon>
-          <span>{{ $t("button.map") }}</span>
-        </button>
-      </nav>
-
-      <template v-if="canOperate">
-        <div class="ops-nav-label ops-nav-label--group">
-          {{ locale === "zh" ? "\u65e5\u5e38\u670d\u52a1\u5668" : "Daily server" }}
-        </div>
-        <nav
-          class="ops-nav ops-nav--list"
-          :aria-label="locale === 'zh' ? '\u65e5\u5e38\u670d\u52a1\u5668' : 'Daily server'"
-        >
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'operations' }"
-            @click="selectWorkspace('operations')"
-          >
-            <n-icon><GuiManagement /></n-icon
-            ><span>{{ $t("operations.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'game-settings' }"
-            @click="selectWorkspace('game-settings')"
-          >
-            <n-icon><ConstructOutline /></n-icon
-            ><span>{{ $t("gameSettings.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'breeding' }"
-            @click="selectWorkspace('breeding')"
-          >
-            <n-icon><Dna /></n-icon
-            ><span>{{
-              locale === "zh"
-                ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4"
-                : "Breeding lab"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'mods' }"
-            @click="selectWorkspace('mods')"
-          >
-            <n-icon><Package /></n-icon
-            ><span>{{
-              locale === "zh" ? "\u6a21\u7ec4\u7ba1\u7406" : "Mods"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'rcon' }"
-            @click="selectWorkspace('rcon')"
-          >
-            <n-icon><Terminal /></n-icon><span>{{ $t("modal.rcon") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'broadcast' }"
-            @click="selectWorkspace('broadcast')"
-          >
-            <n-icon><BroadcastTower /></n-icon
-            ><span>{{ $t("modal.broadcast") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'whitelist' }"
-            @click="selectWorkspace('whitelist')"
-          >
-            <n-icon><ShieldCheckmarkSharp /></n-icon
-            ><span>{{ $t("modal.whitelist") }}</span>
-          </button>
-        </nav>
-
-        <div class="ops-nav-label ops-nav-label--group">
-          {{
-            locale === "zh"
-              ? "\u5b58\u6863\u4e0e\u5907\u4efd"
-              : "Saves & backups"
-          }}
-        </div>
-        <nav
-          class="ops-nav ops-nav--list"
-          :aria-label="
-            locale === 'zh'
-              ? '\u5b58\u6863\u4e0e\u5907\u4efd'
-              : 'Saves and backups'
-          "
-        >
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'backup' }"
-            @click="selectWorkspace('backup')"
-          >
-            <n-icon><ArchiveOutlined /></n-icon
-            ><span>{{ $t("button.backup") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'save-sources' }"
-            @click="selectWorkspace('save-sources')"
-          >
-            <n-icon><Database /></n-icon
-            ><span>{{
-              locale === "zh" ? "\u5b58\u6863\u6e90" : "Save sources"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'world-data' }"
-            @click="selectWorkspace('world-data')"
-          >
-            <n-icon><Database /></n-icon
-            ><span>{{
-              locale === "zh" ? "\u4e16\u754c\u6570\u636e" : "World data"
-            }}</span>
-          </button>
-        </nav>
-
-        <div class="ops-nav-label ops-nav-label--group">
-          {{
-            locale === "zh"
-              ? "\u7ef4\u62a4\u4e0e\u6269\u5c55"
-              : "Maintenance & extensions"
-          }}
-        </div>
-        <nav
-          class="ops-nav ops-nav--list"
-          :aria-label="
-            locale === 'zh'
-              ? '\u7ef4\u62a4\u4e0e\u6269\u5c55'
-              : 'Maintenance and extensions'
-          "
-        >
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'advanced' }"
-            @click="selectWorkspace('advanced')"
-          >
-            <n-icon><Activity /></n-icon
-            ><span>{{
-              locale === "zh" ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'workshop' }"
-            @click="selectWorkspace('workshop')"
-          >
-            <n-icon><BrandSteam /></n-icon><span>Workshop</span>
-          </button>
-        </nav>
-
-        <div v-if="isAdmin" class="ops-nav-label ops-nav-label--group">
-          {{
-            locale === "zh"
-              ? "\u9762\u677f\u4e0e\u6743\u9650"
-              : "Panel & access"
-          }}
-        </div>
-        <nav
-          v-if="isAdmin"
-          class="ops-nav ops-nav--list"
-          :aria-label="
-            locale === 'zh'
-              ? '\u9762\u677f\u4e0e\u6743\u9650'
-              : 'Panel and access'
-          "
-        >
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="selectWorkspace('settings')"
-          >
-            <n-icon><Settings /></n-icon
-            ><span>{{ $t("configuration.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'access' }"
-            @click="selectWorkspace('access')"
-          >
-            <n-icon><AdminPanelSettingsOutlined /></n-icon
-            ><span>{{
-              locale === "zh" ? "\u8d26\u53f7\u6743\u9650" : "Access"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button ops-menu-button--danger"
-            @click="selectWorkspace('shutdown')"
-          >
-            <n-icon><SettingsPowerRound /></n-icon
-            ><span>{{ $t("button.shutdown") }}</span>
-          </button>
-        </nav>
-      </template>
-      </template>
-
       <div class="ops-sidebar-footer">
         <div class="ops-sidebar-preferences">
           <n-button
@@ -812,148 +526,6 @@ onMounted(async () => {
           </div>
         </div>
       </header>
-
-      <section
-        v-if="false"
-        class="ops-command-shelf"
-        :aria-label="$t('button.tools')"
-      >
-        <div class="ops-command-title">{{ $t("button.tools") }}</div>
-        <div class="ops-command-grid">
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('operations')"
-          >
-            <n-icon><GuiManagement /></n-icon>
-            <span>{{ $t("operations.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('settings')"
-          >
-            <n-icon><Settings /></n-icon>
-            <span>{{ $t("configuration.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('game-settings')"
-          >
-            <n-icon><ConstructOutline /></n-icon>
-            <span>{{ $t("gameSettings.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('advanced')"
-          >
-            <n-icon><Activity /></n-icon>
-            <span>{{
-              locale === "zh" ? "运维中心" : "Operations center"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('save-sources')"
-          >
-            <n-icon><Database /></n-icon>
-            <span>{{ locale === "zh" ? "存档源" : "Save sources" }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('mods')"
-          >
-            <n-icon><Package /></n-icon>
-            <span>{{ locale === "zh" ? "模组管理" : "Mods" }}</span>
-          </button>
-          <button
-            v-if="isAdmin"
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('access')"
-          >
-            <n-icon><AdminPanelSettingsOutlined /></n-icon>
-            <span>{{ locale === "zh" ? "账号权限" : "Access" }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('world-data')"
-          >
-            <n-icon><Database /></n-icon>
-            <span>{{ locale === "zh" ? "世界数据" : "World data" }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('breeding')"
-          >
-            <n-icon><Dna /></n-icon>
-            <span>{{ locale === "zh" ? "配种实验室" : "Breeding lab" }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('workshop')"
-          >
-            <n-icon><BrandSteam /></n-icon>
-            <span>Workshop</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('palconf')"
-          >
-            <n-icon><Settings /></n-icon>
-            <span>{{ $t("button.palconf") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleRconDrawer"
-          >
-            <n-icon><Terminal /></n-icon>
-            <span>{{ $t("button.rcon") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleBackupList"
-          >
-            <n-icon><ArchiveOutlined /></n-icon>
-            <span>{{ $t("button.backup") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleWhiteList"
-          >
-            <n-icon><ShieldCheckmarkSharp /></n-icon>
-            <span>{{ $t("button.whitelist") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button"
-            @click="handleStartBrodcast"
-          >
-            <n-icon><BroadcastTower /></n-icon>
-            <span>{{ $t("button.broadcast") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-command-button ops-command-button--danger"
-            @click="handleShutdown"
-          >
-            <n-icon><SettingsPowerRound /></n-icon>
-            <span>{{ $t("button.shutdown") }}</span>
-          </button>
-        </div>
-      </section>
-
       <section class="ops-workspace-content">
         <div v-if="loading" class="ops-loading">
           <div class="ops-loading-panel">
