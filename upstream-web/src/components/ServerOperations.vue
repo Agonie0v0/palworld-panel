@@ -146,19 +146,22 @@ const maintenance = (operation) => {
 </script>
 
 <template>
-  <n-drawer
+  <n-modal
     :show="show"
-    width="min(92vw, 920px)"
-    placement="right"
+    preset="card"
+    class="server-operations-modal"
+    style="width: 94%; max-width: 980px"
+    :title="$t('operations.title')"
     @update:show="emit('update:show', $event)"
   >
-    <n-drawer-content :title="$t('operations.title')" closable>
-      <template #header-extra>
-        <n-button quaternary circle :loading="loading" :aria-label="$t('operations.refresh')" @click="refresh">
-          <template #icon><n-icon><RefreshOutlined /></n-icon></template>
-        </n-button>
-      </template>
+    <template #header-extra>
+      <n-button quaternary circle :loading="loading" :aria-label="$t('operations.refresh')" @click="refresh">
+        <template #icon><n-icon><RefreshOutlined /></n-icon></template>
+      </n-button>
+    </template>
 
+    <n-scrollbar style="max-height: min(74vh, 760px)" trigger="none">
+      <div class="operations-modal-body">
       <n-tabs type="line" animated>
         <n-tab-pane name="service" :tab="$t('operations.service')">
           <n-descriptions label-placement="top" :column="4" bordered class="mb-5">
@@ -241,13 +244,16 @@ const maintenance = (operation) => {
           </n-list>
         </n-tab-pane>
       </n-tabs>
-    </n-drawer-content>
-  </n-drawer>
+      </div>
+    </n-scrollbar>
+  </n-modal>
 </template>
 
 <style scoped>
 .w-full { width: 100%; }
+.operations-modal-body { padding-right: 8px; }
 @media (max-width: 640px) {
+  .operations-modal-body { padding-right: 4px; }
   :deep(.n-descriptions-table-content) { min-width: 560px; }
   :deep(.n-list-item__suffix) { margin-left: 8px; }
 }
