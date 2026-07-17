@@ -230,7 +230,12 @@ onMounted(async () => {
       </n-layout-sider>
 
       <n-layout class="relative" :native-scrollbar="false">
-        <guild-overview :guild-info="guildInfo" @view-player="toPlayers" />
+        <guild-overview
+          v-if="guildInfo?.admin_player_uid"
+          :guild-info="guildInfo"
+          @view-player="toPlayers"
+        />
+        <div v-else class="detail-empty"><n-empty /></div>
         <n-spin
           v-if="loadingGuildDetail"
           size="small"
@@ -249,11 +254,11 @@ onMounted(async () => {
   top: 0;
   z-index: 3;
   padding: 20px 0 14px;
-  background: #fff;
+  background: var(--app-surface);
 }
 
 .is-dark .filter-panel {
-  background: #18181c;
+  background: var(--app-surface);
 }
 
 .result-count {
@@ -273,7 +278,7 @@ onMounted(async () => {
 }
 
 .guild-row-item:focus-visible .guild-row {
-  box-shadow: 0 0 0 2px rgba(64, 152, 252, 0.45);
+  box-shadow: 0 0 0 2px rgb(15 118 110 / 35%);
 }
 
 .guild-row {
@@ -284,7 +289,7 @@ onMounted(async () => {
   min-width: 0;
   padding: 11px 12px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   transition:
     background-color 0.18s ease,
@@ -293,21 +298,21 @@ onMounted(async () => {
 }
 
 .guild-row:hover {
-  background: rgba(64, 152, 252, 0.08);
+  background: rgb(15 118 110 / 7%);
 }
 
 .guild-row.is-selected {
-  border-color: rgba(64, 152, 252, 0.55);
-  background: rgba(64, 152, 252, 0.12);
-  box-shadow: inset 3px 0 0 #4098fc;
+  border-color: rgb(15 118 110 / 42%);
+  background: rgb(15 118 110 / 10%);
+  box-shadow: inset 3px 0 0 var(--app-accent);
 }
 
 .is-dark .guild-row:hover {
-  background: rgba(64, 152, 252, 0.12);
+  background: rgb(52 179 165 / 11%);
 }
 
 .is-dark .guild-row.is-selected {
-  background: rgba(64, 152, 252, 0.17);
+  background: rgb(52 179 165 / 16%);
 }
 
 .guild-row-main {
@@ -367,7 +372,7 @@ onMounted(async () => {
 
 .guild-row:hover .row-chevron,
 .guild-row.is-selected .row-chevron {
-  color: #4098fc;
+  color: var(--app-accent);
   transform: translateX(2px);
 }
 
@@ -377,5 +382,13 @@ onMounted(async () => {
 
 .empty-state {
   padding: 48px 12px;
+}
+
+.detail-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--app-bg);
 }
 </style>

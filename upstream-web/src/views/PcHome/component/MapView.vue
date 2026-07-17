@@ -44,7 +44,7 @@ const showBossTower = ref(false);
 const showFastTravel = ref(false);
 const mapRef = ref(null);
 const searchTarget = ref(null);
-const controlCollapsed = ref(false);
+const controlCollapsed = ref(window.innerWidth < 768);
 
 let timer = null;
 let stopped = false;
@@ -632,6 +632,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="less">
+.map-view {
+  position: relative;
+  overflow: hidden;
+}
+
 .leaflet-container {
   background: #102536;
   outline: 0;

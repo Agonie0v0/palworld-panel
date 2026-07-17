@@ -339,9 +339,11 @@ const filteredPlayers = computed(() => {
       </n-layout-sider>
       <n-layout :native-scrollbar="false" class="relative">
         <player-detail
+          v-if="playerInfo?.player_uid"
           :playerInfo="playerInfo"
           :playerPalsList="playerPalsList"
         ></player-detail>
+        <div v-else class="detail-empty"><n-empty /></div>
         <n-spin
           size="small"
           v-if="loadingPlayerDetail"
@@ -360,11 +362,11 @@ const filteredPlayers = computed(() => {
   top: 0;
   z-index: 3;
   padding: 20px 0 14px;
-  background: #fff;
+  background: var(--app-surface);
 }
 
 .is-dark .filter-panel {
-  background: #18181c;
+  background: var(--app-surface);
 }
 
 .result-count {
@@ -384,7 +386,7 @@ const filteredPlayers = computed(() => {
 }
 
 .player-row-item:focus-visible .player-row {
-  box-shadow: 0 0 0 2px rgba(64, 152, 252, 0.45);
+  box-shadow: 0 0 0 2px rgb(15 118 110 / 35%);
 }
 
 .player-row {
@@ -395,7 +397,7 @@ const filteredPlayers = computed(() => {
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   transition:
     background-color 0.18s ease,
@@ -403,22 +405,22 @@ const filteredPlayers = computed(() => {
     box-shadow 0.18s ease;
 
   &:hover {
-    background: rgba(64, 152, 252, 0.08);
+    background: rgb(15 118 110 / 7%);
   }
 
   &.is-selected {
-    border-color: rgba(64, 152, 252, 0.55);
-    background: rgba(64, 152, 252, 0.12);
-    box-shadow: inset 3px 0 0 #4098fc;
+    border-color: rgb(15 118 110 / 42%);
+    background: rgb(15 118 110 / 10%);
+    box-shadow: inset 3px 0 0 var(--app-accent);
   }
 }
 
 .is-dark .player-row:hover {
-  background: rgba(64, 152, 252, 0.12);
+  background: rgb(52 179 165 / 11%);
 }
 
 .is-dark .player-row.is-selected {
-  background: rgba(64, 152, 252, 0.17);
+  background: rgb(52 179 165 / 16%);
 }
 
 .player-row-main {
@@ -510,7 +512,7 @@ const filteredPlayers = computed(() => {
 
 .player-row:hover .row-chevron,
 .player-row.is-selected .row-chevron {
-  color: #4098fc;
+  color: var(--app-accent);
   transform: translateX(2px);
 }
 
@@ -520,5 +522,13 @@ const filteredPlayers = computed(() => {
 
 .empty-state {
   padding: 48px 12px;
+}
+
+.detail-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--app-bg);
 }
 </style>

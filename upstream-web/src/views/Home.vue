@@ -38,7 +38,7 @@ const handleInitialized = () => {
     <first-run-setup :show="!initialized" @initialized="handleInitialized" />
     <config-manager v-model:show="showConfig" />
   </div>
-  <div v-else class="h-screen flex items-center justify-center">
+  <div v-else class="app-boot">
     <n-spin size="large" />
   </div>
 </template>

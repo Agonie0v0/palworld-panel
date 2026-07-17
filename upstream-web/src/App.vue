@@ -1,20 +1,32 @@
 <script setup>
 import { zhCN, dateZhCN, jaJP, dateJaJP, darkTheme } from "naive-ui";
 import pageStore from "@/stores/model/page.js";
-import { onMounted } from "vue";
+import { onBeforeUnmount, onMounted } from "vue";
 
 const isDarkMode = ref(
-  window.matchMedia("(prefers-color-scheme: dark)").matches
+  window.matchMedia("(prefers-color-scheme: dark)").matches,
 );
 
 const updateDarkMode = (e) => {
   isDarkMode.value = e.matches;
 };
+let mediaQuery;
 
 const themeOverrides = {
   common: {
-    primaryColor: "#4098fc",
-    primaryColorHover: "#4098fc",
+    fontFamily:
+      '"Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+    fontFamilyMono: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+    primaryColor: "#0f766e",
+    primaryColorHover: "#0d9488",
+    primaryColorPressed: "#115e59",
+    primaryColorSuppl: "#14b8a6",
+    infoColor: "#2563eb",
+    successColor: "#16855b",
+    warningColor: "#b7791f",
+    errorColor: "#c2414f",
+    borderRadius: "6px",
+    borderRadiusSmall: "5px",
   },
 };
 
@@ -30,7 +42,7 @@ let getScreenWidth = function () {
 };
 
 onMounted(() => {
-  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
   mediaQuery.addEventListener("change", updateDarkMode);
   isDarkMode.value = mediaQuery.matches;
   getScreenWidth();
@@ -58,6 +70,11 @@ onMounted(() => {
     uiDateLocale.value = dateZhCN;
   }
 });
+
+onBeforeUnmount(() => {
+  mediaQuery?.removeEventListener("change", updateDarkMode);
+  window.onresize = null;
+});
 </script>
 
 <template>
@@ -70,7 +87,9 @@ onMounted(() => {
     <n-dialog-provider>
       <n-notification-provider>
         <n-message-provider>
-          <router-view />
+          <div class="app-theme" :class="{ 'is-dark': isDarkMode }">
+            <router-view />
+          </div>
         </n-message-provider>
       </n-notification-provider>
     </n-dialog-provider>

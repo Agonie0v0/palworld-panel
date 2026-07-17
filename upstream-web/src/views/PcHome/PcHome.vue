@@ -20,7 +20,6 @@ import { computed, onMounted, ref } from "vue";
 import { NIcon, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
-import pageStore from "@/stores/model/page.js";
 import PlayerList from "./component/PlayerList.vue";
 import GuildList from "./component/GuildList.vue";
 import MapView from "./component/MapView.vue";
@@ -45,9 +44,6 @@ const { t, locale } = useI18n();
 const message = useMessage();
 const PALWORLD_TOKEN = "palworld_token";
 
-const pageWidth = computed(() => pageStore().getScreenWidth());
-const smallScreen = computed(() => pageWidth.value < 1024);
-
 const loading = ref(false);
 const serverInfo = ref({});
 const serverMetrics = ref({});
@@ -57,16 +53,23 @@ const onlinePlayerList = ref([]);
 const guildList = ref([]);
 const languageOptions = ref([]);
 const asArray = (value) => (Array.isArray(value) ? value : []);
+const onlineCount = computed(
+  () =>
+    serverMetrics.value?.current_player_num ??
+    onlinePlayerList.value?.length ??
+    0,
+);
+const currentViewLabel = computed(() => {
+  const labels = {
+    overview: "button.overview",
+    players: "button.players",
+    guilds: "button.guilds",
+    map: "button.map",
+  };
+  return t(labels[currentDisplay.value] || labels.players);
+});
 
 const isLogin = ref(false);
-
-const isDarkMode = ref(
-  window.matchMedia("(prefers-color-scheme: dark)").matches,
-);
-
-const updateDarkMode = (e) => {
-  isDarkMode.value = e.matches;
-};
 
 const handleSelectLanguage = (key) => {
   message.info(t("message.changelanguage"));
@@ -421,7 +424,9 @@ const isTokenExpired = (token) => {
   if (parts.length !== 3) return false;
   try {
     const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")));
+    const payload = JSON.parse(
+      atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")),
+    );
     return Boolean(payload.exp) && payload.exp < Date.now() / 1000;
   } catch {
     return false;
@@ -457,10 +462,6 @@ onMounted(async () => {
       disabled: locale.value == "ja",
     },
   ];
-  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  mediaQuery.addEventListener("change", updateDarkMode);
-  isDarkMode.value = mediaQuery.matches;
-
   loading.value = true;
   checkAuthToken();
   await Promise.all([
@@ -483,309 +484,217 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="home-page">
-    <div
-      :class="isDarkMode ? 'bg-#18181c text-#fff' : 'bg-#fff text-#18181c'"
-      class="flex justify-between items-center p-3"
-    >
-      <n-space class="flex items-center">
-        <span
-          class="line-clamp-1"
-          :class="smallScreen ? 'text-lg' : 'text-2xl'"
-          >{{ $t("title") }}</span
-        >
-        <n-badge
-          v-if="serverToolInfo?.version"
-          :value="hasNewVersion ? 'new' : ''"
-        >
-          <n-tag
-            type="warning"
-            :size="smallScreen ? 'mini' : 'medium'"
-            round
+  <div class="ops-shell ops-shell--desktop">
+    <aside class="ops-sidebar">
+      <div class="ops-brand">
+        <div class="ops-brand-mark" aria-hidden="true">
+          <n-icon size="23"><GameController /></n-icon>
+        </div>
+        <div class="ops-brand-copy">
+          <div class="ops-brand-title">{{ $t("title") }}</div>
+          <button
+            v-if="serverToolInfo?.version"
+            type="button"
+            class="ops-brand-version"
             @click="toGithub"
-            style="cursor: pointer"
-            >{{ serverToolInfo.version }}</n-tag
           >
-        </n-badge>
-        <n-tooltip trigger="hover">
-          <template #trigger>
-            <n-tag type="default" :size="smallScreen ? 'medium' : 'large'">{{
-              serverInfo?.name
-                ? `${serverInfo.name + " " + serverInfo.version}`
-                : $t("status.serverUnavailable")
-            }}</n-tag>
-          </template>
-          <div>
-            <p>{{ $t("item.serverFps") }}: {{ serverMetrics?.server_fps }}</p>
-            <p>{{ $t("item.serverUptime") }}: {{ serverMetrics?.uptime }}(s)</p>
-            <p>{{ $t("item.serverDays") }}: {{ serverMetrics?.days }}</p>
-            <p>
-              {{ $t("item.serverFrameTime") }}:
-              {{ serverMetrics?.server_frame_time }}(ms)
-            </p>
-            <p>
-              {{ $t("item.maxPlayerNum") }}: {{ serverMetrics?.max_player_num }}
-            </p>
-          </div>
-        </n-tooltip>
-      </n-space>
+            {{ serverToolInfo.version }}<span v-if="hasNewVersion"> · new</span>
+          </button>
+        </div>
+      </div>
 
-      <n-space>
+      <div class="ops-server-block">
+        <div class="ops-server-line">
+          <span
+            class="ops-status-dot"
+            :class="{ 'is-online': serverInfo?.name }"
+          ></span>
+          <span class="ops-server-name">
+            {{ serverInfo?.name || $t("status.serverUnavailable") }}
+          </span>
+        </div>
+        <div class="ops-server-meta">
+          {{ serverInfo?.version || "Unknown" }} · {{ $t("item.serverFps") }}
+          {{ serverMetrics?.server_fps ?? 0 }}
+        </div>
+      </div>
+
+      <div class="ops-nav-label">{{ $t("button.management") }}</div>
+      <nav class="ops-nav" :aria-label="$t('button.management')">
+        <n-button
+          v-if="isLogin"
+          quaternary
+          class="ops-nav-button"
+          :class="{ 'is-active': currentDisplay === 'overview' }"
+          @click="toOverview"
+        >
+          <template #icon
+            ><n-icon><DashboardOutlined /></n-icon
+          ></template>
+          {{ $t("button.overview") }}
+        </n-button>
+        <n-button
+          quaternary
+          class="ops-nav-button"
+          :class="{ 'is-active': currentDisplay === 'players' }"
+          @click="toPlayers"
+        >
+          <template #icon
+            ><n-icon><GameController /></n-icon
+          ></template>
+          {{ $t("button.players") }}
+        </n-button>
+        <n-button
+          quaternary
+          class="ops-nav-button"
+          :class="{ 'is-active': currentDisplay === 'guilds' }"
+          @click="toGuilds"
+        >
+          <template #icon
+            ><n-icon><SupervisedUserCircleRound /></n-icon
+          ></template>
+          {{ $t("button.guilds") }}
+        </n-button>
+        <n-button
+          quaternary
+          class="ops-nav-button"
+          :class="{ 'is-active': currentDisplay === 'map' }"
+          @click="toMap"
+        >
+          <template #icon
+            ><n-icon><PublicRound /></n-icon
+          ></template>
+          {{ $t("button.map") }}
+        </n-button>
+      </nav>
+
+      <div class="ops-sidebar-spacer"></div>
+
+      <div v-if="isLogin" class="ops-sidebar-actions">
+        <n-button
+          quaternary
+          block
+          class="ops-sidebar-action-button"
+          @click="handleBackupList"
+        >
+          <template #icon
+            ><n-icon><ArchiveOutlined /></n-icon
+          ></template>
+          {{ $t("button.backup") }}
+        </n-button>
+        <n-button
+          quaternary
+          block
+          class="ops-sidebar-action-button"
+          @click="handleRconDrawer"
+        >
+          <template #icon
+            ><n-icon><Terminal /></n-icon
+          ></template>
+          {{ $t("button.rcon") }}
+        </n-button>
         <n-dropdown
-          trigger="hover"
+          trigger="click"
+          :options="controlCenterOption"
+          @select="handleSelectControlCenter"
+        >
+          <n-button type="primary" block>
+            <template #icon
+              ><n-icon><GuiManagement /></n-icon
+            ></template>
+            {{ $t("button.controlCenter") }}
+          </n-button>
+        </n-dropdown>
+      </div>
+
+      <div class="ops-sidebar-footer">
+        <n-dropdown
+          trigger="click"
           :options="languageOptions"
           @select="handleSelectLanguage"
         >
           <n-button
-            type="default"
-            secondary
-            strong
+            quaternary
             circle
             :aria-label="$t('button.language')"
+            style="color: var(--app-sidebar-ink)"
           >
-            <template #icon>
-              <n-icon><LanguageSharp /></n-icon>
-            </template>
+            <template #icon
+              ><n-icon><LanguageSharp /></n-icon
+            ></template>
           </n-button>
         </n-dropdown>
-
         <n-button
+          v-if="!isLogin"
           type="primary"
           secondary
-          strong
+          size="small"
           @click="showLoginModal = true"
-          v-if="!isLogin"
         >
-          <template #icon>
-            <n-icon>
-              <AdminPanelSettingsOutlined />
-            </n-icon>
-          </template>
+          <template #icon
+            ><n-icon><AdminPanelSettingsOutlined /></n-icon
+          ></template>
           {{ $t("button.auth") }}
         </n-button>
-        <n-tag v-else type="success" size="large" round>
-          <template #icon>
-            <n-icon>
-              <AdminPanelSettingsOutlined />
-            </n-icon>
-          </template>
-          {{ $t("status.authenticated") }}
-        </n-tag>
-      </n-space>
-    </div>
-    <div class="w-full">
-      <div class="rounded-lg" v-if="!loading">
-        <n-layout style="height: calc(100vh - 64px)">
-          <n-layout-header class="p-3 flex justify-between h-16" bordered>
-            <n-button-group :size="smallScreen ? 'medium' : 'large'">
-              <n-button
-                v-if="isLogin"
-                @click="toOverview"
-                :type="currentDisplay === 'overview' ? 'primary' : 'tertiary'"
-                secondary
-                strong
-                round
-              >
-                <template #icon>
-                  <n-icon><DashboardOutlined /></n-icon>
-                </template>
-                {{ $t("button.overview") }}
-              </n-button>
-              <n-button
-                @click="toPlayers"
-                :type="currentDisplay === 'players' ? 'primary' : 'tertiary'"
-                secondary
-                strong
-                round
-              >
-                <template #icon>
-                  <n-icon>
-                    <GameController />
-                  </n-icon>
-                </template>
-                {{ $t("button.players") }}
-              </n-button>
-              <n-button
-                @click="toGuilds()"
-                :type="currentDisplay === 'guilds' ? 'primary' : 'tertiary'"
-                secondary
-                strong
-                round
-              >
-                <template #icon>
-                  <n-icon>
-                    <SupervisedUserCircleRound />
-                  </n-icon>
-                </template>
-                {{ $t("button.guilds") }}
-              </n-button>
-              <n-button
-                @click="toMap()"
-                :type="currentDisplay === 'map' ? 'primary' : 'tertiary'"
-                secondary
-                strong
-                round
-              >
-                <template #icon>
-                  <n-icon>
-                    <PublicRound />
-                  </n-icon>
-                </template>
-                {{ $t("button.map") }}
-              </n-button>
-            </n-button-group>
-            <n-space>
-              <n-tag type="info" round size="large">{{
-                $t("status.player_number", { number: playerList?.length })
-              }}</n-tag>
-              <n-tag type="success" round size="large">{{
-                $t("status.online_number", {
-                  number:
-                    serverMetrics?.current_player_num ??
-                    onlinePlayerList?.length ??
-                    0,
-                })
-              }}</n-tag>
-            </n-space>
-            <n-space v-if="isLogin" class="flex items-center">
-              <n-button
-                :size="smallScreen ? 'medium' : 'large'"
-                type="success"
-                secondary
-                strong
-                round
-                @click="handleBackupList"
-              >
-                <template #icon>
-                  <n-icon>
-                    <ArchiveOutlined />
-                  </n-icon>
-                </template>
-                {{ $t("button.backup") }}
-              </n-button>
-              <n-button
-                :size="smallScreen ? 'medium' : 'large'"
-                type="primary"
-                secondary
-                strong
-                round
-                @click="handleRconDrawer"
-              >
-                <template #icon>
-                  <n-icon>
-                    <Terminal />
-                  </n-icon>
-                </template>
-                {{ $t("button.rcon") }}
-              </n-button>
-              <n-dropdown
-                trigger="click"
-                size="large"
-                :options="controlCenterOption"
-                @select="handleSelectControlCenter"
-              >
-                <n-button
-                  :size="smallScreen ? 'medium' : 'large'"
-                  type="error"
-                  secondary
-                  strong
-                  round
-                >
-                  <template #icon>
-                    <n-icon>
-                      <GuiManagement />
-                    </n-icon>
-                  </template>
-                  {{ $t("button.controlCenter") }}</n-button
-                >
-              </n-dropdown>
-              <!-- <n-button
-                :size="smallScreen ? 'medium' : 'large'"
-                type="default"
-                secondary
-                strong
-                round
-                @click="toPalConf"
-              >
-                <template #icon>
-                  <n-icon>
-                    <Settings />
-                  </n-icon>
-                </template>
-                {{ $t("button.palconf") }}
-              </n-button>
-              <n-button
-                :size="smallScreen ? 'medium' : 'large'"
-                type="warning"
-                secondary
-                strong
-                round
-                @click="handleWhiteList"
-              >
-                <template #icon>
-                  <n-icon>
-                    <ShieldCheckmarkSharp />
-                  </n-icon>
-                </template>
-                {{ $t("button.whitelist") }}
-              </n-button>
-              <n-button
-                :size="smallScreen ? 'medium' : 'large'"
-                type="success"
-                secondary
-                strong
-                round
-                @click="handleStartBrodcast"
-              >
-                <template #icon>
-                  <n-icon>
-                    <BroadcastTower />
-                  </n-icon>
-                </template>
-                {{ $t("button.broadcast") }}
-              </n-button>
-              <n-button
-                :size="smallScreen ? 'medium' : 'large'"
-                type="error"
-                secondary
-                strong
-                round
-                @click="handleShutdown"
-              >
-                <template #icon>
-                  <n-icon>
-                    <SettingsPowerRound />
-                  </n-icon>
-                </template>
-                {{ $t("button.shutdown") }}
-              </n-button> -->
-            </n-space>
-          </n-layout-header>
-          <div class="overflow-hidden" style="height: calc(100% - 64px)">
-            <admin-overview
-              v-if="currentDisplay === 'overview'"
-              :server-info="serverInfo"
-              :server-metrics="serverMetrics"
-              :players="playerList"
-              @open-rcon="handleRconDrawer"
-              @open-backup="handleBackupList"
-              @open-broadcast="handleStartBrodcast"
-              @open-config="handleSelectControlCenter('settings')"
-            />
-            <player-list
-              v-if="currentDisplay === 'players'"
-              :players="playerList"
-              @onWhitelistStatus="getSonWhitelistStatus"
-            ></player-list>
-            <guild-list
-              v-if="currentDisplay === 'guilds'"
-              :guilds="guildList"
-            ></guild-list>
-            <map-view v-if="currentDisplay === 'map'"></map-view>
-          </div>
-        </n-layout>
+        <div v-else class="ops-auth-state">
+          <n-icon><AdminPanelSettingsOutlined /></n-icon>
+          <span>{{ $t("status.authenticated") }}</span>
+        </div>
       </div>
-    </div>
+    </aside>
+
+    <main class="ops-main">
+      <header class="ops-workspace-header">
+        <div class="ops-workspace-heading">
+          <h1 class="ops-workspace-title">{{ currentViewLabel }}</h1>
+          <div class="ops-workspace-context">
+            <span>{{
+              serverInfo?.name || $t("status.serverUnavailable")
+            }}</span>
+            <span>{{ serverInfo?.version || "Unknown" }}</span>
+          </div>
+        </div>
+        <div class="ops-header-actions">
+          <div class="ops-stat-chip">
+            <span>{{
+              $t("status.player_number", { number: playerList.length })
+            }}</span>
+          </div>
+          <div class="ops-stat-chip">
+            <span>{{
+              $t("status.online_number", { number: onlineCount })
+            }}</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="ops-workspace-content">
+        <div v-if="loading" class="ops-loading">
+          <div class="ops-loading-panel">
+            <n-skeleton text :repeat="4" />
+          </div>
+        </div>
+        <template v-else>
+          <admin-overview
+            v-if="currentDisplay === 'overview'"
+            :server-info="serverInfo"
+            :server-metrics="serverMetrics"
+            :players="playerList"
+            @open-rcon="handleRconDrawer"
+            @open-backup="handleBackupList"
+            @open-broadcast="handleStartBrodcast"
+            @open-config="handleSelectControlCenter('settings')"
+          />
+          <player-list
+            v-if="currentDisplay === 'players'"
+            :players="playerList"
+            @onWhitelistStatus="getSonWhitelistStatus"
+          />
+          <guild-list v-if="currentDisplay === 'guilds'" :guilds="guildList" />
+          <map-view v-if="currentDisplay === 'map'" />
+        </template>
+      </section>
+    </main>
   </div>
   <!-- login modal -->
   <n-modal
@@ -843,3 +752,23 @@ onMounted(async () => {
     @updated="getSonWhitelistStatus"
   />
 </template>
+
+<style scoped>
+.ops-brand-version {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--app-sidebar-muted);
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ops-brand-version:hover {
+  color: var(--app-sidebar-ink);
+}
+</style>

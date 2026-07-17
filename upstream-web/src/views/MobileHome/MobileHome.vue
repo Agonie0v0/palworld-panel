@@ -1,10 +1,13 @@
 <script setup>
 import {
   AdminPanelSettingsOutlined,
+  DashboardOutlined,
+  PublicRound,
   SupervisedUserCircleRound,
 } from "@vicons/material";
 import { ChevronsLeft } from "@vicons/tabler";
 import { GameController, LanguageSharp } from "@vicons/ionicons5";
+import { GuiManagement } from "@vicons/carbon";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
@@ -48,22 +51,28 @@ const playerPalsList = ref([]);
 const currentPlayerPalsList = ref([]);
 const guildInfo = ref({});
 const languageOptions = ref([]);
+const onlineCount = computed(
+  () =>
+    serverMetrics.value?.current_player_num ??
+    onlinePlayerList.value?.length ??
+    0,
+);
+const currentViewLabel = computed(() => {
+  const labels = {
+    overview: "button.overview",
+    players: "button.players",
+    guilds: "button.guilds",
+    map: "button.map",
+  };
+  return t(labels[currentDisplay.value] || labels.players);
+});
 
 const contentRef = ref(null);
 
 const isLogin = ref(false);
 const authToken = ref("");
 let refreshTimer = null;
-let mediaQuery = null;
 const asArray = (value) => (Array.isArray(value) ? value : []);
-
-const isDarkMode = ref(
-  window.matchMedia("(prefers-color-scheme: dark)").matches,
-);
-
-const updateDarkMode = (e) => {
-  isDarkMode.value = e.matches;
-};
 
 const handleSelectLanguage = (key) => {
   message.info(t("message.changelanguage"));
@@ -187,10 +196,13 @@ const onLoadPals = () => {
     );
   }
 };
-const onContentScroll = () => {
+const onContentScroll = (event) => {
   if (currentDisplay.value === "players" && isShowDetail.value) {
-    const dom = document.getElementsByClassName("n-layout-scroll-container");
-    if (dom[1].scrollTop + dom[1].clientHeight > dom[1].scrollHeight - 6) {
+    const container = event?.currentTarget || contentRef.value;
+    if (
+      container &&
+      container.scrollTop + container.clientHeight > container.scrollHeight - 6
+    ) {
       onLoadPals();
     }
   }
@@ -392,7 +404,9 @@ const isTokenExpired = (token) => {
   if (parts.length !== 3) return false;
   try {
     const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")));
+    const payload = JSON.parse(
+      atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")),
+    );
     return Boolean(payload.exp) && payload.exp < Date.now() / 1000;
   } catch {
     return false;
@@ -425,10 +439,6 @@ onMounted(async () => {
     },
     {},
   );
-  mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  mediaQuery.addEventListener("change", updateDarkMode);
-  isDarkMode.value = mediaQuery.matches;
-
   loading.value = true;
   checkAuthToken();
   await Promise.all([getServerInfo(), getServerMetrics(), getPlayerList()]);
@@ -442,218 +452,181 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearInterval(refreshTimer);
-  mediaQuery?.removeEventListener("change", updateDarkMode);
 });
 </script>
 
 <template>
-  <div class="home-page overflow-hidden">
-    <div
-      :class="isDarkMode ? 'bg-#18181c text-#fff' : 'bg-#fff text-#18181c'"
-      class="flex justify-between items-center p-3"
-    >
-      <div>
-        <span class="line-clamp-1 text-base">{{ $t("title") }}</span>
-        <n-tag type="default" size="small">{{
-          serverInfo?.name
-            ? `${serverInfo.name + " " + serverInfo.version}`
-            : loading
-              ? $t("message.loading")
-              : $t("status.serverUnavailable")
-        }}</n-tag>
-      </div>
-      <n-space vertical>
-        <n-space justify="end">
-          <n-tag type="info" round size="small">{{
-            $t("status.player_number", { number: playerList?.length })
-          }}</n-tag>
-          <n-tag type="success" round size="small">{{
-            $t("status.online_number", {
-              number: onlinePlayerList?.length ?? 0,
-            })
-          }}</n-tag>
-        </n-space>
-        <n-space justify="end" class="flex items-center">
+  <div class="mobile-shell">
+    <header class="mobile-header">
+      <div class="mobile-header-main">
+        <div class="mobile-brand">
+          <div class="mobile-brand-title">{{ $t("title") }}</div>
+        </div>
+        <div class="mobile-header-actions">
           <n-dropdown
-            trigger="hover"
+            trigger="click"
             :options="languageOptions"
             @select="handleSelectLanguage"
           >
             <n-button
-              type="default"
-              secondary
-              strong
               circle
+              quaternary
               size="small"
               :aria-label="$t('button.language')"
             >
-              <template #icon>
-                <n-icon><LanguageSharp /></n-icon>
-              </template>
+              <template #icon
+                ><n-icon><LanguageSharp /></n-icon
+              ></template>
             </n-button>
           </n-dropdown>
-
-          <n-button
-            type="primary"
-            size="small"
-            secondary
-            strong
-            @click="showLoginModal = true"
-            v-if="!isLogin"
+          <n-dropdown
+            v-if="isLogin"
+            trigger="click"
+            :options="adminOptions"
+            @select="handleAdminAction"
           >
-            <template #icon>
-              <n-icon>
-                <AdminPanelSettingsOutlined />
-              </n-icon>
-            </template>
+            <n-button
+              circle
+              secondary
+              size="small"
+              :aria-label="$t('button.management')"
+            >
+              <template #icon
+                ><n-icon><GuiManagement /></n-icon
+              ></template>
+            </n-button>
+          </n-dropdown>
+          <n-button
+            v-else
+            type="primary"
+            secondary
+            size="small"
+            @click="showLoginModal = true"
+          >
+            <template #icon
+              ><n-icon><AdminPanelSettingsOutlined /></n-icon
+            ></template>
             {{ $t("button.auth") }}
           </n-button>
-          <n-tag v-else type="success" size="small" round>
-            <template #icon>
-              <n-icon>
-                <AdminPanelSettingsOutlined />
-              </n-icon>
-            </template>
-            {{ $t("status.authenticated") }}
-          </n-tag>
-        </n-space>
-      </n-space>
-    </div>
-    <div class="w-full">
-      <div class="rounded-lg" v-if="!loading">
-        <n-layout style="height: calc(100vh - 86px)" has-sider>
-          <n-layout-header
-            class="flex flex-col justify-between"
-            :class="isLogin ? 'h-16' : 'h-10'"
-            bordered
-          >
-            <div v-if="isLogin" class="flex justify-center items-center px-3">
-              <n-dropdown
-                trigger="click"
-                :options="adminOptions"
-                @select="handleAdminAction"
-              >
-                <n-button size="small" type="primary" secondary strong round>
-                  {{ $t("button.management") }}
-                </n-button>
-              </n-dropdown>
-            </div>
-            <div v-else></div>
-            <div class="flex justify-end">
-              <n-button-group size="small" class="w-full">
-                <n-button
-                  v-if="isShowDetail"
-                  class="flex-1"
-                  @click="returnList"
-                  type="tertiary"
-                  strong
-                  secondary
-                >
-                  <n-icon size="24">
-                    <ChevronsLeft />
-                  </n-icon>
-                </n-button>
-                <n-button
-                  v-if="isLogin && !isShowDetail"
-                  class="flex-1"
-                  @click="toOverview"
-                  :type="currentDisplay === 'overview' ? 'primary' : 'tertiary'"
-                  secondary
-                  strong
-                >
-                  {{ $t("button.overview") }}
-                </n-button>
-                <n-button
-                  class="flex-1"
-                  @click="toPlayers"
-                  :type="currentDisplay === 'players' ? 'primary' : 'tertiary'"
-                  secondary
-                  strong
-                >
-                  <template #icon>
-                    <n-icon>
-                      <GameController />
-                    </n-icon>
-                  </template>
-                  {{ $t("button.players") }}
-                </n-button>
-                <n-button
-                  class="flex-1"
-                  @click="toGuilds"
-                  :type="currentDisplay === 'guilds' ? 'primary' : 'tertiary'"
-                  secondary
-                  strong
-                >
-                  <template #icon>
-                    <n-icon>
-                      <SupervisedUserCircleRound />
-                    </n-icon>
-                  </template>
-                  {{ $t("button.guilds") }}
-                </n-button>
-                <n-button
-                  v-if="!isShowDetail"
-                  class="flex-1"
-                  @click="toMap"
-                  :type="currentDisplay === 'map' ? 'primary' : 'tertiary'"
-                  secondary
-                  strong
-                >
-                  {{ $t("button.map") }}
-                </n-button>
-              </n-button-group>
-            </div>
-          </n-layout-header>
-          <n-layout
-            position="absolute"
-            style="top: 64px"
-            ref="contentRef"
-            @scroll="onContentScroll"
-          >
-            <admin-overview
-              v-if="currentDisplay === 'overview'"
-              :server-info="serverInfo"
-              :server-metrics="serverMetrics"
-              :players="playerList"
-              @open-rcon="openAuthenticated(showRconDrawer)"
-              @open-backup="openAuthenticated(showBackupManager)"
-              @open-broadcast="handleStartBrodcast"
-              @open-config="handleAdminAction('config')"
-            />
-            <map-view v-if="currentDisplay === 'map'" />
-            <div v-if="!isShowDetail">
-              <!-- list -->
-              <player-list
-                v-if="currentDisplay === 'players'"
-                :playerList="playerList"
-                @onGetInfo="getChoosePlayer"
-              ></player-list>
-              <guild-list
-                v-if="currentDisplay === 'guilds'"
-                :guildList="guildList"
-                @onGetInfo="getChooseGuild"
-              >
-              </guild-list>
-            </div>
-            <!-- detail -->
-            <div v-else class="relative">
-              <player-detail
-                v-if="currentDisplay === 'players'"
-                :playerInfo="playerInfo"
-                :currentPlayerPalsList="currentPlayerPalsList"
-                :finished="finished"
-                @onSearch="clickSearch"
-              ></player-detail>
-              <guild-detail
-                v-if="currentDisplay === 'guilds'"
-                :guildInfo="guildInfo"
-                @view-player="viewPlayerFromGuild"
-              ></guild-detail>
-            </div>
-          </n-layout>
-        </n-layout>
+        </div>
       </div>
-    </div>
+      <div class="mobile-server-row">
+        <div class="mobile-server-identity">
+          <span
+            class="ops-status-dot"
+            :class="{ 'is-online': serverInfo?.name }"
+          ></span>
+          <span class="mobile-server-name">
+            {{ serverInfo?.name || $t("status.serverUnavailable") }}
+          </span>
+        </div>
+        <div class="mobile-server-counts">
+          <span>{{
+            $t("status.player_number", { number: playerList.length })
+          }}</span>
+          <span>{{ $t("status.online_number", { number: onlineCount }) }}</span>
+        </div>
+      </div>
+    </header>
+
+    <main ref="contentRef" class="mobile-content" @scroll="onContentScroll">
+      <div v-if="isShowDetail" class="mobile-context-bar">
+        <n-button
+          circle
+          quaternary
+          size="small"
+          :aria-label="$t('button.close')"
+          @click="returnList"
+        >
+          <template #icon
+            ><n-icon size="22"><ChevronsLeft /></n-icon
+          ></template>
+        </n-button>
+        <span class="mobile-context-title">{{ currentViewLabel }}</span>
+      </div>
+      <div v-if="loading" class="ops-loading">
+        <div class="ops-loading-panel"><n-skeleton text :repeat="4" /></div>
+      </div>
+      <template v-else>
+        <admin-overview
+          v-if="currentDisplay === 'overview'"
+          :server-info="serverInfo"
+          :server-metrics="serverMetrics"
+          :players="playerList"
+          @open-rcon="openAuthenticated(showRconDrawer)"
+          @open-backup="openAuthenticated(showBackupManager)"
+          @open-broadcast="handleStartBrodcast"
+          @open-config="handleAdminAction('config')"
+        />
+        <map-view v-if="currentDisplay === 'map'" />
+        <div v-if="!isShowDetail">
+          <player-list
+            v-if="currentDisplay === 'players'"
+            :playerList="playerList"
+            @onGetInfo="getChoosePlayer"
+          />
+          <guild-list
+            v-if="currentDisplay === 'guilds'"
+            :guildList="guildList"
+            @onGetInfo="getChooseGuild"
+          />
+        </div>
+        <div v-else class="relative">
+          <player-detail
+            v-if="currentDisplay === 'players'"
+            :playerInfo="playerInfo"
+            :currentPlayerPalsList="currentPlayerPalsList"
+            :finished="finished"
+            @onSearch="clickSearch"
+          />
+          <guild-detail
+            v-if="currentDisplay === 'guilds'"
+            :guildInfo="guildInfo"
+            @view-player="viewPlayerFromGuild"
+          />
+        </div>
+      </template>
+    </main>
+
+    <nav class="mobile-bottom-nav" :aria-label="$t('button.management')">
+      <button
+        v-if="isLogin"
+        type="button"
+        class="mobile-nav-button"
+        :class="{ 'is-active': currentDisplay === 'overview' }"
+        @click="toOverview"
+      >
+        <n-icon size="21"><DashboardOutlined /></n-icon>
+        <span>{{ $t("button.overview") }}</span>
+      </button>
+      <button
+        type="button"
+        class="mobile-nav-button"
+        :class="{ 'is-active': currentDisplay === 'players' }"
+        @click="toPlayers"
+      >
+        <n-icon size="21"><GameController /></n-icon>
+        <span>{{ $t("button.players") }}</span>
+      </button>
+      <button
+        type="button"
+        class="mobile-nav-button"
+        :class="{ 'is-active': currentDisplay === 'guilds' }"
+        @click="toGuilds"
+      >
+        <n-icon size="21"><SupervisedUserCircleRound /></n-icon>
+        <span>{{ $t("button.guilds") }}</span>
+      </button>
+      <button
+        type="button"
+        class="mobile-nav-button"
+        :class="{ 'is-active': currentDisplay === 'map' }"
+        @click="toMap"
+      >
+        <n-icon size="21"><PublicRound /></n-icon>
+        <span>{{ $t("button.map") }}</span>
+      </button>
+    </nav>
   </div>
   <!-- 登录 modal -->
   <n-modal
@@ -709,10 +682,8 @@ onBeforeUnmount(() => {
     :players="playerList"
   />
 </template>
-<style scoped lang="less">
-:deep .n-layout-scroll-container {
-  &::-webkit-scrollbar {
-    display: none;
-  }
+<style scoped>
+.mobile-content :deep(.map-view) {
+  min-height: 100%;
 }
 </style>
