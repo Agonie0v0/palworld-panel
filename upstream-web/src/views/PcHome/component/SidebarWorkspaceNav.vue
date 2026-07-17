@@ -1,6 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
+import ApiService from "@/service/api";
 import {
   AdminPanelSettingsOutlined,
   ArchiveOutlined,
@@ -12,7 +14,6 @@ import {
 import {
   AddOutline,
   GameController,
-  PencilOutline,
   ReorderFourOutline,
   Settings,
   TrashOutline,
@@ -29,16 +30,18 @@ const props = defineProps({
   isLogin: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["select"]);
+const emit = defineEmits(["select", "editing-change"]);
 const { t, locale } = useI18n();
-const STORAGE_KEY = "palworld_sidebar_layout_v1";
+const message = useMessage();
+const STORAGE_KEY = "palworld_sidebar_layout_v2";
 
+const makeItems = (items) => items.map((id) => ({ id, name: "" }));
 const defaultGroups = () => [
-  { id: "status", name: "", items: ["overview", "players", "guilds", "map"] },
-  { id: "daily", name: "", items: ["operations", "game-settings", "rcon", "broadcast", "whitelist", "breeding", "mods"] },
-  { id: "saves", name: "", items: ["backup", "save-sources", "world-data"] },
-  { id: "maintenance", name: "", items: ["advanced", "workshop"] },
-  { id: "panel", name: "", items: ["settings", "access", "shutdown"] },
+  { id: "status", name: "", items: makeItems(["overview", "players", "guilds", "map"]) },
+  { id: "daily", name: "", items: makeItems(["operations", "game-settings", "rcon", "broadcast", "whitelist", "breeding", "mods"]) },
+  { id: "saves", name: "", items: makeItems(["backup", "save-sources", "world-data"]) },
+  { id: "maintenance", name: "", items: makeItems(["advanced", "workshop"]) },
+  { id: "panel", name: "", items: makeItems(["settings", "access", "shutdown"]) },
 ];
 
 const defaultGroupNames = computed(() => {
@@ -51,10 +54,6 @@ const defaultGroupNames = computed(() => {
     panel: zh ? "\u9762\u677f\u4e0e\u6743\u9650" : "Panel & access",
   };
 });
-
-const groups = ref(defaultGroups());
-const editing = ref(false);
-const dragState = ref(null);
 
 const catalog = computed(() => ({
   overview: { icon: DashboardOutlined, label: t("button.overview"), gate: "login" },
@@ -78,23 +77,15 @@ const catalog = computed(() => ({
   shutdown: { icon: SettingsPowerRound, label: t("button.shutdown"), gate: "admin", danger: true },
 }));
 
-const isAvailable = (item) => {
-  if (item.gate === "admin") return props.isAdmin;
-  if (item.gate === "operate") return props.canOperate;
-  if (item.gate === "login") return props.isLogin;
-  return true;
-};
-
-const visibleGroups = computed(() =>
-  groups.value
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((id) => catalog.value[id] && (editing.value || isAvailable(catalog.value[id]))),
-    }))
-    .filter((group) => editing.value || group.items.length > 0),
-);
-
+const groups = ref(defaultGroups());
+const savedGroups = ref(defaultGroups());
+const editing = ref(false);
+const saving = ref(false);
+const dragState = ref(null);
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const isAvailable = (item) => item.gate === "admin" ? props.isAdmin : item.gate === "operate" ? props.canOperate : item.gate === "login" ? props.isLogin : true;
 const groupName = (group) => group.name || defaultGroupNames.value[group.id] || (locale.value === "zh" ? "\u65b0\u5206\u7ec4" : "New group");
+const itemName = (item) => item.name || catalog.value[item.id]?.label || item.id;
 
 const normalizeLayout = (layout) => {
   if (!Array.isArray(layout)) return null;
@@ -105,24 +96,52 @@ const normalizeLayout = (layout) => {
     .map((group) => ({
       id: group.id,
       name: typeof group.name === "string" ? group.name : "",
-      items: group.items.filter((id) => known.has(id) && !used.has(id) && used.add(id)),
+      items: group.items
+        .map((item) => typeof item === "string" ? { id: item, name: "" } : item)
+        .filter((item) => item && known.has(item.id) && !used.has(item.id) && used.add(item.id))
+        .map((item) => ({ id: item.id, name: typeof item.name === "string" ? item.name.slice(0, 48) : "" })),
     }));
-  const missing = Object.keys(catalog.value).filter((id) => !used.has(id));
+  const missing = Object.keys(catalog.value).filter((id) => !used.has(id)).map((id) => ({ id, name: "" }));
   if (missing.length) normalized[0]?.items.push(...missing);
   return normalized.length ? normalized : null;
 };
 
-const saveLayout = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(groups.value));
+const visibleGroups = computed(() => groups.value
+  .map((group) => ({ ...group, items: group.items.filter((item) => catalog.value[item.id] && (editing.value || isAvailable(catalog.value[item.id]))) }))
+  .filter((group) => editing.value || group.items.length));
 
-const resetLayout = () => {
-  groups.value = defaultGroups();
-  saveLayout();
+const persistLocal = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(groups.value));
+const beginEditing = () => {
+  if (!props.isAdmin) return;
+  savedGroups.value = clone(groups.value);
+  editing.value = true;
+  emit("editing-change", true);
 };
-
-const addGroup = () => {
-  groups.value.push({ id: `custom-${Date.now()}`, name: locale.value === "zh" ? "\u65b0\u5206\u7ec4" : "New group", items: [] });
+const cancelEditing = () => {
+  groups.value = clone(savedGroups.value);
+  editing.value = false;
+  dragState.value = null;
+  emit("editing-change", false);
 };
-
+const saveEditing = async () => {
+  saving.value = true;
+  const { data, statusCode } = await new ApiService().updateSidebarNavigation(groups.value);
+  saving.value = false;
+  if (statusCode.value !== 200) {
+    message.error(data.value?.error || (locale.value === "zh" ? "导航保存失败" : "Could not save navigation"));
+    return;
+  }
+  const normalized = normalizeLayout(data.value?.navigation || groups.value);
+  if (normalized) groups.value = normalized;
+  savedGroups.value = clone(groups.value);
+  persistLocal();
+  editing.value = false;
+  emit("editing-change", false);
+  message.success(locale.value === "zh" ? "导航已保存到面板配置" : "Navigation saved to panel configuration");
+};
+const toggleEditing = () => editing.value ? cancelEditing() : beginEditing();
+const resetLayout = () => { groups.value = defaultGroups(); };
+const addGroup = () => groups.value.push({ id: `custom-${Date.now()}`, name: locale.value === "zh" ? "\u65b0\u5206\u7ec4" : "New group", items: [] });
 const removeGroup = (groupId) => {
   if (groups.value.length === 1) return;
   const index = groups.value.findIndex((group) => group.id === groupId);
@@ -130,117 +149,76 @@ const removeGroup = (groupId) => {
   const [removed] = groups.value.splice(index, 1);
   groups.value[Math.max(0, index - 1)].items.push(...removed.items);
 };
-
-const selectItem = (id) => {
-  if (!editing.value) emit("select", id);
-};
-
+const selectItem = (item) => { if (!editing.value) emit("select", item.id); };
 const beginItemDrag = (event, groupId, itemId) => {
   dragState.value = { type: "item", groupId, itemId };
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", itemId);
 };
-
 const dropItem = (event, targetGroupId, targetIndex) => {
   event.preventDefault();
   const state = dragState.value;
   if (!state || state.type !== "item") return;
   const sourceGroup = groups.value.find((group) => group.id === state.groupId);
   const targetGroup = groups.value.find((group) => group.id === targetGroupId);
-  if (!sourceGroup || !targetGroup) return;
-  const sourceIndex = sourceGroup.items.indexOf(state.itemId);
-  if (sourceIndex < 0) return;
-  sourceGroup.items.splice(sourceIndex, 1);
-  const adjustedIndex = sourceGroup === targetGroup && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
-  targetGroup.items.splice(Math.max(0, adjustedIndex), 0, state.itemId);
+  const sourceIndex = sourceGroup?.items.findIndex((item) => item.id === state.itemId) ?? -1;
+  if (!sourceGroup || !targetGroup || sourceIndex < 0) return;
+  const [item] = sourceGroup.items.splice(sourceIndex, 1);
+  targetGroup.items.splice(Math.max(0, sourceGroup === targetGroup && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex), 0, item);
   dragState.value = null;
 };
-
 const beginGroupDrag = (event, groupId) => {
   dragState.value = { type: "group", groupId };
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", groupId);
 };
-
 const dropGroup = (event, targetIndex) => {
   event.preventDefault();
-  const state = dragState.value;
-  if (!state || state.type !== "group") return;
-  const sourceIndex = groups.value.findIndex((group) => group.id === state.groupId);
+  if (dragState.value?.type !== "group") return;
+  const sourceIndex = groups.value.findIndex((group) => group.id === dragState.value.groupId);
   if (sourceIndex < 0 || sourceIndex === targetIndex) return;
   const [group] = groups.value.splice(sourceIndex, 1);
   groups.value.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, group);
   dragState.value = null;
 };
 
-watch(groups, saveLayout, { deep: true });
-
-onMounted(() => {
+onMounted(async () => {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    const restored = normalizeLayout(stored);
-    if (restored) groups.value = restored;
-  } catch {
-    resetLayout();
-  }
+    const local = normalizeLayout(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
+    if (local) groups.value = local;
+    const { data, statusCode } = await new ApiService().getSidebarNavigation();
+    const remote = statusCode.value === 200 ? normalizeLayout(data.value?.navigation) : null;
+    if (remote) groups.value = remote;
+  } catch { groups.value = defaultGroups(); }
+  savedGroups.value = clone(groups.value);
+  persistLocal();
 });
+
+defineExpose({ toggleEditing, editing });
 </script>
 
 <template>
   <div class="workspace-nav" :class="{ 'is-editing': editing }">
-    <div class="workspace-nav__tools">
-      <n-button v-if="editing" size="small" @click="addGroup">
-        <template #icon><n-icon><AddOutline /></n-icon></template>
-        {{ locale === "zh" ? "\u65b0\u5efa\u5206\u7ec4" : "Add group" }}
-      </n-button>
-      <n-button v-if="editing" size="small" @click="resetLayout">
-        {{ locale === "zh" ? "\u6062\u590d\u9ed8\u8ba4" : "Reset" }}
-      </n-button>
-      <n-button quaternary size="small" @click="editing = !editing">
-        <template #icon><n-icon><PencilOutline v-if="!editing" /><ReorderFourOutline v-else /></n-icon></template>
-        {{ editing ? (locale === "zh" ? "\u5b8c\u6210" : "Done") : (locale === "zh" ? "\u7f16\u8f91\u5bfc\u822a" : "Edit navigation") }}
-      </n-button>
+    <div v-if="editing" class="workspace-nav__editbar">
+      <n-button size="small" @click="addGroup"><template #icon><n-icon><AddOutline /></n-icon></template>{{ locale === "zh" ? "新建分组" : "Add group" }}</n-button>
+      <n-button size="small" @click="resetLayout">{{ locale === "zh" ? "恢复默认" : "Reset" }}</n-button>
+      <n-button type="primary" size="small" :loading="saving" @click="saveEditing">{{ locale === "zh" ? "保存" : "Save" }}</n-button>
     </div>
-
-    <section
-      v-for="(group, groupIndex) in visibleGroups"
-      :key="group.id"
-      class="workspace-nav__group"
-      :class="{ 'is-dragging': dragState?.type === 'group' && dragState.groupId === group.id }"
-      :draggable="editing"
-      @dragstart="editing && beginGroupDrag($event, group.id)"
-      @dragover.prevent
-      @drop="editing && dropGroup($event, groupIndex)"
-    >
+    <section v-for="(group, groupIndex) in visibleGroups" :key="group.id" class="workspace-nav__group" :class="{ 'is-dragging': dragState?.type === 'group' && dragState.groupId === group.id }" :draggable="editing" @dragstart="editing && beginGroupDrag($event, group.id)" @dragover.prevent @drop="editing && dropGroup($event, groupIndex)">
       <div class="workspace-nav__heading">
         <n-icon v-if="editing" class="workspace-nav__handle"><ReorderFourOutline /></n-icon>
         <n-input v-if="editing" :value="groupName(group)" size="small" @update:value="group.name = $event" />
         <span v-else>{{ groupName(group) }}</span>
-        <n-button v-if="editing && groups.length > 1" quaternary circle size="tiny" type="error" :aria-label="locale === 'zh' ? '\u5220\u9664\u5206\u7ec4' : 'Remove group'" @click.stop="removeGroup(group.id)">
-          <template #icon><n-icon><TrashOutline /></n-icon></template>
-        </n-button>
+        <n-button v-if="editing && groups.length > 1" quaternary circle size="tiny" type="error" :aria-label="locale === 'zh' ? '删除分组' : 'Remove group'" @click.stop="removeGroup(group.id)"><template #icon><n-icon><TrashOutline /></n-icon></template></n-button>
       </div>
-
       <nav class="workspace-nav__list" :aria-label="groupName(group)" @dragover.prevent @drop="editing && dropItem($event, group.id, group.items.length)">
-        <button
-          v-for="(id, itemIndex) in group.items"
-          :key="id"
-          type="button"
-          class="ops-menu-button workspace-nav__item"
-          :class="{ 'is-active': activeKey === id, 'is-danger': catalog[id].danger, 'is-dragging': dragState?.type === 'item' && dragState.itemId === id }"
-          :draggable="editing"
-          @click="selectItem(id)"
-          @dragstart.stop="editing && beginItemDrag($event, group.id, id)"
-          @dragover.prevent
-          @drop.stop="editing && dropItem($event, group.id, itemIndex)"
-        >
+        <button v-for="(item, itemIndex) in group.items" :key="item.id" type="button" class="ops-menu-button workspace-nav__item" :class="{ 'is-active': activeKey === item.id, 'is-danger': catalog[item.id].danger, 'is-dragging': dragState?.type === 'item' && dragState.itemId === item.id }" :draggable="editing" @click="selectItem(item)" @dragstart.stop="editing && beginItemDrag($event, group.id, item.id)" @dragover.prevent @drop.stop="editing && dropItem($event, group.id, itemIndex)">
           <n-icon v-if="editing" class="workspace-nav__handle"><ReorderFourOutline /></n-icon>
-          <n-icon><component :is="catalog[id].icon" /></n-icon>
-          <span>{{ catalog[id].label }}</span>
+          <n-icon><component :is="catalog[item.id].icon" /></n-icon>
+          <n-input v-if="editing" :value="itemName(item)" size="small" @click.stop @update:value="item.name = $event" />
+          <span v-else>{{ itemName(item) }}</span>
         </button>
-        <div v-if="editing && group.items.length === 0" class="workspace-nav__empty" @dragover.prevent @drop="dropItem($event, group.id, 0)">
-          {{ locale === "zh" ? "\u628a\u9879\u76ee\u62d6\u5230\u8fd9\u91cc" : "Drop items here" }}
-        </div>
+        <div v-if="editing && group.items.length === 0" class="workspace-nav__empty" @dragover.prevent @drop="dropItem($event, group.id, 0)">{{ locale === "zh" ? "把项目拖到这里" : "Drop items here" }}</div>
       </nav>
     </section>
   </div>
@@ -248,11 +226,11 @@ onMounted(() => {
 
 <style scoped>
 .workspace-nav { min-width: 0; }
-.workspace-nav__tools { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin: 0 4px 8px; }
-.workspace-nav__group + .workspace-nav__group { margin-top: 12px; }
-.workspace-nav__heading { display: flex; min-height: 22px; align-items: center; gap: 4px; padding: 0 8px 4px; color: var(--app-sidebar-muted); font-size: 11px; font-weight: 600; }
+.workspace-nav__editbar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 5px; margin: 0 4px 10px; }
+.workspace-nav__group + .workspace-nav__group { margin-top: 10px; }
+.workspace-nav__heading { display: flex; min-height: 22px; align-items: center; gap: 4px; padding: 0 8px 3px; color: var(--app-sidebar-muted); font-size: 11px; font-weight: 600; }
 .workspace-nav__heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-nav__heading :deep(.n-input) { flex: 1; }
+.workspace-nav__heading :deep(.n-input), .workspace-nav__item :deep(.n-input) { flex: 1; min-width: 0; }
 .workspace-nav__list { display: grid; gap: 2px; }
 .workspace-nav__item { position: relative; }
 .workspace-nav__item.is-danger { color: var(--app-danger); }

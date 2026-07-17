@@ -4,6 +4,7 @@ import {
   GameController,
   LanguageSharp,
   MoonOutline,
+  PencilOutline,
   SunnyOutline,
 } from "@vicons/ionicons5";
 import { computed, onMounted, ref } from "vue";
@@ -44,6 +45,7 @@ const PALWORLD_TOKEN = "palworld_token";
 const theme = themeStore();
 
 const loading = ref(false);
+const sidebarNav = ref(null);
 const serverInfo = ref({});
 const serverMetrics = ref({});
 const currentDisplay = ref("players");
@@ -433,6 +435,7 @@ onMounted(async () => {
       </div>
 
       <sidebar-workspace-nav
+        ref="sidebarNav"
         :active-key="currentDisplay"
         :can-operate="canOperate"
         :is-admin="isAdmin"
@@ -441,6 +444,17 @@ onMounted(async () => {
       />
       <div class="ops-sidebar-footer">
         <div class="ops-sidebar-preferences">
+          <n-button
+            v-if="isAdmin"
+            quaternary
+            circle
+            class="ops-preference-button"
+            :aria-label="locale === 'zh' ? '编辑导航' : 'Edit navigation'"
+            :title="locale === 'zh' ? '编辑导航' : 'Edit navigation'"
+            @click="sidebarNav?.toggleEditing()"
+          >
+            <template #icon><n-icon><PencilOutline /></n-icon></template>
+          </n-button>
           <n-button
             quaternary
             circle
@@ -494,9 +508,9 @@ onMounted(async () => {
     </aside>
 
     <main class="ops-main">
-      <header class="ops-workspace-header">
+      <header class="ops-workspace-header" :class="{ 'is-tool-view': currentDisplay !== 'overview' }">
         <div class="ops-workspace-heading">
-          <h1 class="ops-workspace-title">{{ currentViewLabel }}</h1>
+          <h1 v-if="currentDisplay === 'overview'" class="ops-workspace-title">{{ currentViewLabel }}</h1>
           <div class="ops-workspace-context">
             <span>{{
               serverInfo?.name || $t("status.serverUnavailable")

@@ -60,6 +60,14 @@ class ApiService extends Service {
     return this.fetch(`/api/config`).put(param).json();
   }
 
+  async getSidebarNavigation() {
+    return this.fetch(`/api/panel/navigation`).get().json();
+  }
+
+  async updateSidebarNavigation(navigation) {
+    return this.fetch(`/api/panel/navigation`).put({ navigation }).json();
+  }
+
   async listDirectories(path = "") {
     const query = new URLSearchParams({ path }).toString();
     return this.fetch(`/api/config/directories?${query}`).get().json();

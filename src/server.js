@@ -50,7 +50,8 @@ const defaultConfig = {
     adminInitialized: false,
     adminUser: "",
     adminPasswordHash: "",
-    adminPasswordSalt: ""
+    adminPasswordSalt: "",
+    navigation: []
   },
   server: {
     mode: "systemd",
@@ -2097,6 +2098,18 @@ async function handleApi(req, res, config) {
     const body = await readBody(req);
     const next = await saveConfig({ ...config, ...body });
     return sendJson(res, 200, { ok: true, config: next });
+  }
+
+  if (req.method === "GET" && req.url === "/api/panel/navigation") {
+    return sendJson(res, 200, { ok: true, navigation: config.panel.navigation || [] });
+  }
+
+  if (req.method === "PUT" && req.url === "/api/panel/navigation") {
+    if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
+    const body = await readBody(req);
+    const navigation = Array.isArray(body.navigation) ? body.navigation : [];
+    const next = await saveConfig({ ...config, panel: { ...config.panel, navigation } });
+    return sendJson(res, 200, { ok: true, navigation: next.panel.navigation || [] });
   }
 
   if (await advancedFeatures.handleApi(req, res, config, {
