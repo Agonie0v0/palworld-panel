@@ -553,6 +553,100 @@ onMounted(loadOverview);
   white-space: nowrap;
 }
 
+@media (min-width: 1600px) and (min-height: 900px) {
+  .overview-page {
+    width: min(1680px, 100%);
+    padding: 32px 36px 38px;
+  }
+
+  .overview-header {
+    margin-bottom: 22px;
+  }
+
+  .overview-header h2 {
+    font-size: 22px;
+  }
+
+  .overview-pulse {
+    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 2.4fr);
+  }
+
+  .overview-pulse-identity {
+    padding: 28px;
+  }
+
+  .overview-pulse-identity > strong {
+    margin-top: 26px;
+    font-size: 23px;
+  }
+
+  .overview-pulse-meta {
+    margin-top: 30px;
+  }
+
+  .overview-reading {
+    padding: 30px 26px;
+  }
+
+  .overview-reading-head strong {
+    font-size: 28px;
+  }
+
+  .overview-meter {
+    margin-top: 32px;
+  }
+
+  .overview-detail-grid {
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .overview-panel {
+    min-height: 280px;
+    padding: 22px;
+  }
+
+  .overview-panel-header {
+    margin-bottom: 16px;
+    padding-bottom: 15px;
+  }
+
+  .overview-panel-header h3 {
+    font-size: 15px;
+  }
+
+  .overview-definition-list > div,
+  .overview-player-list li {
+    min-height: 52px;
+  }
+}
+
+@media (min-width: 2400px) and (min-height: 1100px) {
+  .overview-page {
+    width: min(2100px, 100%);
+    padding: 40px 48px 48px;
+  }
+
+  .overview-pulse {
+    grid-template-columns: minmax(380px, 0.85fr) minmax(0, 2.6fr);
+  }
+
+  .overview-pulse-identity,
+  .overview-reading {
+    padding: 34px 30px;
+  }
+
+  .overview-detail-grid {
+    gap: 24px;
+    margin-top: 24px;
+  }
+
+  .overview-panel {
+    min-height: 320px;
+    padding: 26px;
+  }
+}
+
 @media (max-width: 1080px) {
   .overview-pulse {
     grid-template-columns: 1fr;
