@@ -427,51 +427,43 @@ onMounted(async () => {
 
       <div class="ops-nav-label">{{ $t("button.management") }}</div>
       <nav class="ops-nav" :aria-label="$t('button.management')">
-        <n-button
+        <button
           v-if="isLogin"
-          quaternary
-          class="ops-nav-button"
+          type="button"
+          class="ops-menu-button"
           :class="{ 'is-active': currentDisplay === 'overview' }"
           @click="toOverview"
         >
-          <template #icon
-            ><n-icon><DashboardOutlined /></n-icon
-          ></template>
-          {{ $t("button.overview") }}
-        </n-button>
-        <n-button
-          quaternary
-          class="ops-nav-button"
+          <n-icon><DashboardOutlined /></n-icon>
+          <span>{{ $t("button.overview") }}</span>
+        </button>
+        <button
+          type="button"
+          class="ops-menu-button"
           :class="{ 'is-active': currentDisplay === 'players' }"
           @click="toPlayers"
         >
-          <template #icon
-            ><n-icon><GameController /></n-icon
-          ></template>
-          {{ $t("button.players") }}
-        </n-button>
-        <n-button
-          quaternary
-          class="ops-nav-button"
+          <n-icon><GameController /></n-icon>
+          <span>{{ $t("button.players") }}</span>
+        </button>
+        <button
+          type="button"
+          class="ops-menu-button"
           :class="{ 'is-active': currentDisplay === 'guilds' }"
           @click="toGuilds"
         >
-          <template #icon
-            ><n-icon><SupervisedUserCircleRound /></n-icon
-          ></template>
-          {{ $t("button.guilds") }}
-        </n-button>
-        <n-button
-          quaternary
-          class="ops-nav-button"
+          <n-icon><SupervisedUserCircleRound /></n-icon>
+          <span>{{ $t("button.guilds") }}</span>
+        </button>
+        <button
+          type="button"
+          class="ops-menu-button"
           :class="{ 'is-active': currentDisplay === 'map' }"
           @click="toMap"
         >
-          <template #icon
-            ><n-icon><PublicRound /></n-icon
-          ></template>
-          {{ $t("button.map") }}
-        </n-button>
+          <n-icon><PublicRound /></n-icon>
+          <span>{{ $t("button.map") }}</span>
+        </button>
       </nav>
 
       <div v-if="isLogin" class="ops-tools-section">
@@ -481,7 +473,7 @@ onMounted(async () => {
         <div class="ops-tool-grid">
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleToolAction('operations')"
           >
             <n-icon><GuiManagement /></n-icon>
@@ -489,7 +481,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleToolAction('settings')"
           >
             <n-icon><Settings /></n-icon>
@@ -497,7 +489,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleToolAction('game-settings')"
           >
             <n-icon><ConstructOutline /></n-icon>
@@ -505,7 +497,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleToolAction('palconf')"
           >
             <n-icon><Settings /></n-icon>
@@ -513,7 +505,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleRconDrawer"
           >
             <n-icon><Terminal /></n-icon>
@@ -521,7 +513,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleBackupList"
           >
             <n-icon><ArchiveOutlined /></n-icon>
@@ -529,7 +521,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleWhiteList"
           >
             <n-icon><ShieldCheckmarkSharp /></n-icon>
@@ -537,7 +529,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button"
+            class="ops-menu-button"
             @click="handleStartBrodcast"
           >
             <n-icon><BroadcastTower /></n-icon>
@@ -545,7 +537,7 @@ onMounted(async () => {
           </button>
           <button
             type="button"
-            class="ops-tool-button ops-tool-button--danger"
+            class="ops-menu-button ops-menu-button--danger"
             @click="handleShutdown"
           >
             <n-icon><SettingsPowerRound /></n-icon>
