@@ -42,6 +42,7 @@ import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
+import SidebarWorkspaceNav from "./component/SidebarWorkspaceNav.vue";
 import whitelistStore from "@/stores/model/whitelist";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import { watch } from "vue";
@@ -315,6 +316,14 @@ const toMap = () => {
   playerToGuildStore().setUpdateStatus("map");
 };
 
+const handleSidebarNavigation = (key) => {
+  if (key === "overview") return toOverview();
+  if (key === "players") return toPlayers();
+  if (key === "guilds") return toGuilds();
+  if (key === "map") return toMap();
+  selectWorkspace(key);
+};
+
 const playerToGuildStatus = computed(() =>
   playerToGuildStore().getUpdateStatus(),
 );
@@ -452,6 +461,15 @@ onMounted(async () => {
         </div>
       </div>
 
+      <sidebar-workspace-nav
+        :active-key="currentDisplay"
+        :can-operate="canOperate"
+        :is-admin="isAdmin"
+        :is-login="isLogin"
+        @select="handleSidebarNavigation"
+      />
+
+      <template v-if="false">
       <div class="ops-nav-label">
         {{ locale === "zh" ? "\u72b6\u6001\u4e0e\u73a9\u5bb6" : "Status & players" }}
       </div>
@@ -704,6 +722,7 @@ onMounted(async () => {
             ><span>{{ $t("button.shutdown") }}</span>
           </button>
         </nav>
+      </template>
       </template>
 
       <div class="ops-sidebar-footer">
