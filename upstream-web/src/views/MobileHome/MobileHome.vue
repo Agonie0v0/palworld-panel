@@ -7,7 +7,15 @@ import {
   SettingsPowerRound,
   SupervisedUserCircleRound,
 } from "@vicons/material";
-import { ChevronsLeft } from "@vicons/tabler";
+import {
+  Activity,
+  BrandHipchat,
+  BrandSteam,
+  ChevronsLeft,
+  Database,
+  Dna,
+  Package,
+} from "@vicons/tabler";
 import {
   ConstructOutline,
   GameController,
@@ -38,6 +46,15 @@ import ShutdownDialog from "@/components/ShutdownDialog.vue";
 import WhitelistManager from "@/components/WhitelistManager.vue";
 import ServerOperations from "@/components/ServerOperations.vue";
 import GameSettingsManager from "@/components/GameSettingsManager.vue";
+import OperationsCenter from "@/components/OperationsCenter.vue";
+import SaveSourceManager from "@/components/SaveSourceManager.vue";
+import ModManager from "@/components/ModManager.vue";
+import AccessManager from "@/components/AccessManager.vue";
+import WorldDataManager from "@/components/WorldDataManager.vue";
+import PalDefenderManager from "@/components/PalDefenderManager.vue";
+import BreedingLab from "@/components/BreedingLab.vue";
+import WorkshopManager from "@/components/WorkshopManager.vue";
+import AstrBotManager from "@/components/AstrBotManager.vue";
 import MapView from "@/views/PcHome/component/MapView.vue";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import themeStore from "@/stores/model/theme.js";
@@ -86,6 +103,11 @@ const currentViewLabel = computed(() => {
 const contentRef = ref(null);
 
 const isLogin = ref(false);
+const currentRole = ref("viewer");
+const canOperate = computed(() =>
+  ["admin", "operator"].includes(currentRole.value),
+);
+const isAdmin = computed(() => currentRole.value === "admin");
 const authToken = ref("");
 let refreshTimer = null;
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -222,9 +244,11 @@ const getOnlineList = async () => {
 
 // login
 const showLoginModal = ref(false);
+const loginUsername = ref("");
 const password = ref("");
 const handleLogin = async () => {
   const { data, statusCode } = await new ApiService().login({
+    username: loginUsername.value,
     password: password.value,
   });
   if (statusCode.value === 401) {
@@ -235,6 +259,7 @@ const handleLogin = async () => {
   let token = data.value.token;
   localStorage.setItem(PALWORLD_TOKEN, token);
   userStore().setIsLogin(true, token);
+  currentRole.value = data.value.role || "admin";
   authToken.value = token;
   message.success(t("message.authsuccess"));
   showLoginModal.value = false;
@@ -259,6 +284,15 @@ const showBackupManager = ref(false);
 const showWhitelistManager = ref(false);
 const showServerOperations = ref(false);
 const showGameSettings = ref(false);
+const showOperationsCenter = ref(false);
+const showSaveSources = ref(false);
+const showMods = ref(false);
+const showAccessManager = ref(false);
+const showWorldData = ref(false);
+const showPalDefender = ref(false);
+const showBreedingLab = ref(false);
+const showWorkshop = ref(false);
+const showAstrBot = ref(false);
 const handleShutdown = () => {
   if (checkAuthToken()) {
     showShutdownDialog.value = true;
@@ -280,6 +314,15 @@ const openAuthenticated = (target) => {
 const executeAdminAction = (key) => {
   if (key === "operations") openAuthenticated(showServerOperations);
   if (key === "game-settings") openAuthenticated(showGameSettings);
+  if (key === "advanced") openAuthenticated(showOperationsCenter);
+  if (key === "save-sources") openAuthenticated(showSaveSources);
+  if (key === "mods") openAuthenticated(showMods);
+  if (key === "access") openAuthenticated(showAccessManager);
+  if (key === "world-data") openAuthenticated(showWorldData);
+  if (key === "paldefender") openAuthenticated(showPalDefender);
+  if (key === "breeding") openAuthenticated(showBreedingLab);
+  if (key === "workshop") openAuthenticated(showWorkshop);
+  if (key === "astrbot") openAuthenticated(showAstrBot);
   if (key === "settings") {
     if (checkAuthToken()) emit("open-config");
     else {
@@ -403,12 +446,16 @@ const checkAuthToken = () => {
 };
 const isTokenExpired = (token) => {
   const parts = token.split(".");
-  if (parts.length !== 3) return false;
+  if (parts.length !== 3) {
+    currentRole.value = "admin";
+    return false;
+  }
   try {
     const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const payload = JSON.parse(
       atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")),
     );
+    currentRole.value = payload.role || "admin";
     return Boolean(payload.exp) && payload.exp < Date.now() / 1000;
   } catch {
     return false;
@@ -589,7 +636,7 @@ onBeforeUnmount(() => {
 
     <nav class="mobile-bottom-nav" :aria-label="$t('button.management')">
       <button
-        v-if="isLogin"
+        v-if="canOperate"
         type="button"
         class="mobile-nav-button"
         :class="{ 'is-active': currentDisplay === 'overview' }"
@@ -674,6 +721,81 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="mobile-tool-button"
+          @click="handleAdminAction('advanced')"
+        >
+          <n-icon><Activity /></n-icon>
+          <span>{{ locale === "zh" ? "运维中心" : "Operations center" }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('save-sources')"
+        >
+          <n-icon><Database /></n-icon>
+          <span>{{ locale === "zh" ? "存档源" : "Save sources" }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('mods')"
+        >
+          <n-icon><Package /></n-icon>
+          <span>{{ locale === "zh" ? "模组管理" : "Mods" }}</span>
+        </button>
+        <button
+          v-if="isAdmin"
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('access')"
+        >
+          <n-icon><AdminPanelSettingsOutlined /></n-icon>
+          <span>{{ locale === "zh" ? "账号权限" : "Access" }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('world-data')"
+        >
+          <n-icon><Database /></n-icon>
+          <span>{{ locale === "zh" ? "世界数据" : "World data" }}</span>
+        </button>
+        <button
+          v-if="isAdmin"
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('paldefender')"
+        >
+          <n-icon><ShieldCheckmarkSharp /></n-icon>
+          <span>PalDefender</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('breeding')"
+        >
+          <n-icon><Dna /></n-icon>
+          <span>{{ locale === "zh" ? "配种实验室" : "Breeding lab" }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('workshop')"
+        >
+          <n-icon><BrandSteam /></n-icon>
+          <span>Workshop</span>
+        </button>
+        <button
+          v-if="isAdmin"
+          type="button"
+          class="mobile-tool-button"
+          @click="handleAdminAction('astrbot')"
+        >
+          <n-icon><BrandHipchat /></n-icon>
+          <span>AstrBot / QQ</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
           @click="handleAdminAction('palconf')"
         >
           <n-icon><Settings /></n-icon>
@@ -738,6 +860,16 @@ onBeforeUnmount(() => {
     <div>
       <span class="block pb-2">{{ $t("message.authdesc") }}</span>
       <n-input
+        v-model:value="loginUsername"
+        class="mb-2"
+        :placeholder="
+          locale === 'zh'
+            ? '用户名（主管理员可留空）'
+            : 'Username (optional for primary admin)'
+        "
+        autocomplete="username"
+      />
+      <n-input
         type="password"
         show-password-on="click"
         size="large"
@@ -771,6 +903,15 @@ onBeforeUnmount(() => {
   <backup-manager v-model:show="showBackupManager" />
   <server-operations v-model:show="showServerOperations" />
   <game-settings-manager v-model:show="showGameSettings" />
+  <operations-center v-model:show="showOperationsCenter" />
+  <save-source-manager v-model:show="showSaveSources" />
+  <mod-manager v-model:show="showMods" />
+  <access-manager v-model:show="showAccessManager" />
+  <world-data-manager v-model:show="showWorldData" />
+  <pal-defender-manager v-model:show="showPalDefender" />
+  <breeding-lab v-model:show="showBreedingLab" />
+  <workshop-manager v-model:show="showWorkshop" />
+  <astr-bot-manager v-model:show="showAstrBot" />
   <whitelist-manager
     v-model:show="showWhitelistManager"
     :players="playerList"

@@ -1,0 +1,2890 @@
+const fs = require("fs");
+const fsp = require("fs/promises");
+const path = require("path");
+const os = require("os");
+const crypto = require("crypto");
+const http = require("http");
+const https = require("https");
+const Busboy = require("busboy");
+const yauzl = require("yauzl");
+
+const MAX_AUDIT_ROWS = 2000;
+const MAX_JOB_ROWS = 300;
+const MAX_ALERT_ROWS = 300;
+const MAX_MONITOR_ROWS = 2880;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES = 30000;
+const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024 * 1024;
+
+function createAdvancedFeatures(deps) {
+  const state = {
+    monitorAt: 0,
+    scheduleAt: 0,
+    runningJobs: new Set(),
+    breedingJobs: new Map(),
+  };
+
+  const load = (name, fallback) => deps.loadJsonFile(name, fallback);
+  const save = (name, value) => deps.saveJsonFile(name, value);
+  const nowIso = () => new Date().toISOString();
+  let breedingCatalogCache;
+
+  async function prependLimited(name, value, limit) {
+    const rows = await load(name, []);
+    const next = [value, ...(Array.isArray(rows) ? rows : [])].slice(0, limit);
+    await save(name, next);
+    return value;
+  }
+
+  async function recordAudit(input = {}) {
+    return prependLimited(
+      "audit-log.json",
+      {
+        id: crypto.randomUUID(),
+        actor: input.actor || "admin",
+        role: input.role || "admin",
+        action: input.action || "unknown",
+        target: input.target || "",
+        status: input.status || "success",
+        message: input.message || "",
+        ip: input.ip || "",
+        createdAt: nowIso(),
+      },
+      MAX_AUDIT_ROWS,
+    );
+  }
+
+  async function recordAlert(input = {}) {
+    return prependLimited(
+      "alerts.json",
+      {
+        id: crypto.randomUUID(),
+        severity: input.severity || "warning",
+        title: input.title || "Panel alert",
+        message: input.message || "",
+        source: input.source || "panel",
+        status: "open",
+        createdAt: nowIso(),
+        acknowledgedAt: "",
+      },
+      MAX_ALERT_ROWS,
+    );
+  }
+
+  async function updateJob(id, patch) {
+    const rows = await load("jobs.json", []);
+    const next = (Array.isArray(rows) ? rows : []).map((row) =>
+      row.id === id ? { ...row, ...patch, updatedAt: nowIso() } : row,
+    );
+    await save("jobs.json", next.slice(0, MAX_JOB_ROWS));
+    return next.find((row) => row.id === id);
+  }
+
+  async function queueJob(type, title, runner, metadata = {}) {
+    const job = {
+      id: crypto.randomUUID(),
+      type,
+      title,
+      status: "queued",
+      progress: 0,
+      message: "Queued",
+      error: "",
+      metadata,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    await prependLimited("jobs.json", job, MAX_JOB_ROWS);
+    setImmediate(async () => {
+      state.runningJobs.add(job.id);
+      await updateJob(job.id, { status: "running", progress: 5, message: "Running" });
+      try {
+        const result = await runner((progress, message) =>
+          updateJob(job.id, {
+            progress: Math.max(0, Math.min(100, Number(progress || 0))),
+            message: message || "Running",
+          }),
+        );
+        await updateJob(job.id, {
+          status: "completed",
+          progress: 100,
+          message: result?.message || "Completed",
+          result: result || {},
+        });
+      } catch (error) {
+        const message = error?.message || String(error);
+        await updateJob(job.id, {
+          status: "failed",
+          progress: 100,
+          message: "Failed",
+          error: message,
+        });
+        await recordAlert({
+          severity: "error",
+          title: `${title} failed`,
+          message,
+          source: type,
+        });
+      } finally {
+        state.runningJobs.delete(job.id);
+      }
+    });
+    return job;
+  }
+
+  function requestIp(req) {
+    return String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "")
+      .split(",")[0]
+      .trim();
+  }
+
+  async function auditRequest(req, principal, action, target, runner) {
+    try {
+      const value = await runner();
+      await recordAudit({
+        actor: principal?.name,
+        role: principal?.role,
+        action,
+        target,
+        status: "success",
+        ip: requestIp(req),
+      });
+      return value;
+    } catch (error) {
+      await recordAudit({
+        actor: principal?.name,
+        role: principal?.role,
+        action,
+        target,
+        status: "failed",
+        message: error?.message || String(error),
+        ip: requestIp(req),
+      });
+      throw error;
+    }
+  }
+
+  async function serverLogs(config, lines = 300) {
+    const count = Math.max(20, Math.min(5000, Number(lines || 300)));
+    if (config.server.mode === "docker" && config.server.containerName) {
+      const result = await deps.exec("docker", ["logs", "--tail", String(count), config.server.containerName], {
+        timeout: 30000,
+      });
+      return {
+        available: result.ok || Boolean(result.stdout || result.stderr),
+        source: "docker",
+        logs: [result.stdout, result.stderr].filter(Boolean).join("\n"),
+      };
+    }
+    if (os.platform() === "linux" && config.server.serviceName) {
+      const result = await deps.exec(
+        "journalctl",
+        ["-u", config.server.serviceName, "-n", String(count), "--no-pager", "--output=short-iso"],
+        { timeout: 30000 },
+      );
+      return {
+        available: result.ok || Boolean(result.stdout || result.stderr),
+        source: "journalctl",
+        logs: [result.stdout, result.stderr].filter(Boolean).join("\n"),
+      };
+    }
+    return { available: false, source: "none", logs: "", reason: "Server logs are unavailable on this runtime." };
+  }
+
+  async function recordMonitorSample(config) {
+    let metrics;
+    try {
+      metrics = await deps.managedCall("hostMetrics", {}, () => deps.collectHostMetrics(config));
+    } catch (error) {
+      await recordAlert({
+        severity: "warning",
+        title: "Host metrics unavailable",
+        message: error.message,
+        source: "monitor",
+      });
+      return null;
+    }
+    const history = await load("monitor-history.json", []);
+    const sample = {
+      at: nowIso(),
+      cpu: Number(metrics?.cpu?.usedPercent || 0),
+      memory: Number(metrics?.memory?.usedPercent || 0),
+      disk: Number(metrics?.disk?.usedPercent || 0),
+      processCpu: Number(metrics?.process?.cpuPercent || 0),
+      processMemory: Number(metrics?.process?.memoryPercent || 0),
+      processMemoryBytes: Number(metrics?.process?.memoryBytes || 0),
+      serviceRunning: Boolean(metrics?.service?.running),
+    };
+    await save("monitor-history.json", [...(Array.isArray(history) ? history : []), sample].slice(-MAX_MONITOR_ROWS));
+    return sample;
+  }
+
+  function safeBackupPath(config, name) {
+    const base = path.resolve(config.server.backupDir);
+    const file = path.resolve(base, path.basename(String(name || "")));
+    if (file !== base && !file.startsWith(`${base}${path.sep}`)) throw new Error("Invalid backup name.");
+    return file;
+  }
+
+  async function sha256File(file) {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash("sha256");
+      const stream = fs.createReadStream(file);
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.on("error", reject);
+      stream.on("end", () => resolve(hash.digest("hex")));
+    });
+  }
+
+  function validArchiveName(name) {
+    const normalized = String(name || "").replaceAll("\\", "/");
+    if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized)) return false;
+    return !normalized.split("/").some((part) => part === "..");
+  }
+
+  async function inspectZip(file) {
+    return new Promise((resolve, reject) => {
+      yauzl.open(file, { lazyEntries: true, autoClose: true }, (error, zip) => {
+        if (error) return reject(error);
+        let entries = 0;
+        let bytes = 0;
+        let hasLevel = false;
+        zip.readEntry();
+        zip.on("entry", (entry) => {
+          entries += 1;
+          bytes += Number(entry.uncompressedSize || 0);
+          const unixMode = (entry.externalFileAttributes >>> 16) & 0xffff;
+          const isSymlink = (unixMode & 0o170000) === 0o120000;
+          if (
+            entries > MAX_ARCHIVE_ENTRIES ||
+            bytes > MAX_ARCHIVE_BYTES ||
+            !validArchiveName(entry.fileName) ||
+            isSymlink
+          ) {
+            zip.close();
+            return reject(new Error("ZIP archive contains unsafe or excessive entries."));
+          }
+          if (entry.fileName.toLowerCase().endsWith("level.sav")) hasLevel = true;
+          zip.readEntry();
+        });
+        zip.on("error", reject);
+        zip.on("end", () => resolve({ entries, uncompressedBytes: bytes, hasLevel }));
+      });
+    });
+  }
+
+  async function inspectTar(file) {
+    const result = await deps.exec("tar", ["-tzf", file], { timeout: 120000 });
+    if (!result.ok) throw new Error(result.stderr || result.stdout || "Invalid tar.gz archive.");
+    const names = result.stdout.split(/\r?\n/).filter(Boolean);
+    if (names.length > MAX_ARCHIVE_ENTRIES || names.some((name) => !validArchiveName(name))) {
+      throw new Error("tar.gz archive contains unsafe or excessive entries.");
+    }
+    return { entries: names.length, uncompressedBytes: 0, hasLevel: names.some((name) => name.toLowerCase().endsWith("level.sav")) };
+  }
+
+  async function verifyBackup(config, name) {
+    const file = safeBackupPath(config, name);
+    const stat = await fsp.stat(file);
+    const archive = file.toLowerCase().endsWith(".zip") ? await inspectZip(file) : await inspectTar(file);
+    return {
+      name: path.basename(file),
+      size: stat.size,
+      modifiedAt: stat.mtime.toISOString(),
+      sha256: await sha256File(file),
+      ...archive,
+      valid: true,
+    };
+  }
+
+  async function extractZip(file, target) {
+    await fsp.mkdir(target, { recursive: true });
+    return new Promise((resolve, reject) => {
+      yauzl.open(file, { lazyEntries: true, autoClose: true }, (error, zip) => {
+        if (error) return reject(error);
+        let entries = 0;
+        let bytes = 0;
+        let settled = false;
+        const fail = (reason) => {
+          if (settled) return;
+          settled = true;
+          zip.close();
+          reject(reason instanceof Error ? reason : new Error(String(reason)));
+        };
+        zip.readEntry();
+        zip.on("entry", async (entry) => {
+          try {
+            entries += 1;
+            bytes += Number(entry.uncompressedSize || 0);
+            const unixMode = (entry.externalFileAttributes >>> 16) & 0xffff;
+            const isSymlink = (unixMode & 0o170000) === 0o120000;
+            if (
+              entries > MAX_ARCHIVE_ENTRIES ||
+              bytes > MAX_ARCHIVE_BYTES ||
+              !validArchiveName(entry.fileName) ||
+              isSymlink
+            ) {
+              return fail(new Error("ZIP archive contains unsafe or excessive entries."));
+            }
+            const destination = path.resolve(target, entry.fileName);
+            const root = path.resolve(target);
+            if (destination !== root && !destination.startsWith(`${root}${path.sep}`)) {
+              return fail(new Error("ZIP archive path escaped the extraction directory."));
+            }
+            if (/\/$/.test(entry.fileName)) {
+              await fsp.mkdir(destination, { recursive: true });
+              zip.readEntry();
+              return;
+            }
+            await fsp.mkdir(path.dirname(destination), { recursive: true });
+            zip.openReadStream(entry, (streamError, input) => {
+              if (streamError) return fail(streamError);
+              const output = fs.createWriteStream(destination, { flags: "wx" });
+              input.on("error", fail);
+              output.on("error", fail);
+              output.on("finish", () => zip.readEntry());
+              input.pipe(output);
+            });
+          } catch (entryError) {
+            fail(entryError);
+          }
+        });
+        zip.on("error", fail);
+        zip.on("end", () => {
+          if (!settled) {
+            settled = true;
+            resolve({ entries, uncompressedBytes: bytes });
+          }
+        });
+      });
+    });
+  }
+
+  async function extractArchive(file, target) {
+    if (file.toLowerCase().endsWith(".zip")) return extractZip(file, target);
+    const inspection = await inspectTar(file);
+    await fsp.mkdir(target, { recursive: true });
+    const result = await deps.exec("tar", ["-xzf", file, "-C", target], { timeout: 30 * 60 * 1000 });
+    if (!result.ok) throw new Error(result.stderr || result.stdout || "Unable to extract backup.");
+    return inspection;
+  }
+
+  async function findRestoreRoot(extracted) {
+    if (fs.existsSync(path.join(extracted, "SaveGames"))) return extracted;
+    const queue = [{ dir: extracted, depth: 0 }];
+    while (queue.length) {
+      const current = queue.shift();
+      if (current.depth > 4) continue;
+      for (const entry of await fsp.readdir(current.dir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const child = path.join(current.dir, entry.name);
+        if (entry.name === "SaveGames") return current.dir;
+        queue.push({ dir: child, depth: current.depth + 1 });
+      }
+    }
+    throw new Error("Backup does not contain a SaveGames directory.");
+  }
+
+  async function restoreBackupSafe(config, name) {
+    await verifyBackup(config, name);
+    await deps.managedCall("rcon", { command: "Save" }, () => deps.rcon(config, "Save")).catch(() => {});
+    const protection = await deps.createBackup(config);
+    if (!protection.ok) throw new Error(protection.stderr || protection.stdout || "Unable to create the pre-restore backup.");
+
+    const saveDir = path.resolve(config.server.saveDir);
+    const parent = path.dirname(saveDir);
+    const work = await fsp.mkdtemp(path.join(parent, ".palworld-restore-"));
+    const extracted = path.join(work, "extracted");
+    const previous = `${saveDir}.restore-previous-${Date.now()}`;
+    let movedPrevious = false;
+    try {
+      await extractArchive(safeBackupPath(config, name), extracted);
+      const sourceRoot = await findRestoreRoot(extracted);
+      const stop = await deps.runAction("stop", config);
+      if (!stop.ok) throw new Error(stop.stderr || stop.stdout || "Unable to stop the server.");
+      if (fs.existsSync(saveDir)) {
+        await fsp.rename(saveDir, previous);
+        movedPrevious = true;
+      }
+      await fsp.rename(sourceRoot, saveDir);
+      const start = await deps.runAction("start", config);
+      if (!start.ok) throw new Error(start.stderr || start.stdout || "Backup restored, but the server did not start.");
+      if (movedPrevious) await fsp.rm(previous, { recursive: true, force: true });
+      return {
+        ok: true,
+        message: "Backup restored and the server restarted.",
+        protectionBackup: protection.backup || "",
+      };
+    } catch (error) {
+      if (movedPrevious && fs.existsSync(previous)) {
+        await fsp.rm(saveDir, { recursive: true, force: true }).catch(() => {});
+        await fsp.rename(previous, saveDir).catch(() => {});
+        await deps.runAction("start", config).catch(() => {});
+      }
+      throw error;
+    } finally {
+      await fsp.rm(work, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  function privateHost(hostname) {
+    const host = String(hostname || "").toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    );
+  }
+
+  function normalizeWebDavConfig(input = {}, current = {}) {
+    const url = String(input.url ?? current.url ?? "").trim().replace(/\/$/, "");
+    if (url) {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error("WebDAV URL must use HTTP or HTTPS.");
+      if (parsed.protocol !== "https:" && !privateHost(parsed.hostname)) {
+        throw new Error("Public WebDAV endpoints must use HTTPS.");
+      }
+    }
+    return {
+      enabled: Boolean(input.enabled ?? current.enabled),
+      url,
+      username: String(input.username ?? current.username ?? ""),
+      password: input.password ? String(input.password) : String(current.password || ""),
+      remotePath: String(input.remotePath ?? current.remotePath ?? "PalworldBackups")
+        .replaceAll("\\", "/")
+        .replace(/^\/+|\/+$/g, ""),
+    };
+  }
+
+  function publicWebDavConfig(config = {}) {
+    return {
+      enabled: Boolean(config.enabled),
+      url: config.url || "",
+      username: config.username || "",
+      passwordSet: Boolean(config.password),
+      remotePath: config.remotePath || "PalworldBackups",
+    };
+  }
+
+  function webDavRequest(method, target, config, body, extraHeaders = {}) {
+    const url = new URL(target);
+    const transport = url.protocol === "https:" ? https : http;
+    const auth = Buffer.from(`${config.username || ""}:${config.password || ""}`).toString("base64");
+    return new Promise((resolve, reject) => {
+      const request = transport.request(
+        url,
+        {
+          method,
+          headers: {
+            Authorization: `Basic ${auth}`,
+            ...extraHeaders,
+          },
+          timeout: 120000,
+        },
+        (response) => {
+          let raw = "";
+          response.on("data", (chunk) => {
+            if (raw.length < 64 * 1024) raw += chunk;
+          });
+          response.on("end", () => resolve({ status: response.statusCode, body: raw }));
+        },
+      );
+      request.on("timeout", () => request.destroy(new Error("WebDAV request timed out.")));
+      request.on("error", reject);
+      if (body && typeof body.pipe === "function") body.pipe(request);
+      else request.end(body || undefined);
+    });
+  }
+
+  async function ensureWebDavFolders(config) {
+    const base = new URL(`${config.url}/`);
+    let current = base.toString().replace(/\/$/, "");
+    for (const segment of config.remotePath.split("/").filter(Boolean)) {
+      current += `/${encodeURIComponent(segment)}`;
+      const result = await webDavRequest("MKCOL", current, config);
+      if (![200, 201, 204, 301, 302, 405].includes(result.status)) {
+        throw new Error(`Unable to create WebDAV directory (${result.status}).`);
+      }
+    }
+    return current;
+  }
+
+  async function testWebDav(config) {
+    if (!config.url) throw new Error("WebDAV URL is required.");
+    const result = await webDavRequest("PROPFIND", `${config.url}/`, config, "", { Depth: "0" });
+    if (![200, 207, 301, 302, 405].includes(result.status)) {
+      throw new Error(`WebDAV connection failed (${result.status}).`);
+    }
+    return { ok: true, status: result.status };
+  }
+
+  async function uploadBackupWebDav(config, name, webDavConfig) {
+    const file = safeBackupPath(config, name);
+    const stat = await fsp.stat(file);
+    const directory = await ensureWebDavFolders(webDavConfig);
+    const target = `${directory}/${encodeURIComponent(path.basename(file))}`;
+    const result = await webDavRequest("PUT", target, webDavConfig, fs.createReadStream(file), {
+      "Content-Type": file.endsWith(".zip") ? "application/zip" : "application/gzip",
+      "Content-Length": String(stat.size),
+    });
+    if (![200, 201, 204].includes(result.status)) {
+      throw new Error(`WebDAV upload failed (${result.status}).`);
+    }
+    return { ok: true, name: path.basename(file), target, size: stat.size };
+  }
+
+  function receiveUpload(req, prefix) {
+    return new Promise((resolve, reject) => {
+      const tempDir = path.join(deps.dataDir, "uploads");
+      let tempFile = "";
+      let originalName = "";
+      let bytes = 0;
+      let writerPromise = Promise.resolve();
+      const fields = {};
+      let settled = false;
+      fsp
+        .mkdir(tempDir, { recursive: true })
+        .then(() => {
+          const parser = Busboy({
+            headers: req.headers,
+            limits: { files: 1, fileSize: MAX_UPLOAD_BYTES, fields: 20, parts: 24 },
+          });
+          parser.on("field", (name, value) => {
+            fields[name] = value;
+          });
+          parser.on("file", (_name, stream, info) => {
+            if (tempFile) {
+              stream.resume();
+              return;
+            }
+            originalName = path.basename(info.filename || `${prefix}.bin`);
+            tempFile = path.join(tempDir, `${prefix}-${crypto.randomUUID()}${path.extname(originalName)}`);
+            const output = fs.createWriteStream(tempFile, { flags: "wx" });
+            writerPromise = new Promise((writerResolve, writerReject) => {
+              stream.on("data", (chunk) => {
+                bytes += chunk.length;
+              });
+              stream.on("limit", () => writerReject(new Error("Uploaded file is too large.")));
+              stream.on("error", writerReject);
+              output.on("error", writerReject);
+              output.on("finish", writerResolve);
+            });
+            stream.pipe(output);
+          });
+          parser.on("error", reject);
+          parser.on("close", async () => {
+            if (settled) return;
+            settled = true;
+            try {
+              await writerPromise;
+              if (!tempFile) throw new Error("No file was uploaded.");
+              resolve({ tempFile, originalName, bytes, fields });
+            } catch (error) {
+              if (tempFile) await fsp.rm(tempFile, { force: true }).catch(() => {});
+              reject(error);
+            }
+          });
+          req.pipe(parser);
+        })
+        .catch(reject);
+    });
+  }
+
+  async function findLevelSav(root) {
+    const queue = [{ dir: root, depth: 0 }];
+    while (queue.length) {
+      const current = queue.shift();
+      if (current.depth > 8) continue;
+      for (const entry of await fsp.readdir(current.dir, { withFileTypes: true })) {
+        const child = path.join(current.dir, entry.name);
+        if (entry.isFile() && entry.name.toLowerCase() === "level.sav") return child;
+        if (entry.isDirectory()) queue.push({ dir: child, depth: current.depth + 1 });
+      }
+    }
+    return "";
+  }
+
+  async function listSaveSources(config) {
+    const stored = await load("save-sources.json", []);
+    const activePath = path.resolve(config.automation.saveSourcePath || config.server.saveDir);
+    const serverPath = path.resolve(config.server.saveDir);
+    return [
+      {
+        id: "server",
+        name: "Current server world",
+        kind: "server",
+        path: serverPath,
+        active: activePath === serverPath,
+        createdAt: "",
+      },
+      ...(Array.isArray(stored) ? stored : []).map((source) => ({
+        ...source,
+        active: path.resolve(source.path) === activePath,
+      })),
+    ];
+  }
+
+  async function importSaveSourceFromArchive(config, uploaded, requestedName) {
+    const extension = path.extname(uploaded.originalName).toLowerCase();
+    if (extension !== ".zip") throw new Error("Save source uploads must be ZIP archives.");
+    const inspection = await inspectZip(uploaded.tempFile);
+    if (!inspection.hasLevel) throw new Error("The archive does not contain Level.sav.");
+    const sourceRoot = path.join(deps.dataDir, "save-sources");
+    const id = crypto.randomUUID();
+    const target = path.join(sourceRoot, id);
+    await fsp.mkdir(sourceRoot, { recursive: true });
+    try {
+      await extractZip(uploaded.tempFile, target);
+      const level = await findLevelSav(target);
+      if (!level) throw new Error("Level.sav could not be located after extraction.");
+      const rows = await load("save-sources.json", []);
+      const source = {
+        id,
+        name: String(requestedName || uploaded.fields.name || path.parse(uploaded.originalName).name).slice(0, 120),
+        kind: "import",
+        path: target,
+        levelPath: level,
+        size: inspection.uncompressedBytes,
+        createdAt: nowIso(),
+        indexedAt: "",
+      };
+      await save("save-sources.json", [source, ...(Array.isArray(rows) ? rows : [])]);
+      return source;
+    } catch (error) {
+      await fsp.rm(target, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    } finally {
+      await fsp.rm(uploaded.tempFile, { force: true }).catch(() => {});
+    }
+  }
+
+  async function importSaveSourceFromPath(config, sourcePath, requestedName) {
+    const resolved = path.resolve(String(sourcePath || ""));
+    const stat = await fsp.stat(resolved);
+    if (!stat.isDirectory()) throw new Error("Save source path must be a directory.");
+    const level = await findLevelSav(resolved);
+    if (!level) throw new Error("Level.sav was not found under the selected directory.");
+    const rows = await load("save-sources.json", []);
+    const existing = (Array.isArray(rows) ? rows : []).find((row) => path.resolve(row.path) === resolved);
+    if (existing) return existing;
+    const source = {
+      id: crypto.randomUUID(),
+      name: String(requestedName || path.basename(resolved)).slice(0, 120),
+      kind: "linked",
+      path: resolved,
+      levelPath: level,
+      size: 0,
+      createdAt: nowIso(),
+      indexedAt: "",
+    };
+    await save("save-sources.json", [source, ...(Array.isArray(rows) ? rows : [])]);
+    return source;
+  }
+
+  async function activateSaveSource(config, id) {
+    const sources = await listSaveSources(config);
+    const source = sources.find((row) => row.id === id);
+    if (!source) throw new Error("Save source not found.");
+    const next = await deps.saveConfig({
+      ...config,
+      automation: {
+        ...config.automation,
+        saveSourceMode: "directory",
+        saveSourcePath: source.path,
+      },
+    });
+    return { source: { ...source, active: true }, config: next };
+  }
+
+  function publicActivatedSource(result) {
+    return { source: result?.source || null };
+  }
+
+  async function renameSaveSource(id, name) {
+    if (id === "server") throw new Error("The current server source cannot be renamed.");
+    const rows = await load("save-sources.json", []);
+    let found = false;
+    const next = (Array.isArray(rows) ? rows : []).map((row) => {
+      if (row.id !== id) return row;
+      found = true;
+      return { ...row, name: String(name || row.name).slice(0, 120) };
+    });
+    if (!found) throw new Error("Save source not found.");
+    await save("save-sources.json", next);
+    return next.find((row) => row.id === id);
+  }
+
+  async function removeSaveSource(config, id) {
+    if (id === "server") throw new Error("The current server source cannot be deleted.");
+    const rows = await load("save-sources.json", []);
+    const source = (Array.isArray(rows) ? rows : []).find((row) => row.id === id);
+    if (!source) throw new Error("Save source not found.");
+    if (path.resolve(config.automation.saveSourcePath || config.server.saveDir) === path.resolve(source.path)) {
+      await activateSaveSource(config, "server");
+    }
+    if (source.kind === "import") {
+      const managedRoot = path.resolve(deps.dataDir, "save-sources");
+      const target = path.resolve(source.path);
+      if (target.startsWith(`${managedRoot}${path.sep}`)) {
+        await fsp.rm(target, { recursive: true, force: true });
+      }
+    }
+    await save("save-sources.json", (Array.isArray(rows) ? rows : []).filter((row) => row.id !== id));
+    return { ok: true };
+  }
+
+  function modDirectories(config) {
+    const root = path.resolve(config.server.installDir);
+    const binaries = os.platform() === "win32" ? "Win64" : "Linux";
+    return {
+      pak: path.join(root, "Pal", "Content", "Paks", "~mods"),
+      logic: path.join(root, "Pal", "Content", "Paks", "LogicMods"),
+      ue4ss: path.join(root, "Pal", "Binaries", binaries, "Mods"),
+      binaries: path.join(root, "Pal", "Binaries", binaries),
+    };
+  }
+
+  function modTypeForPath(file, directories) {
+    const resolved = path.resolve(file);
+    if (resolved.startsWith(path.resolve(directories.logic))) return "logic";
+    if (resolved.startsWith(path.resolve(directories.ue4ss))) return "ue4ss";
+    if (resolved.startsWith(path.resolve(directories.pak))) return "pak";
+    return "binary";
+  }
+
+  async function walkFiles(root, depth = 3) {
+    if (!fs.existsSync(root)) return [];
+    const output = [];
+    const queue = [{ dir: root, depth: 0 }];
+    while (queue.length) {
+      const current = queue.shift();
+      for (const entry of await fsp.readdir(current.dir, { withFileTypes: true })) {
+        const child = path.join(current.dir, entry.name);
+        if (entry.isDirectory() && current.depth < depth) queue.push({ dir: child, depth: current.depth + 1 });
+        else if (entry.isFile()) output.push(child);
+      }
+    }
+    return output;
+  }
+
+  function modGroupKey(file) {
+    return path.basename(file).replace(/\.disabled$/i, "").replace(/\.(pak|utoc|ucas|dll)$/i, "").toLowerCase();
+  }
+
+  async function scanMods(config) {
+    const directories = modDirectories(config);
+    const files = [
+      ...(await walkFiles(directories.pak, 1)),
+      ...(await walkFiles(directories.logic, 2)),
+      ...(await walkFiles(directories.ue4ss, 3)),
+    ].filter((file) => /\.(pak|utoc|ucas|dll)(\.disabled)?$/i.test(file));
+    const groups = new Map();
+    for (const file of files) {
+      const key = `${modTypeForPath(file, directories)}:${modGroupKey(file)}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(file);
+    }
+    const registry = await load("mods.json", []);
+    const knownByKey = new Map((Array.isArray(registry) ? registry : []).map((row) => [row.key, row]));
+    const mods = [];
+    for (const [key, paths] of groups) {
+      const previous = knownByKey.get(key) || {};
+      const stats = await Promise.all(paths.map((file) => fsp.stat(file)));
+      mods.push({
+        id: previous.id || crypto.randomUUID(),
+        key,
+        name: previous.name || path.basename(paths[0]).replace(/\.disabled$/i, "").replace(/\.(pak|utoc|ucas|dll)$/i, ""),
+        type: key.split(":")[0],
+        source: previous.source || "local",
+        version: previous.version || "",
+        enabled: paths.some((file) => !file.endsWith(".disabled")),
+        paths,
+        size: stats.reduce((total, stat) => total + stat.size, 0),
+        modifiedAt: new Date(Math.max(...stats.map((stat) => stat.mtimeMs))).toISOString(),
+        createdAt: previous.createdAt || nowIso(),
+      });
+    }
+    await save("mods.json", mods);
+    return { mods, directories };
+  }
+
+  function assertModPath(config, target) {
+    const roots = Object.values(modDirectories(config)).map((value) => path.resolve(value));
+    const resolved = path.resolve(target);
+    if (!roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))) {
+      throw new Error("Mod path is outside managed directories.");
+    }
+    return resolved;
+  }
+
+  async function setModEnabled(config, id, enabled) {
+    const { mods } = await scanMods(config);
+    const mod = mods.find((row) => row.id === id);
+    if (!mod) throw new Error("Mod not found.");
+    for (const current of mod.paths) {
+      const file = assertModPath(config, current);
+      const target = enabled ? file.replace(/\.disabled$/i, "") : `${file}.disabled`;
+      if (target !== file) await fsp.rename(file, target);
+    }
+    return (await scanMods(config)).mods.find((row) => row.key === mod.key);
+  }
+
+  async function deleteMod(config, id) {
+    const { mods } = await scanMods(config);
+    const mod = mods.find((row) => row.id === id);
+    if (!mod) throw new Error("Mod not found.");
+    for (const current of mod.paths) await fsp.rm(assertModPath(config, current), { force: true });
+    await scanMods(config);
+    return { ok: true };
+  }
+
+  async function importModUpload(config, uploaded, requestedType) {
+    const directories = modDirectories(config);
+    const type = ["pak", "logic", "ue4ss"].includes(requestedType) ? requestedType : "pak";
+    const target = directories[type];
+    await fsp.mkdir(target, { recursive: true });
+    const extension = path.extname(uploaded.originalName).toLowerCase();
+    try {
+      if (extension === ".zip") {
+        const staging = await fsp.mkdtemp(path.join(deps.dataDir, "mod-import-"));
+        try {
+          await extractZip(uploaded.tempFile, staging);
+          const files = (await walkFiles(staging, 8)).filter((file) => /\.(pak|utoc|ucas|dll)$/i.test(file));
+          if (!files.length) throw new Error("No supported mod files were found in the archive.");
+          for (const file of files) {
+            await fsp.copyFile(file, path.join(target, path.basename(file)));
+          }
+        } finally {
+          await fsp.rm(staging, { recursive: true, force: true }).catch(() => {});
+        }
+      } else if (/\.(pak|utoc|ucas|dll)$/i.test(extension)) {
+        await fsp.copyFile(uploaded.tempFile, path.join(target, uploaded.originalName));
+      } else {
+        throw new Error("Supported mod uploads are ZIP, PAK, UTOC, UCAS, or DLL files.");
+      }
+      return scanMods(config);
+    } finally {
+      await fsp.rm(uploaded.tempFile, { force: true }).catch(() => {});
+    }
+  }
+
+  function palDefenderPaths(config) {
+    const binaries = path.join(path.resolve(config.server.installDir), "Pal", "Binaries", "Win64");
+    return {
+      binaries,
+      loader: path.join(binaries, "d3d9.dll"),
+      plugin: path.join(binaries, "PalDefender.dll"),
+      directory: path.join(binaries, "PalDefender"),
+      config: path.join(binaries, "PalDefender", "Config.json"),
+      ue4ss: path.join(binaries, "UE4SS.dll"),
+    };
+  }
+
+  async function githubJson(target) {
+    const url = new URL(target);
+    if (url.protocol !== "https:" || url.hostname !== "api.github.com") {
+      throw new Error("Only the GitHub API is allowed for PalDefender releases.");
+    }
+    return new Promise((resolve, reject) => {
+      const request = https.get(
+        url,
+        {
+          headers: {
+            Accept: "application/vnd.github+json",
+            "User-Agent": "palworld-panel",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+          timeout: 30000,
+        },
+        (response) => {
+          let raw = "";
+          response.on("data", (chunk) => {
+            raw += chunk;
+            if (raw.length > 4 * 1024 * 1024) request.destroy(new Error("GitHub response is too large."));
+          });
+          response.on("end", () => {
+            if (response.statusCode !== 200) return reject(new Error(`GitHub release request failed (${response.statusCode}).`));
+            try {
+              resolve(JSON.parse(raw));
+            } catch {
+              reject(new Error("GitHub returned invalid release data."));
+            }
+          });
+        },
+      );
+      request.on("timeout", () => request.destroy(new Error("GitHub request timed out.")));
+      request.on("error", reject);
+    });
+  }
+
+  async function latestPalDefenderRelease() {
+    const release = await githubJson("https://api.github.com/repos/Ultimeit/PalDefender/releases/latest");
+    const assets = (release.assets || []).map((asset) => ({
+      name: asset.name,
+      size: asset.size,
+      url: asset.browser_download_url,
+      digest: asset.digest || "",
+    }));
+    return { tag: release.tag_name || "", publishedAt: release.published_at || "", assets };
+  }
+
+  async function downloadVerifiedAsset(asset, destination) {
+    if (!asset?.url || !asset.digest?.startsWith("sha256:")) {
+      throw new Error(`GitHub did not publish a SHA-256 digest for ${asset?.name || "asset"}.`);
+    }
+    const expected = asset.digest.slice("sha256:".length).toLowerCase();
+    const url = new URL(asset.url);
+    if (url.protocol !== "https:" || !["github.com", "objects.githubusercontent.com"].includes(url.hostname)) {
+      throw new Error("PalDefender assets must be downloaded from GitHub HTTPS endpoints.");
+    }
+    await new Promise((resolve, reject) => {
+      const request = https.get(url, { headers: { "User-Agent": "palworld-panel" }, timeout: 120000 }, (response) => {
+        if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+          response.resume();
+          const redirect = new URL(response.headers.location, url);
+          if (redirect.protocol !== "https:" || !redirect.hostname.endsWith("githubusercontent.com")) {
+            return reject(new Error("PalDefender download redirected outside GitHub."));
+          }
+          https.get(redirect, { headers: { "User-Agent": "palworld-panel" }, timeout: 120000 }, (assetResponse) => {
+            if (assetResponse.statusCode !== 200) return reject(new Error(`PalDefender download failed (${assetResponse.statusCode}).`));
+            const output = fs.createWriteStream(destination, { flags: "wx", mode: 0o600 });
+            assetResponse.pipe(output);
+            output.on("finish", () => output.close(resolve));
+            output.on("error", reject);
+          }).on("error", reject);
+          return;
+        }
+        if (response.statusCode !== 200) return reject(new Error(`PalDefender download failed (${response.statusCode}).`));
+        const output = fs.createWriteStream(destination, { flags: "wx", mode: 0o600 });
+        response.pipe(output);
+        output.on("finish", () => output.close(resolve));
+        output.on("error", reject);
+      });
+      request.on("timeout", () => request.destroy(new Error("PalDefender download timed out.")));
+      request.on("error", reject);
+    });
+    const actual = await sha256File(destination);
+    if (actual !== expected) {
+      await fsp.rm(destination, { force: true });
+      throw new Error(`SHA-256 verification failed for ${asset.name}.`);
+    }
+  }
+
+  async function palDefenderStatus(config) {
+    const paths = palDefenderPaths(config);
+    const release = await load("paldefender-release.json", {});
+    const bridge = await load("paldefender-bridge.json", {});
+    const compatible = fs.existsSync(paths.binaries);
+    return {
+      compatible,
+      reason: compatible ? "" : "PalDefender requires a Win64/Wine Palworld runtime.",
+      installed: fs.existsSync(paths.loader) && fs.existsSync(paths.plugin),
+      ue4ssInstalled: fs.existsSync(paths.ue4ss),
+      version: release.version || "",
+      installedAt: release.installedAt || "",
+      configExists: fs.existsSync(paths.config),
+      bridge: {
+        endpoint: bridge.endpoint || "http://127.0.0.1:17993",
+        tokenSet: Boolean(bridge.token),
+      },
+      paths: {
+        binaries: paths.binaries,
+        config: paths.config,
+      },
+    };
+  }
+
+  async function installPalDefender(config) {
+    const paths = palDefenderPaths(config);
+    const status = await palDefenderStatus(config);
+    if (!status.compatible) throw new Error(status.reason);
+    if (!status.ue4ssInstalled) throw new Error("UE4SS must be installed before PalDefender.");
+    const release = await latestPalDefenderRelease();
+    const loaderAsset = release.assets.find((asset) => asset.name.toLowerCase() === "d3d9.dll");
+    const pluginAsset = release.assets.find((asset) => asset.name.toLowerCase() === "paldefender.dll");
+    if (!loaderAsset || !pluginAsset) throw new Error("The latest stable release does not contain direct PalDefender DLL assets.");
+    const work = await fsp.mkdtemp(path.join(deps.dataDir, "paldefender-install-"));
+    const backup = path.join(deps.dataDir, "paldefender-backups", `${Date.now()}-${release.tag || "unknown"}`);
+    const wasRunning = (await deps.serviceStatus(config)).running;
+    try {
+      await downloadVerifiedAsset(loaderAsset, path.join(work, "d3d9.dll"));
+      await downloadVerifiedAsset(pluginAsset, path.join(work, "PalDefender.dll"));
+      if (wasRunning) {
+        const stop = await deps.runAction("stop", config);
+        if (!stop.ok) throw new Error(stop.stderr || stop.stdout || "Unable to stop the server.");
+      }
+      await fsp.mkdir(backup, { recursive: true });
+      for (const target of [paths.loader, paths.plugin]) {
+        if (fs.existsSync(target)) await fsp.copyFile(target, path.join(backup, path.basename(target)));
+      }
+      await fsp.mkdir(paths.binaries, { recursive: true });
+      await fsp.copyFile(path.join(work, "d3d9.dll"), paths.loader);
+      await fsp.copyFile(path.join(work, "PalDefender.dll"), paths.plugin);
+      await save("paldefender-release.json", {
+        version: release.tag,
+        installedAt: nowIso(),
+        rollback: backup,
+      });
+      if (wasRunning) {
+        const start = await deps.runAction("start", config);
+        if (!start.ok) throw new Error(start.stderr || start.stdout || "PalDefender installed, but the server did not restart.");
+      }
+      return { ok: true, version: release.tag };
+    } finally {
+      await fsp.rm(work, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  async function rollbackPalDefender(config) {
+    const paths = palDefenderPaths(config);
+    const release = await load("paldefender-release.json", {});
+    if (!release.rollback || !fs.existsSync(release.rollback)) throw new Error("No PalDefender rollback is available.");
+    const wasRunning = (await deps.serviceStatus(config)).running;
+    if (wasRunning) {
+      const stop = await deps.runAction("stop", config);
+      if (!stop.ok) throw new Error(stop.stderr || stop.stdout || "Unable to stop the server.");
+    }
+    for (const name of ["d3d9.dll", "PalDefender.dll"]) {
+      const source = path.join(release.rollback, name);
+      if (fs.existsSync(source)) await fsp.copyFile(source, path.join(paths.binaries, name));
+    }
+    if (wasRunning) await deps.runAction("start", config);
+    return { ok: true };
+  }
+
+  async function readPalDefenderConfig(config) {
+    const file = palDefenderPaths(config).config;
+    if (!fs.existsSync(file)) return { config: {}, exists: false };
+    return { config: JSON.parse(await fsp.readFile(file, "utf8")), exists: true };
+  }
+
+  async function writePalDefenderConfig(config, value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("PalDefender configuration must be a JSON object.");
+    }
+    const file = palDefenderPaths(config).config;
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    if (fs.existsSync(file)) await fsp.copyFile(file, `${file}.bak`);
+    const temp = `${file}.${crypto.randomUUID()}.tmp`;
+    await fsp.writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    await fsp.rename(temp, file);
+    return { config: value, exists: true };
+  }
+
+  function normalizePalDefenderBridge(input = {}, current = {}) {
+    const endpoint = String(input.endpoint ?? current.endpoint ?? "http://127.0.0.1:17993").replace(/\/$/, "");
+    const parsed = new URL(endpoint);
+    if (parsed.protocol !== "http:" || !["127.0.0.1", "localhost", "::1"].includes(parsed.hostname)) {
+      throw new Error("PalDefender REST must use an HTTP loopback endpoint.");
+    }
+    return {
+      endpoint,
+      token: input.token ? String(input.token) : String(current.token || ""),
+    };
+  }
+
+  async function palDefenderRequest(method, requestPath, body, bridge) {
+    if (!bridge.token) throw new Error("PalDefender REST token is not configured.");
+    if (!/^\/v1\/pdapi\/[A-Za-z0-9_./-]*$/.test(requestPath) || requestPath.includes("..")) {
+      throw new Error("Unsupported PalDefender REST path.");
+    }
+    if (!["GET", "POST", "PUT", "DELETE"].includes(method)) throw new Error("Unsupported PalDefender REST method.");
+    const target = new URL(requestPath, `${bridge.endpoint}/`);
+    return new Promise((resolve, reject) => {
+      const payload = body === undefined ? "" : JSON.stringify(body);
+      const request = http.request(
+        target,
+        {
+          method,
+          headers: {
+            Authorization: `Bearer ${bridge.token}`,
+            Origin: "http://palworld-panel.local",
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+          timeout: 10000,
+        },
+        (response) => {
+          let raw = "";
+          response.on("data", (chunk) => {
+            raw += chunk;
+            if (raw.length > 8 * 1024 * 1024) request.destroy(new Error("PalDefender response is too large."));
+          });
+          response.on("end", () => {
+            let data = raw;
+            try {
+              data = raw ? JSON.parse(raw) : {};
+            } catch {}
+            if (response.statusCode >= 400) return reject(new Error(data?.error || `PalDefender REST failed (${response.statusCode}).`));
+            resolve({ status: response.statusCode, data });
+          });
+        },
+      );
+      request.on("timeout", () => request.destroy(new Error("PalDefender REST timed out.")));
+      request.on("error", reject);
+      request.end(payload);
+    });
+  }
+
+  async function getPalDefenderBridge() {
+    const bridge = await load("paldefender-bridge.json", {});
+    return { endpoint: bridge.endpoint || "http://127.0.0.1:17993", tokenSet: Boolean(bridge.token) };
+  }
+
+  async function savePalDefenderBridge(input) {
+    const current = await load("paldefender-bridge.json", {});
+    const next = normalizePalDefenderBridge(input, current);
+    await save("paldefender-bridge.json", next);
+    return { endpoint: next.endpoint, tokenSet: Boolean(next.token) };
+  }
+
+  async function breedingCatalog() {
+    if (!breedingCatalogCache) {
+      const file = path.join(__dirname, "..", "resources", "palcalc", "catalog.json");
+      const raw = JSON.parse(await fsp.readFile(file, "utf8"));
+      breedingCatalogCache = {
+        ...raw,
+        matrixBuffer: Buffer.from(raw.matrix, "base64"),
+        index: new Map(raw.pals.map((pal, index) => [pal.internal, index])),
+      };
+    }
+    return breedingCatalogCache;
+  }
+
+  function breedingChildIndex(catalog, first, second, firstGender = "WILDCARD", secondGender = "WILDCARD") {
+    const a = catalog.index.get(first);
+    const b = catalog.index.get(second);
+    if (a === undefined || b === undefined) throw new Error("Unknown Pal breeding parent.");
+    const override = catalog.genderOverrides.find(
+      (row) =>
+        (row[0] === a && row[1] === firstGender && row[2] === b && row[3] === secondGender) ||
+        (row[0] === b && row[1] === secondGender && row[2] === a && row[3] === firstGender),
+    );
+    if (override) return override[4];
+    const value = catalog.matrixBuffer.readUInt16LE((a * catalog.pals.length + b) * 2);
+    if (!value) throw new Error("No breeding result is available for this pair.");
+    return value - 1;
+  }
+
+  async function breedingDirect(input = {}) {
+    const catalog = await breedingCatalog();
+    const child = catalog.pals[breedingChildIndex(
+      catalog,
+      input.parent1,
+      input.parent2,
+      input.parent1Gender || "WILDCARD",
+      input.parent2Gender || "WILDCARD",
+    )];
+    return { parent1: input.parent1, parent2: input.parent2, child };
+  }
+
+  async function breedingParents(target) {
+    const catalog = await breedingCatalog();
+    const targetIndex = catalog.index.get(target);
+    if (targetIndex === undefined) throw new Error("Unknown target Pal.");
+    const rows = [];
+    for (let first = 0; first < catalog.pals.length; first += 1) {
+      for (let second = first; second < catalog.pals.length; second += 1) {
+        const value = catalog.matrixBuffer.readUInt16LE((first * catalog.pals.length + second) * 2);
+        if (value - 1 === targetIndex) rows.push({ parent1: catalog.pals[first], parent2: catalog.pals[second] });
+      }
+    }
+    for (const override of catalog.genderOverrides) {
+      if (override[4] !== targetIndex) continue;
+      rows.push({
+        parent1: catalog.pals[override[0]],
+        parent1Gender: override[1],
+        parent2: catalog.pals[override[2]],
+        parent2Gender: override[3],
+      });
+    }
+    return rows;
+  }
+
+  function normalizeStringList(value) {
+    const rows = Array.isArray(value) ? value : String(value || "").split(/[\n,\uFF0C]/);
+    return [...new Set(rows.map((row) => String(row || "").trim()).filter(Boolean))].slice(0, 32);
+  }
+
+  function normalizeBreedingInput(value, legacyMaxSteps) {
+    const input = typeof value === "string" ? { target: value, maxSteps: legacyMaxSteps } : (value || {});
+    return {
+      target: String(input.target || "").trim(),
+      targetGender: ["WILDCARD", "MALE", "FEMALE"].includes(input.targetGender)
+        ? input.targetGender
+        : "WILDCARD",
+      requiredPassives: normalizeStringList(input.requiredPassives),
+      optionalPassives: normalizeStringList(input.optionalPassives),
+      minIV: {
+        health: Math.max(0, Math.min(100, Number(input.minIV?.health || 0))),
+        attack: Math.max(0, Math.min(100, Number(input.minIV?.attack || 0))),
+        defense: Math.max(0, Math.min(100, Number(input.minIV?.defense || 0))),
+      },
+      maxSteps: Math.max(1, Math.min(8, Number(input.maxSteps || 4))),
+      maxIterations: Math.max(100, Math.min(500000, Number(input.maxIterations || 10000))),
+      threads: Math.max(1, Math.min(32, Number(input.threads || Math.min(4, os.cpus().length || 1)))),
+      allowWild: Boolean(input.allowWild),
+      ignoreIrrelevantPassives: input.ignoreIrrelevantPassives !== false,
+      allowSurgery: Boolean(input.allowSurgery),
+      customContainerIds: normalizeStringList(input.customContainerIds),
+    };
+  }
+
+  function breedingSourceHash(pals) {
+    return crypto
+      .createHash("sha256")
+      .update(
+        JSON.stringify(
+          (pals || []).map((pal) => [pal.type, pal.gender, pal.melee, pal.ranged, pal.defense, pal.skills]).sort(),
+        ),
+      )
+      .digest("hex");
+  }
+
+  async function waitForBreedingControl(control) {
+    if (!control) return;
+    if (control.cancelled) throw Object.assign(new Error("Breeding job cancelled."), { code: "BREEDING_CANCELLED" });
+    while (control.paused) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (control.cancelled) throw Object.assign(new Error("Breeding job cancelled."), { code: "BREEDING_CANCELLED" });
+    }
+  }
+
+  async function breedingMaterials(config, input) {
+    const saveData = await deps.managedCall("saveData", {}, () => deps.querySaveData(config));
+    const customContainers = await load("breeding-containers.json", []);
+    const selectedContainers = new Set(input.customContainerIds || []);
+    const customPals = (Array.isArray(customContainers) ? customContainers : [])
+      .filter((container) => selectedContainers.has(container.id))
+      .flatMap((container) => (container.pals || []).map((pal) => ({ ...pal, customContainerId: container.id })));
+    const pals = [...(saveData.pals || []), ...customPals];
+    return { pals, sourceHash: breedingSourceHash(pals), saveData };
+  }
+
+  async function breedingSolve(config, value, legacyMaxSteps, control) {
+    const input = normalizeBreedingInput(value, legacyMaxSteps);
+    const catalog = await breedingCatalog();
+    const targetIndex = catalog.index.get(input.target);
+    if (targetIndex === undefined) throw new Error("Unknown target Pal.");
+    const materials = await breedingMaterials(config, input);
+    const owned = new Set(materials.pals.map((pal) => catalog.index.get(pal.type)).filter((index) => index !== undefined));
+    if (!owned.size) throw new Error("No owned Pals were found in the active save source.");
+    const matchingMaterials = materials.pals.filter((pal) => {
+      const skills = new Set(pal.skills || []);
+      return (
+        input.requiredPassives.every((skill) => skills.has(skill)) &&
+        Number(pal.melee || 0) >= input.minIV.health &&
+        Number(pal.ranged || 0) >= input.minIV.attack &&
+        Number(pal.defense || 0) >= input.minIV.defense
+      );
+    });
+    const routeMeta = {
+      criteria: input,
+      sourceHash: materials.sourceHash,
+      materialCount: materials.pals.length,
+      matchingMaterialCount: matchingMaterials.length,
+      generatedAt: nowIso(),
+      requestedThreads: input.threads,
+    };
+    if (owned.has(targetIndex)) return { target: catalog.pals[targetIndex], owned: true, steps: [], ...routeMeta };
+    const known = new Set(owned);
+    const recipes = new Map();
+    const limit = input.maxSteps;
+    let combinations = 0;
+    for (let step = 1; step <= limit; step += 1) {
+      await waitForBreedingControl(control);
+      const parents = [...known];
+      const discovered = [];
+      for (let i = 0; i < parents.length; i += 1) {
+        for (let j = i; j < parents.length; j += 1) {
+          combinations += 1;
+          if (combinations >= input.maxIterations) {
+            return {
+              target: catalog.pals[targetIndex],
+              owned: false,
+              steps: null,
+              tree: null,
+              combinations,
+              iterationLimitReached: true,
+              ...routeMeta,
+            };
+          }
+          if (combinations % 4000 === 0) {
+            await waitForBreedingControl(control);
+            await new Promise((resolve) => setImmediate(resolve));
+            if (control?.onProgress) {
+              await control.onProgress(Math.min(92, 10 + Math.round((step / limit) * 75)), `Searching generation ${step}`);
+            }
+          }
+          const value = catalog.matrixBuffer.readUInt16LE((parents[i] * catalog.pals.length + parents[j]) * 2);
+          if (!value) continue;
+          const child = value - 1;
+          if (known.has(child)) continue;
+          known.add(child);
+          discovered.push(child);
+          recipes.set(child, { parent1: parents[i], parent2: parents[j], step });
+          if (child === targetIndex) {
+            const build = (index) => {
+              const recipe = recipes.get(index);
+              if (!recipe) return { pal: catalog.pals[index], owned: true };
+              return {
+                pal: catalog.pals[index],
+                step: recipe.step,
+                parent1: build(recipe.parent1),
+                parent2: build(recipe.parent2),
+              };
+            };
+            const inheritedTraits = input.requiredPassives.length + input.optionalPassives.length;
+            const probability = Math.max(0.01, Math.min(1, Math.pow(0.62, inheritedTraits || 1)));
+            return {
+              target: catalog.pals[targetIndex],
+              owned: false,
+              steps: step,
+              tree: build(targetIndex),
+              probability,
+              estimatedEggs: Math.ceil(1 / probability),
+              estimatedMinutes: Math.ceil(1 / probability) * 10 * step,
+              combinations,
+              ...routeMeta,
+            };
+          }
+        }
+      }
+      if (!discovered.length) break;
+    }
+    return { target: catalog.pals[targetIndex], owned: false, steps: null, tree: null, combinations, ...routeMeta };
+  }
+
+  async function updateBreedingJob(id, patch) {
+    const rows = await load("breeding-jobs.json", []);
+    const next = (Array.isArray(rows) ? rows : []).map((row) =>
+      row.id === id ? { ...row, ...patch, updatedAt: nowIso() } : row,
+    );
+    await save("breeding-jobs.json", next.slice(0, MAX_JOB_ROWS));
+    return next.find((row) => row.id === id);
+  }
+
+  async function queueBreedingJob(config, value) {
+    const input = normalizeBreedingInput(value);
+    if (!input.target) throw new Error("A target Pal is required.");
+    const job = {
+      id: crypto.randomUUID(),
+      status: "queued",
+      progress: 0,
+      message: "Queued",
+      input,
+      result: null,
+      error: "",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    await prependLimited("breeding-jobs.json", job, MAX_JOB_ROWS);
+    const control = { paused: false, cancelled: false, onProgress: (progress, message) => updateBreedingJob(job.id, { progress, message }) };
+    state.breedingJobs.set(job.id, control);
+    setImmediate(async () => {
+      await updateBreedingJob(job.id, { status: "running", progress: 5, message: "Loading save materials" });
+      try {
+        const result = await breedingSolve(config, input, undefined, control);
+        await waitForBreedingControl(control);
+        const completed = await updateBreedingJob(job.id, { status: "completed", progress: 100, message: "Completed", result });
+        await prependLimited("breeding-history.json", { ...completed, stale: false }, MAX_JOB_ROWS);
+      } catch (error) {
+        const cancelled = control.cancelled || error?.code === "BREEDING_CANCELLED";
+        await updateBreedingJob(job.id, {
+          status: cancelled ? "cancelled" : "failed",
+          progress: cancelled ? 100 : 100,
+          message: cancelled ? "Cancelled" : "Failed",
+          error: cancelled ? "" : (error?.message || String(error)),
+        });
+      } finally {
+        state.breedingJobs.delete(job.id);
+      }
+    });
+    return job;
+  }
+
+  async function controlBreedingJob(id, action) {
+    const jobs = await load("breeding-jobs.json", []);
+    const job = (Array.isArray(jobs) ? jobs : []).find((row) => row.id === id);
+    if (!job) throw new Error("Breeding job was not found.");
+    if (["completed", "failed", "cancelled"].includes(job.status)) return job;
+    const control = state.breedingJobs.get(id);
+    if (!control) throw new Error("Breeding job is no longer active on this panel process.");
+    if (action === "pause") {
+      control.paused = true;
+      return updateBreedingJob(id, { status: "paused", message: "Paused" });
+    }
+    if (action === "resume") {
+      control.paused = false;
+      return updateBreedingJob(id, { status: "running", message: "Running" });
+    }
+    if (action === "cancel") {
+      control.cancelled = true;
+      control.paused = false;
+      return updateBreedingJob(id, { status: "cancelling", message: "Cancelling" });
+    }
+    throw new Error("Unsupported breeding job action.");
+  }
+
+  function normalizeCustomBreedingPal(pal = {}) {
+    return {
+      id: pal.id || crypto.randomUUID(),
+      type: String(pal.type || "").trim(),
+      nickname: String(pal.nickname || "").slice(0, 80),
+      gender: String(pal.gender || "WILDCARD"),
+      melee: Math.max(0, Math.min(100, Number(pal.melee || pal.ivHealth || 0))),
+      ranged: Math.max(0, Math.min(100, Number(pal.ranged || pal.ivAttack || 0))),
+      defense: Math.max(0, Math.min(100, Number(pal.defense || pal.ivDefense || 0))),
+      skills: normalizeStringList(pal.skills || pal.passives),
+    };
+  }
+
+  function normalizeWorkshopConfig(input = {}, current = {}) {
+    const translationUrl = String(input.translationUrl ?? current.translationUrl ?? "").replace(/\/$/, "");
+    if (translationUrl) {
+      const parsed = new URL(translationUrl);
+      if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && ["127.0.0.1", "localhost", "::1"].includes(parsed.hostname))) {
+        throw new Error("Translation API must use HTTPS or an HTTP loopback address.");
+      }
+      if (parsed.username || parsed.password) throw new Error("Translation API URL cannot contain credentials.");
+    }
+    return {
+      appId: String(input.appId ?? current.appId ?? "1623730"),
+      steamApiKey: input.steamApiKey ? String(input.steamApiKey) : String(current.steamApiKey || ""),
+      translationUrl,
+      translationModel: String(input.translationModel ?? current.translationModel ?? "gpt-4.1-mini"),
+      translationKey: input.translationKey ? String(input.translationKey) : String(current.translationKey || ""),
+    };
+  }
+
+  function publicWorkshopConfig(config = {}) {
+    return {
+      appId: config.appId || "1623730",
+      steamApiKeySet: Boolean(config.steamApiKey),
+      translationUrl: config.translationUrl || "",
+      translationModel: config.translationModel || "gpt-4.1-mini",
+      translationKeySet: Boolean(config.translationKey),
+    };
+  }
+
+  function steamRequest(method, target, body = "", headers = {}) {
+    const url = new URL(target);
+    if (url.protocol !== "https:" || !url.hostname.endsWith("steampowered.com")) {
+      throw new Error("Steam requests must use an official HTTPS endpoint.");
+    }
+    return new Promise((resolve, reject) => {
+      const request = https.request(
+        url,
+        {
+          method,
+          headers: { "User-Agent": "palworld-panel", ...headers },
+          timeout: 30000,
+        },
+        (response) => {
+          let raw = "";
+          response.on("data", (chunk) => {
+            raw += chunk;
+            if (raw.length > 8 * 1024 * 1024) request.destroy(new Error("Steam response is too large."));
+          });
+          response.on("end", () => {
+            if (response.statusCode >= 400) return reject(new Error(`Steam request failed (${response.statusCode}).`));
+            try {
+              resolve(JSON.parse(raw));
+            } catch {
+              reject(new Error("Steam returned invalid JSON."));
+            }
+          });
+        },
+      );
+      request.on("timeout", () => request.destroy(new Error("Steam request timed out.")));
+      request.on("error", reject);
+      request.end(body || undefined);
+    });
+  }
+
+  async function workshopSearch(query, page = 1) {
+    const config = await load("workshop.json", {});
+    if (!config.steamApiKey) throw new Error("A Steam Web API key is required for Workshop search.");
+    const url = new URL("https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/");
+    url.search = new URLSearchParams({
+      key: config.steamApiKey,
+      appid: config.appId || "1623730",
+      query_type: "3",
+      page: String(Math.max(1, Number(page || 1))),
+      numperpage: "30",
+      search_text: String(query || "").slice(0, 200),
+      return_short_description: "true",
+      return_previews: "true",
+    });
+    const response = await steamRequest("GET", url);
+    return response.response || {};
+  }
+
+  async function workshopDetails(id) {
+    if (!/^\d{5,20}$/.test(String(id || ""))) throw new Error("Invalid Workshop item ID.");
+    const body = new URLSearchParams({ itemcount: "1", "publishedfileids[0]": String(id) }).toString();
+    const response = await steamRequest(
+      "POST",
+      "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/",
+      body,
+      { "Content-Type": "application/x-www-form-urlencoded", "Content-Length": Buffer.byteLength(body) },
+    );
+    const detail = response.response?.publishedfiledetails?.[0];
+    if (!detail || Number(detail.result) !== 1) throw new Error("Workshop item was not found.");
+    return detail;
+  }
+
+  function workshopTarget(config, id) {
+    return path.join(path.resolve(config.server.installDir), "Mods", "Workshop", String(id));
+  }
+
+  async function listWorkshopMods(config) {
+    const rows = await load("workshop-mods.json", []);
+    return (Array.isArray(rows) ? rows : []).map((row) => ({
+      ...row,
+      enabled: fs.existsSync(workshopTarget(config, row.id)),
+      installed: fs.existsSync(workshopTarget(config, row.id)) || fs.existsSync(`${workshopTarget(config, row.id)}.disabled`),
+    }));
+  }
+
+  async function installWorkshopMod(config, id) {
+    const detail = await workshopDetails(id);
+    const workshopConfig = await load("workshop.json", {});
+    const appId = workshopConfig.appId || "1623730";
+    const steamcmd = config.server.steamcmdPath || "steamcmd";
+    const result = await deps.exec(
+      steamcmd,
+      [
+        "+force_install_dir",
+        path.resolve(config.server.installDir),
+        "+login",
+        "anonymous",
+        "+workshop_download_item",
+        appId,
+        String(id),
+        "validate",
+        "+quit",
+      ],
+      { timeout: 30 * 60 * 1000 },
+    );
+    if (!result.ok) throw new Error(result.stderr || result.stdout || "SteamCMD Workshop download failed.");
+    const candidates = [
+      path.join(path.dirname(steamcmd), "steamapps", "workshop", "content", appId, String(id)),
+      path.join(path.resolve(config.server.installDir), "steamapps", "workshop", "content", appId, String(id)),
+      path.join(os.homedir(), ".steam", "steam", "steamapps", "workshop", "content", appId, String(id)),
+    ];
+    const source = candidates.find((candidate) => fs.existsSync(candidate));
+    if (!source) throw new Error("SteamCMD completed, but the downloaded Workshop directory could not be located.");
+    const target = workshopTarget(config, id);
+    const staging = `${target}.staging-${Date.now()}`;
+    await fsp.mkdir(path.dirname(target), { recursive: true });
+    await fsp.cp(source, staging, { recursive: true, force: true });
+    await fsp.rm(target, { recursive: true, force: true });
+    await fsp.rename(staging, target);
+    const rows = await load("workshop-mods.json", []);
+    const record = {
+      id: String(id),
+      title: detail.title || String(id),
+      previewUrl: detail.preview_url || "",
+      updatedAt: nowIso(),
+      installedAt: nowIso(),
+      pendingRestart: true,
+    };
+    await save("workshop-mods.json", [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.id !== String(id))]);
+    return record;
+  }
+
+  async function setWorkshopModEnabled(config, id, enabled) {
+    const active = workshopTarget(config, id);
+    const disabled = `${active}.disabled`;
+    if (enabled && fs.existsSync(disabled)) await fsp.rename(disabled, active);
+    if (!enabled && fs.existsSync(active)) await fsp.rename(active, disabled);
+    return listWorkshopMods(config);
+  }
+
+  async function deleteWorkshopMod(config, id) {
+    await fsp.rm(workshopTarget(config, id), { recursive: true, force: true });
+    await fsp.rm(`${workshopTarget(config, id)}.disabled`, { recursive: true, force: true });
+    const rows = (await load("workshop-mods.json", [])).filter((row) => row.id !== String(id));
+    await save("workshop-mods.json", rows);
+    return rows;
+  }
+
+  async function translateWorkshop(id, language = "zh-CN") {
+    const detail = await workshopDetails(id);
+    const config = await load("workshop.json", {});
+    if (!config.translationUrl || !config.translationKey) throw new Error("Translation API is not configured.");
+    const cache = await load("workshop-translations.json", {});
+    const sourceHash = crypto.createHash("sha256").update(`${detail.title}\n${detail.description}`).digest("hex");
+    const key = `${id}:${language}:${config.translationModel}:${sourceHash}`;
+    if (cache[key]) return cache[key];
+    const endpoint = new URL(`${config.translationUrl}/chat/completions`);
+    const payload = JSON.stringify({
+      model: config.translationModel,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: `Translate Steam Workshop mod metadata to ${language}. Return JSON with title and description only.` },
+        { role: "user", content: JSON.stringify({ title: detail.title, description: detail.description }) },
+      ],
+      response_format: { type: "json_object" },
+    });
+    const transport = endpoint.protocol === "https:" ? https : http;
+    const response = await new Promise((resolve, reject) => {
+      const request = transport.request(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.translationKey}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+        timeout: 60000,
+      }, (res) => {
+        let raw = "";
+        res.on("data", (chunk) => {
+          raw += chunk;
+          if (raw.length > 2 * 1024 * 1024) request.destroy(new Error("Translation response is too large."));
+        });
+        res.on("end", () => {
+          if (res.statusCode >= 400) return reject(new Error(`Translation API failed (${res.statusCode}).`));
+          try { resolve(JSON.parse(raw)); } catch { reject(new Error("Translation API returned invalid JSON.")); }
+        });
+      });
+      request.on("timeout", () => request.destroy(new Error("Translation API timed out.")));
+      request.on("error", reject);
+      request.end(payload);
+    });
+    const content = response.choices?.[0]?.message?.content;
+    const translated = typeof content === "string" ? JSON.parse(content) : content;
+    if (!translated?.title || !translated?.description) throw new Error("Translation response was incomplete.");
+    cache[key] = translated;
+    await save("workshop-translations.json", cache);
+    return translated;
+  }
+
+  function publicAstrBotConfig(config = {}) {
+    return {
+      enabled: Boolean(config.enabled),
+      dailyReward: Math.max(0, Number(config.dailyReward || 10)),
+      solveCost: Math.max(0, Number(config.solveCost || 1)),
+      challengeMinutes: Math.max(1, Number(config.challengeMinutes || 5)),
+      loginMinutes: Math.max(1, Number(config.loginMinutes || 5)),
+      adminQqs: normalizeStringList(config.adminQqs).filter((value) => /^\d{5,20}$/.test(value)),
+    };
+  }
+
+  async function astrBotConfig() {
+    return { enabled: false, dailyReward: 10, solveCost: 1, challengeMinutes: 5, loginMinutes: 5, adminQqs: [], ...(await load("astrbot.json", {})) };
+  }
+
+  function validQq(value) {
+    const qq = String(value || "").trim();
+    if (!/^\d{5,20}$/.test(qq)) throw new Error("Invalid QQ identifier.");
+    return qq;
+  }
+
+  async function recordAstrBotLedger(qq, change, reason, actor = "system") {
+    return prependLimited(
+      "astrbot-ledger.json",
+      {
+        id: crypto.randomUUID(),
+        qq,
+        change: Number(change || 0),
+        reason: String(reason || "points update").slice(0, 200),
+        actor: String(actor || "system").slice(0, 100),
+        createdAt: nowIso(),
+      },
+      MAX_AUDIT_ROWS,
+    );
+  }
+
+  async function assertAstrBotAccountActive(qq) {
+    const points = await load("astrbot-points.json", {});
+    if (points[qq]?.frozen) throw new Error("This QQ account has been frozen by an administrator.");
+  }
+
+  async function astrBotPlayers(config) {
+    const live = await deps.managedCall("live", {}, () => deps.liveServerData(config));
+    return (live.players || []).map((player) => ({
+      name: player.name || player.nickname || "",
+      playerId: player.user_id || player.player_uid || (player.steam_id ? `steam_${player.steam_id}` : ""),
+    })).filter((player) => player.playerId);
+  }
+
+  async function createAstrBotChallenge(config, input) {
+    const qq = validQq(input.qq);
+    await assertAstrBotAccountActive(qq);
+    const playerId = String(input.playerId || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(playerId)) throw new Error("Invalid player identifier.");
+    const players = await astrBotPlayers(config);
+    if (!players.some((player) => player.playerId === playerId)) throw new Error("The selected player is not online.");
+    const settings = await astrBotConfig();
+    if (!settings.enabled) throw new Error("AstrBot integration is disabled.");
+    const code = String(crypto.randomInt(100000, 1000000));
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto.createHash("sha256").update(`${salt}:${code}`).digest("hex");
+    const challenges = await load("astrbot-challenges.json", []);
+    const challenge = {
+      id: crypto.randomUUID(),
+      qq,
+      playerId,
+      salt,
+      hash,
+      expiresAt: Date.now() + settings.challengeMinutes * 60 * 1000,
+      createdAt: nowIso(),
+    };
+    await save("astrbot-challenges.json", [challenge, ...(Array.isArray(challenges) ? challenges : []).filter((row) => row.expiresAt > Date.now())]);
+    const bridge = await load("paldefender-bridge.json", {});
+    const payload = {
+      UserID: playerId,
+      SendType: "PlayerLogImportant",
+      Message: `QQ binding code: ${code} (${settings.challengeMinutes} min)`,
+    };
+    await deps.managedCall(
+      "advancedPalDefenderProxy",
+      { method: "POST", path: "/v1/pdapi/SendPlayerMessage", body: payload },
+      () => palDefenderRequest("POST", "/v1/pdapi/SendPlayerMessage", payload, bridge),
+    );
+    return { id: challenge.id, expiresAt: challenge.expiresAt, delivered: true };
+  }
+
+  async function verifyAstrBotChallenge(input) {
+    const qq = validQq(input.qq);
+    await assertAstrBotAccountActive(qq);
+    const code = String(input.code || "").trim();
+    const challenges = await load("astrbot-challenges.json", []);
+    const challenge = (Array.isArray(challenges) ? challenges : []).find((row) => row.qq === qq && row.expiresAt > Date.now());
+    if (!challenge) throw new Error("Binding challenge expired or was not found.");
+    const hash = crypto.createHash("sha256").update(`${challenge.salt}:${code}`).digest("hex");
+    if (hash !== challenge.hash) throw new Error("Binding code is incorrect.");
+    const bindings = await load("astrbot-bindings.json", []);
+    const binding = { qq, playerId: challenge.playerId, boundAt: nowIso() };
+    await save("astrbot-bindings.json", [binding, ...(Array.isArray(bindings) ? bindings : []).filter((row) => row.qq !== qq && row.playerId !== challenge.playerId)]);
+    await save("astrbot-challenges.json", challenges.filter((row) => row.id !== challenge.id));
+    return binding;
+  }
+
+  async function astrBotAccount(qqValue) {
+    const qq = validQq(qqValue);
+    const bindings = await load("astrbot-bindings.json", []);
+    const points = await load("astrbot-points.json", {});
+    const ledger = await load("astrbot-ledger.json", []);
+    return {
+      qq,
+      binding: (Array.isArray(bindings) ? bindings : []).find((row) => row.qq === qq) || null,
+      points: Number(points[qq]?.points || 0),
+      lastCheckIn: points[qq]?.lastCheckIn || "",
+      frozen: Boolean(points[qq]?.frozen),
+      ledger: (Array.isArray(ledger) ? ledger : []).filter((row) => row.qq === qq).slice(0, 20),
+    };
+  }
+
+  async function listAstrBotAccounts() {
+    const bindings = await load("astrbot-bindings.json", []);
+    const points = await load("astrbot-points.json", {});
+    const qqs = new Set([...(Array.isArray(bindings) ? bindings : []).map((row) => row.qq), ...Object.keys(points || {})]);
+    return Promise.all([...qqs].sort().map((qq) => astrBotAccount(qq)));
+  }
+
+  async function manageAstrBotAccount(input, actor = "admin") {
+    const qq = validQq(input.qq);
+    const action = String(input.action || "");
+    const bindings = await load("astrbot-bindings.json", []);
+    const points = await load("astrbot-points.json", {});
+    points[qq] = { points: 0, lastCheckIn: "", frozen: false, ...(points[qq] || {}) };
+    if (action === "bind") {
+      const playerId = String(input.playerId || "").trim();
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(playerId)) throw new Error("Invalid player identifier.");
+      await save("astrbot-bindings.json", [
+        { qq, playerId, boundAt: nowIso(), managedBy: actor },
+        ...(Array.isArray(bindings) ? bindings : []).filter((row) => row.qq !== qq && row.playerId !== playerId),
+      ]);
+    } else if (action === "unbind") {
+      await save("astrbot-bindings.json", (Array.isArray(bindings) ? bindings : []).filter((row) => row.qq !== qq));
+    } else if (action === "freeze" || action === "unfreeze") {
+      points[qq].frozen = action === "freeze";
+      await save("astrbot-points.json", points);
+    } else if (action === "adjust") {
+      const change = Math.max(-1000000, Math.min(1000000, Math.trunc(Number(input.change || 0))));
+      if (!change) throw new Error("Point adjustment cannot be zero.");
+      points[qq].points = Math.max(0, Number(points[qq].points || 0) + change);
+      await save("astrbot-points.json", points);
+      await recordAstrBotLedger(qq, change, input.reason || "administrator adjustment", actor);
+    } else {
+      throw new Error("Unsupported AstrBot account action.");
+    }
+    return astrBotAccount(qq);
+  }
+
+  async function astrBotCheckIn(qqValue) {
+    const qq = validQq(qqValue);
+    await assertAstrBotAccountActive(qq);
+    const settings = await astrBotConfig();
+    const points = await load("astrbot-points.json", {});
+    const today = new Date().toISOString().slice(0, 10);
+    const current = points[qq] || { points: 0, lastCheckIn: "" };
+    if (current.lastCheckIn === today) return { ...current, alreadyCheckedIn: true };
+    current.points = Number(current.points || 0) + settings.dailyReward;
+    current.lastCheckIn = today;
+    points[qq] = current;
+    await save("astrbot-points.json", points);
+    await recordAstrBotLedger(qq, settings.dailyReward, "daily check-in");
+    return { ...current, reward: settings.dailyReward, alreadyCheckedIn: false };
+  }
+
+  async function astrBotSolve(config, input) {
+    const qq = validQq(input.qq);
+    const settings = await astrBotConfig();
+    const account = await astrBotAccount(qq);
+    if (account.frozen) throw new Error("This QQ account has been frozen by an administrator.");
+    if (!account.binding) throw new Error("QQ account is not bound to a player.");
+    if (account.points < settings.solveCost) throw new Error("Not enough points.");
+    const points = await load("astrbot-points.json", {});
+    points[qq] = { ...(points[qq] || {}), points: account.points - settings.solveCost };
+    await save("astrbot-points.json", points);
+    await recordAstrBotLedger(qq, -settings.solveCost, `breeding solve: ${input.target}`);
+    try {
+      const result = await breedingSolve(config, input);
+      return { result, points: points[qq].points, cost: settings.solveCost };
+    } catch (error) {
+      points[qq].points += settings.solveCost;
+      await save("astrbot-points.json", points);
+      await recordAstrBotLedger(qq, settings.solveCost, `breeding solve refund: ${input.target}`);
+      throw error;
+    }
+  }
+
+  async function createAstrBotLogin(input) {
+    const qq = validQq(input.qq);
+    const account = await astrBotAccount(qq);
+    if (!account.binding) throw new Error("QQ account is not bound to a player.");
+    if (account.frozen) throw new Error("This QQ account has been frozen by an administrator.");
+    const settings = await astrBotConfig();
+    const raw = crypto.randomBytes(32).toString("base64url");
+    const tickets = await load("astrbot-login-tickets.json", []);
+    const ticket = {
+      id: crypto.randomUUID(),
+      qq,
+      playerId: account.binding.playerId,
+      hash: crypto.createHash("sha256").update(raw).digest("hex"),
+      expiresAt: Date.now() + settings.loginMinutes * 60 * 1000,
+      usedAt: "",
+    };
+    await save("astrbot-login-tickets.json", [ticket, ...(Array.isArray(tickets) ? tickets : []).filter((row) => row.expiresAt > Date.now() && !row.usedAt)]);
+    return { ticket: raw, expiresAt: ticket.expiresAt };
+  }
+
+  async function redeemAstrBotLogin(req, res, config, token) {
+    const hash = crypto.createHash("sha256").update(token).digest("hex");
+    const tickets = await load("astrbot-login-tickets.json", []);
+    const ticket = (Array.isArray(tickets) ? tickets : []).find((row) => row.hash === hash && !row.usedAt && row.expiresAt > Date.now());
+    if (!ticket) {
+      deps.sendError(res, 401, "AstrBot login link is invalid or expired.");
+      return true;
+    }
+    try {
+      await assertAstrBotAccountActive(ticket.qq);
+    } catch (error) {
+      deps.sendError(res, 403, error.message);
+      return true;
+    }
+    ticket.usedAt = nowIso();
+    await save("astrbot-login-tickets.json", tickets);
+    const users = await load("access-users.json", []);
+    const id = `astrbot:${ticket.qq}`;
+    let user = (Array.isArray(users) ? users : []).find((row) => row.id === id);
+    if (!user) {
+      user = {
+        id,
+        username: `qq_${ticket.qq}`,
+        role: "viewer",
+        tokenVersion: 1,
+        createdAt: nowIso(),
+        integrationUser: true,
+      };
+      await save("access-users.json", [user, ...(Array.isArray(users) ? users : [])]);
+    }
+    const jwt = deps.issueViewerToken(config, { id, name: user.username, role: "viewer", tokenVersion: user.tokenVersion });
+    res.writeHead(302, { Location: `/?auth_token=${encodeURIComponent(jwt)}` });
+    res.end();
+    return true;
+  }
+
+  async function listSchedules() {
+    return load("schedules.json", []);
+  }
+
+  function nextScheduleRun(schedule, from = Date.now()) {
+    const interval = Math.max(1, Number(schedule.intervalMinutes || 60)) * 60 * 1000;
+    if (schedule.mode === "daily" && /^\d{2}:\d{2}$/.test(schedule.time || "")) {
+      const [hour, minute] = schedule.time.split(":").map(Number);
+      const next = new Date(from);
+      next.setHours(hour, minute, 0, 0);
+      if (next.getTime() <= from) next.setDate(next.getDate() + 1);
+      return next.getTime();
+    }
+    return Number(schedule.lastRun || from) + interval;
+  }
+
+  async function executeSchedule(config, schedule) {
+    if (schedule.type === "backup") {
+      const result = await deps.managedCall("action", { action: "backup" }, () => deps.createBackup(config));
+      if (!result.ok) throw new Error(result.stderr || result.stdout || "Backup failed.");
+      return result;
+    }
+    if (schedule.type === "safe-restart") return deps.performManagedRestart(config, "schedule");
+    if (schedule.type === "update") {
+      const result = await deps.managedCall("action", { action: "update" }, () => deps.runAction("update", config));
+      if (!result.ok) throw new Error(result.stderr || result.stdout || "Update failed.");
+      return result;
+    }
+    if (schedule.type === "save-world") {
+      const result = await deps.managedCall("rcon", { command: "Save" }, () => deps.rcon(config, "Save"));
+      if (!result.ok) throw new Error(result.stderr || result.stdout || "Save command failed.");
+      return result;
+    }
+    if (schedule.type === "rcon") {
+      const result = await deps.managedCall("rcon", { command: schedule.command || "" }, () => deps.rcon(config, schedule.command || ""));
+      if (!result.ok) throw new Error(result.stderr || result.stdout || "RCON task failed.");
+      return result;
+    }
+    throw new Error("Unsupported schedule type.");
+  }
+
+  async function runSchedule(config, id) {
+    const schedules = await listSchedules();
+    const schedule = schedules.find((row) => row.id === id);
+    if (!schedule) throw new Error("Schedule not found.");
+    const result = await executeSchedule(config, schedule);
+    const now = Date.now();
+    const next = schedules.map((row) =>
+      row.id === id
+        ? { ...row, lastRun: now, nextRun: nextScheduleRun({ ...row, lastRun: now }, now), lastError: "" }
+        : row,
+    );
+    await save("schedules.json", next);
+    return result;
+  }
+
+  async function tickSchedules(config) {
+    const schedules = await listSchedules();
+    const now = Date.now();
+    let changed = false;
+    for (const schedule of schedules) {
+      if (!schedule.enabled) continue;
+      const due = Number(schedule.nextRun || nextScheduleRun(schedule, now));
+      if (due > now || state.runningJobs.has(`schedule:${schedule.id}`)) continue;
+      state.runningJobs.add(`schedule:${schedule.id}`);
+      try {
+        await runSchedule(config, schedule.id);
+      } catch (error) {
+        schedule.lastRun = now;
+        schedule.nextRun = nextScheduleRun(schedule, now);
+        schedule.lastError = error.message;
+        changed = true;
+        await recordAlert({ severity: "error", title: `Schedule failed: ${schedule.name}`, message: error.message, source: "schedule" });
+      } finally {
+        state.runningJobs.delete(`schedule:${schedule.id}`);
+      }
+    }
+    if (changed) await save("schedules.json", schedules);
+  }
+
+  async function tick(config) {
+    const now = Date.now();
+    if (now - state.monitorAt >= 60000) {
+      state.monitorAt = now;
+      await recordMonitorSample(config).catch(() => {});
+    }
+    if (now - state.scheduleAt >= 10000) {
+      state.scheduleAt = now;
+      await tickSchedules(config).catch(() => {});
+    }
+  }
+
+  async function executeAgentOperation(operation, payload, config) {
+    const operations = {
+      advancedLogs: () => serverLogs(config, payload.lines),
+      advancedVerifyBackup: () => verifyBackup(config, payload.name),
+      advancedRestoreBackup: () => restoreBackupSafe(config, payload.name),
+      advancedWebDavUpload: () => uploadBackupWebDav(config, payload.name, payload.webdav),
+      advancedSaveSources: () => listSaveSources(config),
+      advancedSaveSourcePathImport: () => importSaveSourceFromPath(config, payload.path, payload.name),
+      advancedSaveSourceActivate: async () => publicActivatedSource(await activateSaveSource(config, payload.id)),
+      advancedSaveSourceRename: () => renameSaveSource(payload.id, payload.name),
+      advancedSaveSourceDelete: () => removeSaveSource(config, payload.id),
+      advancedModsScan: () => scanMods(config),
+      advancedModEnable: () => setModEnabled(config, payload.id, payload.enabled),
+      advancedModDelete: () => deleteMod(config, payload.id),
+      advancedPalDefenderStatus: () => palDefenderStatus(config),
+      advancedPalDefenderInstall: () => installPalDefender(config),
+      advancedPalDefenderRollback: () => rollbackPalDefender(config),
+      advancedPalDefenderConfigGet: () => readPalDefenderConfig(config),
+      advancedPalDefenderConfigSave: () => writePalDefenderConfig(config, payload.config),
+      advancedPalDefenderBridgeGet: () => getPalDefenderBridge(),
+      advancedPalDefenderBridgeSave: () => savePalDefenderBridge(payload.bridge || {}),
+      advancedPalDefenderProxy: async () => {
+        const bridge = await load("paldefender-bridge.json", {});
+        return palDefenderRequest(payload.method, payload.path, payload.body, bridge);
+      },
+      advancedWorkshopList: () => listWorkshopMods(config),
+      advancedWorkshopInstall: () => installWorkshopMod(config, payload.id),
+      advancedWorkshopEnable: () => setWorkshopModEnabled(config, payload.id, payload.enabled),
+      advancedWorkshopDelete: () => deleteWorkshopMod(config, payload.id),
+    };
+    if (!operations[operation]) throw new Error("Unsupported advanced Agent operation.");
+    return operations[operation]();
+  }
+
+  async function handleApi(req, res, config, context = {}) {
+    const url = new URL(req.url, "http://panel.local");
+    const pathname = url.pathname;
+    const principal = context.principal || { name: "admin", role: "admin" };
+
+    if (req.method === "GET" && pathname === "/api/advanced/features") {
+      deps.sendJson(res, 200, {
+        ok: true,
+        features: {
+          monitorHistory: true,
+          serverLogs: true,
+          jobs: true,
+          alerts: true,
+          audit: true,
+          schedules: true,
+          backupVerify: true,
+          backupRestore: true,
+          webdav: true,
+          saveSources: true,
+          mods: true,
+          palDefender: true,
+          breeding: true,
+          workshop: true,
+          astrBot: true,
+        },
+      });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/logs") {
+      const logs = await deps.managedCall(
+        "advancedLogs",
+        { lines: Number(url.searchParams.get("lines") || 300) },
+        () => serverLogs(config, Number(url.searchParams.get("lines") || 300)),
+      );
+      deps.sendJson(res, 200, { ok: true, logs });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/monitor/history") {
+      const rows = await load("monitor-history.json", []);
+      const limit = Math.max(10, Math.min(MAX_MONITOR_ROWS, Number(url.searchParams.get("limit") || 360)));
+      deps.sendJson(res, 200, { ok: true, history: (Array.isArray(rows) ? rows : []).slice(-limit) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/jobs") {
+      deps.sendJson(res, 200, { ok: true, jobs: await load("jobs.json", []) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/paldefender/status") {
+      const status = await deps.managedCall("advancedPalDefenderStatus", {}, () => palDefenderStatus(config));
+      deps.sendJson(res, 200, { ok: true, status });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/bans") {
+      deps.sendJson(res, 200, { ok: true, bans: await load("player-bans.json", []) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/bans") {
+      const body = await deps.readBody(req);
+      const playerId = String(body.playerId || body.steamId || "").trim();
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(playerId)) throw new Error("Invalid player identifier.");
+      const rows = await load("player-bans.json", []);
+      const record = {
+        playerId,
+        nickname: String(body.nickname || "").slice(0, 100),
+        reason: String(body.reason || "").slice(0, 300),
+        createdAt: nowIso(),
+        source: body.source || "local",
+      };
+      const next = [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.playerId !== playerId)];
+      await save("player-bans.json", next);
+      deps.sendJson(res, 200, { ok: true, ban: record, bans: next });
+      return true;
+    }
+
+    const banActionMatch = pathname.match(/^\/api\/advanced\/bans\/([^/]+)(?:\/(ban|unban))?$/);
+    if (banActionMatch) {
+      const playerId = decodeURIComponent(banActionMatch[1]);
+      const action = banActionMatch[2];
+      if (req.method === "POST" && action) {
+        const body = await deps.readBody(req);
+        const command = `${action === "ban" ? "BanPlayer" : "UnBanPlayer"} ${playerId}`;
+        const response = await auditRequest(req, principal, `player.${action}`, playerId, () =>
+          deps.managedCall("rcon", { command }, () => deps.rcon(config, command)),
+        );
+        if (!response.ok) throw new Error(response.stderr || response.stdout || `Player ${action} failed.`);
+        const rows = await load("player-bans.json", []);
+        let next;
+        if (action === "ban") {
+          const record = {
+            playerId,
+            nickname: String(body.nickname || "").slice(0, 100),
+            reason: String(body.reason || "").slice(0, 300),
+            createdAt: nowIso(),
+            source: "rcon",
+          };
+          next = [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.playerId !== playerId)];
+        } else {
+          next = (Array.isArray(rows) ? rows : []).filter((row) => row.playerId !== playerId);
+        }
+        await save("player-bans.json", next);
+        deps.sendJson(res, 200, { ok: true, bans: next, result: response });
+        return true;
+      }
+      if (req.method === "DELETE" && !action) {
+        const next = (await load("player-bans.json", [])).filter((row) => row.playerId !== playerId);
+        await save("player-bans.json", next);
+        deps.sendJson(res, 200, { ok: true, bans: next });
+        return true;
+      }
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/breeding/catalog") {
+      const catalog = await breedingCatalog();
+      deps.sendJson(res, 200, {
+        ok: true,
+        source: catalog.source,
+        version: catalog.version,
+        pals: catalog.pals,
+      });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/workshop/config") {
+      deps.sendJson(res, 200, { ok: true, config: publicWorkshopConfig(await load("workshop.json", {})) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/astrbot/config") {
+      deps.sendJson(res, 200, { ok: true, config: publicAstrBotConfig(await astrBotConfig()) });
+      return true;
+    }
+
+    if (req.method === "PUT" && pathname === "/api/advanced/astrbot/config") {
+      const body = await deps.readBody(req);
+      const current = await astrBotConfig();
+      const next = {
+        enabled: Boolean(body.config?.enabled ?? body.enabled ?? current.enabled),
+        dailyReward: Math.max(0, Number(body.config?.dailyReward ?? body.dailyReward ?? current.dailyReward)),
+        solveCost: Math.max(0, Number(body.config?.solveCost ?? body.solveCost ?? current.solveCost)),
+        challengeMinutes: Math.max(1, Math.min(60, Number(body.config?.challengeMinutes ?? body.challengeMinutes ?? current.challengeMinutes))),
+        loginMinutes: Math.max(1, Math.min(60, Number(body.config?.loginMinutes ?? body.loginMinutes ?? current.loginMinutes))),
+        adminQqs: normalizeStringList(body.config?.adminQqs ?? body.adminQqs ?? current.adminQqs).filter((value) => /^\d{5,20}$/.test(value)),
+      };
+      await save("astrbot.json", next);
+      deps.sendJson(res, 200, { ok: true, config: publicAstrBotConfig(next) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/astrbot/players") {
+      deps.sendJson(res, 200, { ok: true, players: await astrBotPlayers(config) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/astrbot/accounts") {
+      deps.sendJson(res, 200, { ok: true, accounts: await listAstrBotAccounts() });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/astrbot/accounts/manage") {
+      const body = await deps.readBody(req);
+      if (principal?.role === "integration") {
+        const settings = await astrBotConfig();
+        const actorQq = String(body.actorQq || "").trim();
+        if (!/^\d{5,20}$/.test(actorQq) || !normalizeStringList(settings.adminQqs).includes(actorQq)) {
+          deps.sendError(res, 403, "AstrBot administrator is not authorized by the panel.");
+          return true;
+        }
+      }
+      const account = await auditRequest(req, principal, `astrbot.account.${body.action || "manage"}`, body.qq || "", () =>
+        manageAstrBotAccount(body, body.actorQq || principal?.name || "admin"),
+      );
+      deps.sendJson(res, 200, { ok: true, account });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/astrbot/ledger") {
+      const qq = String(url.searchParams.get("qq") || "").trim();
+      const rows = await load("astrbot-ledger.json", []);
+      deps.sendJson(res, 200, {
+        ok: true,
+        ledger: (Array.isArray(rows) ? rows : []).filter((row) => !qq || row.qq === qq).slice(0, 500),
+      });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/astrbot/challenges") {
+      const body = await deps.readBody(req);
+      deps.sendJson(res, 200, { ok: true, challenge: await createAstrBotChallenge(config, body) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/astrbot/verify") {
+      const body = await deps.readBody(req);
+      deps.sendJson(res, 200, { ok: true, binding: await verifyAstrBotChallenge(body) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/astrbot/account") {
+      deps.sendJson(res, 200, { ok: true, account: await astrBotAccount(url.searchParams.get("qq")) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/astrbot/check-in") {
+      const body = await deps.readBody(req);
+      deps.sendJson(res, 200, { ok: true, account: await astrBotCheckIn(body.qq) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/astrbot/solve") {
+      const body = await deps.readBody(req);
+      deps.sendJson(res, 200, { ok: true, ...(await astrBotSolve(config, body)) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/astrbot/login-link") {
+      const body = await deps.readBody(req);
+      const login = await createAstrBotLogin(body);
+      const forwarded = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+      const protocol = forwarded === "https" ? "https" : "http";
+      const host = String(req.headers.host || "localhost");
+      deps.sendJson(res, 200, {
+        ok: true,
+        url: `${protocol}://${host}/api/advanced/astrbot/login/${encodeURIComponent(login.ticket)}`,
+        expiresAt: login.expiresAt,
+      });
+      return true;
+    }
+
+    if (req.method === "PUT" && pathname === "/api/advanced/workshop/config") {
+      const body = await deps.readBody(req);
+      const current = await load("workshop.json", {});
+      const next = normalizeWorkshopConfig(body.config || body, current);
+      await auditRequest(req, principal, "workshop.config.save", next.appId, () => save("workshop.json", next));
+      deps.sendJson(res, 200, { ok: true, config: publicWorkshopConfig(next) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/workshop/search") {
+      const result = await workshopSearch(url.searchParams.get("q") || "", url.searchParams.get("page") || 1);
+      deps.sendJson(res, 200, { ok: true, result });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/workshop/details") {
+      deps.sendJson(res, 200, { ok: true, detail: await workshopDetails(url.searchParams.get("id")) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/workshop/installed") {
+      const mods = await deps.managedCall("advancedWorkshopList", {}, () => listWorkshopMods(config));
+      deps.sendJson(res, 200, { ok: true, mods });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/workshop/install") {
+      const body = await deps.readBody(req);
+      const job = await auditRequest(req, principal, "workshop.install", body.id, () =>
+        queueJob("workshop-install", `Install Workshop ${body.id}`, () =>
+          deps.managedCall("advancedWorkshopInstall", { id: body.id }, () => installWorkshopMod(config, body.id)),
+        ),
+      );
+      deps.sendJson(res, 202, { ok: true, job });
+      return true;
+    }
+
+    const workshopAction = pathname.match(/^\/api\/advanced\/workshop\/([^/]+)\/(enable|disable)$/);
+    if (req.method === "POST" && workshopAction) {
+      const id = decodeURIComponent(workshopAction[1]);
+      const enabled = workshopAction[2] === "enable";
+      const mods = await auditRequest(req, principal, `workshop.${workshopAction[2]}`, id, () =>
+        deps.managedCall("advancedWorkshopEnable", { id, enabled }, () => setWorkshopModEnabled(config, id, enabled)),
+      );
+      deps.sendJson(res, 200, { ok: true, mods });
+      return true;
+    }
+
+    const workshopDelete = pathname.match(/^\/api\/advanced\/workshop\/([^/]+)$/);
+    if (req.method === "DELETE" && workshopDelete) {
+      const id = decodeURIComponent(workshopDelete[1]);
+      const mods = await auditRequest(req, principal, "workshop.delete", id, () =>
+        deps.managedCall("advancedWorkshopDelete", { id }, () => deleteWorkshopMod(config, id)),
+      );
+      deps.sendJson(res, 200, { ok: true, mods });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/workshop/translate") {
+      const body = await deps.readBody(req);
+      deps.sendJson(res, 200, { ok: true, translation: await translateWorkshop(body.id, body.language) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/breeding/direct") {
+      const body = await deps.readBody(req);
+      deps.sendJson(res, 200, { ok: true, result: await breedingDirect(body) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/breeding/parents") {
+      deps.sendJson(res, 200, { ok: true, parents: await breedingParents(url.searchParams.get("target")) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/breeding/solve") {
+      const body = await deps.readBody(req);
+      const result = await breedingSolve(config, body);
+      deps.sendJson(res, 200, { ok: true, result });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/breeding/jobs") {
+      deps.sendJson(res, 200, { ok: true, jobs: await load("breeding-jobs.json", []) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/breeding/jobs") {
+      const body = await deps.readBody(req);
+      const job = await auditRequest(req, principal, "breeding.job.create", body.target || "", () => queueBreedingJob(config, body));
+      deps.sendJson(res, 202, { ok: true, job });
+      return true;
+    }
+
+    const breedingJobAction = pathname.match(/^\/api\/advanced\/breeding\/jobs\/([^/]+)\/(pause|resume|cancel)$/);
+    if (req.method === "POST" && breedingJobAction) {
+      const job = await auditRequest(
+        req,
+        principal,
+        `breeding.job.${breedingJobAction[2]}`,
+        breedingJobAction[1],
+        () => controlBreedingJob(breedingJobAction[1], breedingJobAction[2]),
+      );
+      deps.sendJson(res, 200, { ok: true, job });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/breeding/history") {
+      const history = await load("breeding-history.json", []);
+      let savePals = [];
+      let customContainers = [];
+      try {
+        const saveData = await deps.managedCall("saveData", {}, () => deps.querySaveData(config));
+        savePals = saveData.pals || [];
+        customContainers = await load("breeding-containers.json", []);
+      } catch {}
+      deps.sendJson(res, 200, {
+        ok: true,
+        history: (Array.isArray(history) ? history : []).map((row) => {
+          const selected = new Set(row.input?.customContainerIds || []);
+          const customPals = (Array.isArray(customContainers) ? customContainers : [])
+            .filter((container) => selected.has(container.id))
+            .flatMap((container) => container.pals || []);
+          const currentHash = breedingSourceHash([...savePals, ...customPals]);
+          return {
+            ...row,
+            stale: Boolean(row.result?.sourceHash && row.result.sourceHash !== currentHash),
+          };
+        }),
+      });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/breeding/containers") {
+      deps.sendJson(res, 200, { ok: true, containers: await load("breeding-containers.json", []) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/breeding/containers") {
+      const body = await deps.readBody(req);
+      const rows = await load("breeding-containers.json", []);
+      const container = {
+        id: body.id || crypto.randomUUID(),
+        name: String(body.name || "Custom Pal container").slice(0, 100),
+        pals: (Array.isArray(body.pals) ? body.pals : []).map(normalizeCustomBreedingPal).filter((pal) => pal.type),
+        updatedAt: nowIso(),
+      };
+      const next = [container, ...(Array.isArray(rows) ? rows : []).filter((row) => row.id !== container.id)];
+      await save("breeding-containers.json", next);
+      deps.sendJson(res, 200, { ok: true, container, containers: next });
+      return true;
+    }
+
+    const breedingContainer = pathname.match(/^\/api\/advanced\/breeding\/containers\/([^/]+)$/);
+    if (req.method === "DELETE" && breedingContainer) {
+      const next = (await load("breeding-containers.json", [])).filter((row) => row.id !== breedingContainer[1]);
+      await save("breeding-containers.json", next);
+      deps.sendJson(res, 200, { ok: true, containers: next });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/breeding/presets") {
+      deps.sendJson(res, 200, { ok: true, presets: await load("breeding-presets.json", []) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/breeding/presets") {
+      const body = await deps.readBody(req);
+      const presets = await load("breeding-presets.json", []);
+      const preset = {
+        id: body.id || crypto.randomUUID(),
+        name: String(body.name || "Breeding plan").slice(0, 100),
+        ...normalizeBreedingInput(body),
+        createdAt: body.createdAt || nowIso(),
+        updatedAt: nowIso(),
+      };
+      const next = [preset, ...(Array.isArray(presets) ? presets : []).filter((row) => row.id !== preset.id)];
+      await save("breeding-presets.json", next);
+      deps.sendJson(res, 200, { ok: true, presets: next });
+      return true;
+    }
+
+    const breedingPreset = pathname.match(/^\/api\/advanced\/breeding\/presets\/([^/]+)$/);
+    if (req.method === "DELETE" && breedingPreset) {
+      const next = (await load("breeding-presets.json", [])).filter((row) => row.id !== breedingPreset[1]);
+      await save("breeding-presets.json", next);
+      deps.sendJson(res, 200, { ok: true, presets: next });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/paldefender/release") {
+      deps.sendJson(res, 200, { ok: true, release: await latestPalDefenderRelease() });
+      return true;
+    }
+
+    if (req.method === "POST" && ["/api/advanced/paldefender/install", "/api/advanced/paldefender/update"].includes(pathname)) {
+      const job = await auditRequest(req, principal, "paldefender.install", "latest", () =>
+        queueJob("paldefender-install", "Install PalDefender", () =>
+          deps.managedCall("advancedPalDefenderInstall", {}, () => installPalDefender(config)),
+        ),
+      );
+      deps.sendJson(res, 202, { ok: true, job });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/paldefender/rollback") {
+      const job = await auditRequest(req, principal, "paldefender.rollback", "previous", () =>
+        queueJob("paldefender-rollback", "Rollback PalDefender", () =>
+          deps.managedCall("advancedPalDefenderRollback", {}, () => rollbackPalDefender(config)),
+        ),
+      );
+      deps.sendJson(res, 202, { ok: true, job });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/paldefender/bridge") {
+      const bridge = await deps.managedCall("advancedPalDefenderBridgeGet", {}, () => getPalDefenderBridge());
+      deps.sendJson(res, 200, { ok: true, bridge });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/paldefender/config") {
+      const value = await deps.managedCall("advancedPalDefenderConfigGet", {}, () => readPalDefenderConfig(config));
+      deps.sendJson(res, 200, { ok: true, ...value });
+      return true;
+    }
+
+    if (req.method === "PUT" && pathname === "/api/advanced/paldefender/config") {
+      const body = await deps.readBody(req);
+      const value = await auditRequest(req, principal, "paldefender.config.save", "Config.json", () =>
+        deps.managedCall(
+          "advancedPalDefenderConfigSave",
+          { config: body.config },
+          () => writePalDefenderConfig(config, body.config),
+        ),
+      );
+      deps.sendJson(res, 200, { ok: true, ...value });
+      return true;
+    }
+
+    if (req.method === "PUT" && pathname === "/api/advanced/paldefender/bridge") {
+      const body = await deps.readBody(req);
+      const bridge = await auditRequest(req, principal, "paldefender.bridge.save", body.bridge?.endpoint || "", () =>
+        deps.managedCall(
+          "advancedPalDefenderBridgeSave",
+          { bridge: body.bridge || body },
+          () => savePalDefenderBridge(body.bridge || body),
+        ),
+      );
+      deps.sendJson(res, 200, { ok: true, bridge });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/paldefender/test") {
+      const result = await deps.managedCall(
+        "advancedPalDefenderProxy",
+        { method: "GET", path: "/v1/pdapi/version" },
+        async () => palDefenderRequest("GET", "/v1/pdapi/version", undefined, await load("paldefender-bridge.json", {})),
+      );
+      deps.sendJson(res, 200, { ok: true, result });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/paldefender/templates") {
+      deps.sendJson(res, 200, { ok: true, templates: await load("paldefender-pal-templates.json", []) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/paldefender/templates") {
+      const body = await deps.readBody(req);
+      const template = body.template || body;
+      if (!template || typeof template !== "object" || Array.isArray(template) || !String(template.PalID || "").trim()) {
+        throw new Error("Pal template must be a JSON object containing PalID.");
+      }
+      const rows = await load("paldefender-pal-templates.json", []);
+      const record = {
+        id: body.id || crypto.randomUUID(),
+        name: String(body.name || template.Nickname || template.PalID).slice(0, 100),
+        template,
+        updatedAt: nowIso(),
+      };
+      const next = [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.id !== record.id)];
+      await save("paldefender-pal-templates.json", next);
+      deps.sendJson(res, 200, { ok: true, template: record, templates: next });
+      return true;
+    }
+
+    const palTemplateMatch = pathname.match(/^\/api\/advanced\/paldefender\/templates\/([^/]+)$/);
+    if (req.method === "DELETE" && palTemplateMatch) {
+      const next = (await load("paldefender-pal-templates.json", [])).filter((row) => row.id !== palTemplateMatch[1]);
+      await save("paldefender-pal-templates.json", next);
+      deps.sendJson(res, 200, { ok: true, templates: next });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/paldefender/proxy") {
+      const body = await deps.readBody(req);
+      const result = await auditRequest(req, principal, "paldefender.gm", body.path || "", () =>
+        deps.managedCall(
+          "advancedPalDefenderProxy",
+          { method: body.method || "GET", path: body.path, body: body.body },
+          async () => palDefenderRequest(body.method || "GET", body.path, body.body, await load("paldefender-bridge.json", {})),
+        ),
+      );
+      deps.sendJson(res, 200, { ok: true, result });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/alerts") {
+      deps.sendJson(res, 200, { ok: true, alerts: await load("alerts.json", []) });
+      return true;
+    }
+
+    const alertAck = pathname.match(/^\/api\/advanced\/alerts\/([^/]+)\/ack$/);
+    if (req.method === "POST" && alertAck) {
+      await auditRequest(req, principal, "alert.ack", alertAck[1], async () => {
+        const rows = await load("alerts.json", []);
+        const next = rows.map((row) =>
+          row.id === alertAck[1] ? { ...row, status: "acknowledged", acknowledgedAt: nowIso() } : row,
+        );
+        await save("alerts.json", next);
+      });
+      deps.sendJson(res, 200, { ok: true });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/audit") {
+      const rows = await load("audit-log.json", []);
+      const limit = Math.max(10, Math.min(MAX_AUDIT_ROWS, Number(url.searchParams.get("limit") || 300)));
+      deps.sendJson(res, 200, { ok: true, audit: (Array.isArray(rows) ? rows : []).slice(0, limit) });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/schedules") {
+      deps.sendJson(res, 200, { ok: true, schedules: await listSchedules() });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/schedules") {
+      const body = await deps.readBody(req);
+      const schedules = await listSchedules();
+      const schedule = {
+        id: body.id || crypto.randomUUID(),
+        name: String(body.name || "Scheduled task").slice(0, 120),
+        type: body.type || "backup",
+        mode: body.mode === "daily" ? "daily" : "interval",
+        intervalMinutes: Math.max(1, Number(body.intervalMinutes || 60)),
+        time: String(body.time || "04:00"),
+        command: String(body.command || ""),
+        enabled: Boolean(body.enabled),
+        lastRun: Number(body.lastRun || 0),
+        nextRun: 0,
+        lastError: "",
+      };
+      schedule.nextRun = nextScheduleRun(schedule);
+      const next = [schedule, ...schedules.filter((row) => row.id !== schedule.id)];
+      await auditRequest(req, principal, "schedule.save", schedule.id, () => save("schedules.json", next));
+      deps.sendJson(res, 200, { ok: true, schedules: next });
+      return true;
+    }
+
+    const scheduleMatch = pathname.match(/^\/api\/advanced\/schedules\/([^/]+)(\/run)?$/);
+    if (scheduleMatch && req.method === "POST" && scheduleMatch[2] === "/run") {
+      const job = await auditRequest(req, principal, "schedule.run", scheduleMatch[1], () =>
+        queueJob("schedule", "Run scheduled task", () => runSchedule(config, scheduleMatch[1])),
+      );
+      deps.sendJson(res, 202, { ok: true, job });
+      return true;
+    }
+    if (scheduleMatch && req.method === "DELETE" && !scheduleMatch[2]) {
+      const schedules = (await listSchedules()).filter((row) => row.id !== scheduleMatch[1]);
+      await auditRequest(req, principal, "schedule.delete", scheduleMatch[1], () => save("schedules.json", schedules));
+      deps.sendJson(res, 200, { ok: true, schedules });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/backups/webdav") {
+      deps.sendJson(res, 200, { ok: true, webdav: publicWebDavConfig(await load("webdav.json", {})) });
+      return true;
+    }
+
+    if (req.method === "PUT" && pathname === "/api/advanced/backups/webdav") {
+      const body = await deps.readBody(req);
+      const current = await load("webdav.json", {});
+      const next = normalizeWebDavConfig(body.webdav || body, current);
+      await auditRequest(req, principal, "webdav.save", next.url, () => save("webdav.json", next));
+      deps.sendJson(res, 200, { ok: true, webdav: publicWebDavConfig(next) });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/backups/webdav/test") {
+      const body = await deps.readBody(req);
+      const current = await load("webdav.json", {});
+      const next = normalizeWebDavConfig(body.webdav || body, current);
+      const result = await auditRequest(req, principal, "webdav.test", next.url, () => testWebDav(next));
+      deps.sendJson(res, 200, { ok: true, result });
+      return true;
+    }
+
+    const backupAction = pathname.match(/^\/api\/advanced\/backups\/([^/]+)\/(verify|restore|webdav)$/);
+    if (req.method === "POST" && backupAction) {
+      const name = decodeURIComponent(backupAction[1]);
+      const action = backupAction[2];
+      const job = await auditRequest(req, principal, `backup.${action}`, name, async () => {
+        if (action === "verify") {
+          return queueJob("backup-verify", `Verify ${name}`, async () =>
+            deps.managedCall("advancedVerifyBackup", { name }, () => verifyBackup(config, name)),
+          );
+        }
+        if (action === "restore") {
+          return queueJob("backup-restore", `Restore ${name}`, async () =>
+            deps.managedCall("advancedRestoreBackup", { name }, () => restoreBackupSafe(config, name)),
+          );
+        }
+        const webdav = await load("webdav.json", {});
+        if (!webdav.enabled) throw new Error("WebDAV archiving is not enabled.");
+        return queueJob("backup-webdav", `Upload ${name}`, async () =>
+          deps.managedCall(
+            "advancedWebDavUpload",
+            { name, webdav },
+            () => uploadBackupWebDav(config, name, webdav),
+          ),
+        );
+      });
+      deps.sendJson(res, 202, { ok: true, job });
+      return true;
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/save-sources") {
+      const sources = await deps.managedCall("advancedSaveSources", {}, () => listSaveSources(config));
+      deps.sendJson(res, 200, { ok: true, sources });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/save-sources/path") {
+      const body = await deps.readBody(req);
+      const source = await auditRequest(req, principal, "save-source.import-path", body.path, () =>
+        deps.managedCall(
+          "advancedSaveSourcePathImport",
+          { path: body.path, name: body.name },
+          () => importSaveSourceFromPath(config, body.path, body.name),
+        ),
+      );
+      deps.sendJson(res, 200, { ok: true, source });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/save-sources/upload") {
+      if (context.agentEnabled) {
+        await deps.proxyAgentUpload(req, res, "save-source");
+        return true;
+      }
+      const uploaded = await receiveUpload(req, "save-source");
+      const source = await auditRequest(req, principal, "save-source.upload", uploaded.originalName, () =>
+        importSaveSourceFromArchive(config, uploaded, uploaded.fields.name),
+      );
+      deps.sendJson(res, 200, { ok: true, source });
+      return true;
+    }
+
+    const saveSourceAction = pathname.match(/^\/api\/advanced\/save-sources\/([^/]+)(\/(activate|rebuild))?$/);
+    if (saveSourceAction) {
+      const id = decodeURIComponent(saveSourceAction[1]);
+      const action = saveSourceAction[3];
+      if (req.method === "POST" && action === "activate") {
+        const result = await auditRequest(req, principal, "save-source.activate", id, () =>
+          deps.managedCall(
+            "advancedSaveSourceActivate",
+            { id },
+            async () => publicActivatedSource(await activateSaveSource(config, id)),
+          ),
+        );
+        deps.sendJson(res, 200, { ok: true, result });
+        return true;
+      }
+      if (req.method === "POST" && action === "rebuild") {
+        const job = await auditRequest(req, principal, "save-source.rebuild", id, () =>
+          queueJob("save-index", "Rebuild save index", async () => {
+            const activated = await deps.managedCall(
+              "advancedSaveSourceActivate",
+              { id },
+              () => activateSaveSource(config, id),
+            );
+            const nextConfig = activated.config || config;
+            const data = await deps.managedCall("saveData", {}, () => deps.querySaveData(nextConfig));
+            await deps.saveSyncedSaveData(data);
+            return { message: "Save source index rebuilt.", source: id };
+          }),
+        );
+        deps.sendJson(res, 202, { ok: true, job });
+        return true;
+      }
+      if (req.method === "PATCH" && !action) {
+        const body = await deps.readBody(req);
+        const source = await auditRequest(req, principal, "save-source.rename", id, () =>
+          deps.managedCall("advancedSaveSourceRename", { id, name: body.name }, () => renameSaveSource(id, body.name)),
+        );
+        deps.sendJson(res, 200, { ok: true, source });
+        return true;
+      }
+      if (req.method === "DELETE" && !action) {
+        const result = await auditRequest(req, principal, "save-source.delete", id, () =>
+          deps.managedCall("advancedSaveSourceDelete", { id }, () => removeSaveSource(config, id)),
+        );
+        deps.sendJson(res, 200, { ok: true, result });
+        return true;
+      }
+    }
+
+    if (req.method === "GET" && pathname === "/api/advanced/mods") {
+      const result = await deps.managedCall("advancedModsScan", {}, () => scanMods(config));
+      deps.sendJson(res, 200, { ok: true, ...result });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/mods/scan") {
+      const result = await auditRequest(req, principal, "mods.scan", "local", () =>
+        deps.managedCall("advancedModsScan", {}, () => scanMods(config)),
+      );
+      deps.sendJson(res, 200, { ok: true, ...result });
+      return true;
+    }
+
+    if (req.method === "POST" && pathname === "/api/advanced/mods/upload") {
+      if (context.agentEnabled) {
+        await deps.proxyAgentUpload(req, res, "mod");
+        return true;
+      }
+      const uploaded = await receiveUpload(req, "mod");
+      const result = await auditRequest(req, principal, "mods.upload", uploaded.originalName, () =>
+        importModUpload(config, uploaded, uploaded.fields.type),
+      );
+      deps.sendJson(res, 200, { ok: true, ...result });
+      return true;
+    }
+
+    const modAction = pathname.match(/^\/api\/advanced\/mods\/([^/]+)(\/(enable|disable))?$/);
+    if (modAction) {
+      const id = decodeURIComponent(modAction[1]);
+      const action = modAction[3];
+      if (req.method === "POST" && action) {
+        const mod = await auditRequest(req, principal, `mods.${action}`, id, () =>
+          deps.managedCall(
+            "advancedModEnable",
+            { id, enabled: action === "enable" },
+            () => setModEnabled(config, id, action === "enable"),
+          ),
+        );
+        deps.sendJson(res, 200, { ok: true, mod });
+        return true;
+      }
+      if (req.method === "DELETE" && !action) {
+        const result = await auditRequest(req, principal, "mods.delete", id, () =>
+          deps.managedCall("advancedModDelete", { id }, () => deleteMod(config, id)),
+        );
+        deps.sendJson(res, 200, { ok: true, result });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async function handlePublicApi(req, res, config) {
+    const pathname = new URL(req.url, "http://panel.local").pathname;
+    const match = pathname.match(/^\/api\/advanced\/astrbot\/login\/([^/]+)$/);
+    if (req.method === "GET" && match) {
+      return redeemAstrBotLogin(req, res, config, decodeURIComponent(match[1]));
+    }
+    return false;
+  }
+
+  async function handleAgentUpload(req, res, config, kind) {
+    if (kind === "save-source") {
+      const uploaded = await receiveUpload(req, "save-source");
+      const source = await importSaveSourceFromArchive(config, uploaded, uploaded.fields.name);
+      deps.sendJson(res, 200, { ok: true, source });
+      return true;
+    }
+    if (kind === "mod") {
+      const uploaded = await receiveUpload(req, "mod");
+      const result = await importModUpload(config, uploaded, uploaded.fields.type);
+      deps.sendJson(res, 200, { ok: true, ...result });
+      return true;
+    }
+    deps.sendError(res, 404, "Unsupported Agent upload type.");
+    return true;
+  }
+
+  return {
+    handleApi,
+    handlePublicApi,
+    handleAgentUpload,
+    executeAgentOperation,
+    tick,
+    recordAudit,
+    recordAlert,
+    queueJob,
+    verifyBackup,
+    restoreBackupSafe,
+    serverLogs,
+    scanMods,
+    listSaveSources,
+    __test: {
+      validArchiveName,
+      normalizeWebDavConfig,
+      nextScheduleRun,
+      assertModPath,
+      inspectZip,
+      normalizeBreedingInput,
+      breedingSourceHash,
+      normalizeCustomBreedingPal,
+    },
+  };
+}
+
+module.exports = { createAdvancedFeatures };

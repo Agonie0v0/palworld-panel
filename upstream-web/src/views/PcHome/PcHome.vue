@@ -19,6 +19,14 @@ import {
 } from "@vicons/ionicons5";
 import { GuiManagement } from "@vicons/carbon";
 import { BroadcastTower } from "@vicons/fa";
+import {
+  Activity,
+  BrandHipchat,
+  BrandSteam,
+  Database,
+  Dna,
+  Package,
+} from "@vicons/tabler";
 import { computed, onMounted, ref } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
@@ -34,6 +42,15 @@ import ShutdownDialog from "@/components/ShutdownDialog.vue";
 import WhitelistManager from "@/components/WhitelistManager.vue";
 import ServerOperations from "@/components/ServerOperations.vue";
 import GameSettingsManager from "@/components/GameSettingsManager.vue";
+import OperationsCenter from "@/components/OperationsCenter.vue";
+import SaveSourceManager from "@/components/SaveSourceManager.vue";
+import ModManager from "@/components/ModManager.vue";
+import AccessManager from "@/components/AccessManager.vue";
+import WorldDataManager from "@/components/WorldDataManager.vue";
+import PalDefenderManager from "@/components/PalDefenderManager.vue";
+import BreedingLab from "@/components/BreedingLab.vue";
+import WorkshopManager from "@/components/WorkshopManager.vue";
+import AstrBotManager from "@/components/AstrBotManager.vue";
 import whitelistStore from "@/stores/model/whitelist";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import { watch } from "vue";
@@ -83,6 +100,11 @@ const currentViewLabel = computed(() => {
 });
 
 const isLogin = ref(false);
+const currentRole = ref("viewer");
+const canOperate = computed(() =>
+  ["admin", "operator"].includes(currentRole.value),
+);
+const isAdmin = computed(() => currentRole.value === "admin");
 
 const handleSelectLanguage = (key) => {
   message.info(t("message.changelanguage"));
@@ -165,9 +187,11 @@ const getOnlineList = async () => {
 
 // login
 const showLoginModal = ref(false);
+const loginUsername = ref("");
 const password = ref("");
 const handleLogin = async () => {
   const { data, statusCode } = await new ApiService().login({
+    username: loginUsername.value,
     password: password.value,
   });
   if (statusCode.value === 401) {
@@ -178,6 +202,7 @@ const handleLogin = async () => {
   let token = data.value.token;
   localStorage.setItem(PALWORLD_TOKEN, token);
   userStore().setIsLogin(true, token);
+  currentRole.value = data.value.role || "admin";
   await getWhiteList();
   message.success(t("message.authsuccess"));
   showLoginModal.value = false;
@@ -185,6 +210,15 @@ const handleLogin = async () => {
   currentDisplay.value = "overview";
 };
 const showRconDrawer = ref(false);
+const showOperationsCenter = ref(false);
+const showSaveSources = ref(false);
+const showMods = ref(false);
+const showAccessManager = ref(false);
+const showWorldData = ref(false);
+const showPalDefender = ref(false);
+const showBreedingLab = ref(false);
+const showWorkshop = ref(false);
+const showAstrBot = ref(false);
 const handleRconDrawer = () => {
   if (checkAuthToken()) {
     showRconDrawer.value = true;
@@ -209,6 +243,60 @@ const handleToolAction = (key) => {
     }
   } else if (key === "game-settings") {
     if (checkAuthToken()) showGameSettings.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "advanced") {
+    if (checkAuthToken()) showOperationsCenter.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "save-sources") {
+    if (checkAuthToken()) showSaveSources.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "mods") {
+    if (checkAuthToken()) showMods.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "access") {
+    if (checkAuthToken()) showAccessManager.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "world-data") {
+    if (checkAuthToken()) showWorldData.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "paldefender") {
+    if (checkAuthToken()) showPalDefender.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "breeding") {
+    if (checkAuthToken()) showBreedingLab.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "workshop") {
+    if (checkAuthToken()) showWorkshop.value = true;
+    else {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+    }
+  } else if (key === "astrbot") {
+    if (checkAuthToken()) showAstrBot.value = true;
     else {
       message.error(t("message.requireauth"));
       showLoginModal.value = true;
@@ -331,12 +419,16 @@ const checkAuthToken = () => {
 };
 const isTokenExpired = (token) => {
   const parts = token.split(".");
-  if (parts.length !== 3) return false;
+  if (parts.length !== 3) {
+    currentRole.value = "admin";
+    return false;
+  }
   try {
     const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const payload = JSON.parse(
       atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")),
     );
+    currentRole.value = payload.role || "admin";
     return Boolean(payload.exp) && payload.exp < Date.now() / 1000;
   } catch {
     return false;
@@ -571,7 +663,7 @@ onMounted(async () => {
       </header>
 
       <section
-        v-if="isLogin"
+        v-if="canOperate"
         class="ops-command-shelf"
         :aria-label="$t('button.tools')"
       >
@@ -600,6 +692,83 @@ onMounted(async () => {
           >
             <n-icon><ConstructOutline /></n-icon>
             <span>{{ $t("gameSettings.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('advanced')"
+          >
+            <n-icon><Activity /></n-icon>
+            <span>{{
+              locale === "zh" ? "运维中心" : "Operations center"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('save-sources')"
+          >
+            <n-icon><Database /></n-icon>
+            <span>{{ locale === "zh" ? "存档源" : "Save sources" }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('mods')"
+          >
+            <n-icon><Package /></n-icon>
+            <span>{{ locale === "zh" ? "模组管理" : "Mods" }}</span>
+          </button>
+          <button
+            v-if="isAdmin"
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('access')"
+          >
+            <n-icon><AdminPanelSettingsOutlined /></n-icon>
+            <span>{{ locale === "zh" ? "账号权限" : "Access" }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('world-data')"
+          >
+            <n-icon><Database /></n-icon>
+            <span>{{ locale === "zh" ? "世界数据" : "World data" }}</span>
+          </button>
+          <button
+            v-if="isAdmin"
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('paldefender')"
+          >
+            <n-icon><ShieldCheckmarkSharp /></n-icon>
+            <span>PalDefender</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('breeding')"
+          >
+            <n-icon><Dna /></n-icon>
+            <span>{{ locale === "zh" ? "配种实验室" : "Breeding lab" }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('workshop')"
+          >
+            <n-icon><BrandSteam /></n-icon>
+            <span>Workshop</span>
+          </button>
+          <button
+            v-if="isAdmin"
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('astrbot')"
+          >
+            <n-icon><BrandHipchat /></n-icon>
+            <span>AstrBot / QQ</span>
           </button>
           <button
             type="button"
@@ -692,6 +861,16 @@ onMounted(async () => {
     <div>
       <span class="block pb-2">{{ $t("message.authdesc") }}</span>
       <n-input
+        v-model:value="loginUsername"
+        class="mb-2"
+        :placeholder="
+          locale === 'zh'
+            ? '用户名（主管理员可留空）'
+            : 'Username (optional for primary admin)'
+        "
+        autocomplete="username"
+      />
+      <n-input
         type="password"
         show-password-on="click"
         size="large"
@@ -726,6 +905,15 @@ onMounted(async () => {
   <backup-manager v-model:show="backupModal" />
   <server-operations v-model:show="showServerOperations" />
   <game-settings-manager v-model:show="showGameSettings" />
+  <operations-center v-model:show="showOperationsCenter" />
+  <save-source-manager v-model:show="showSaveSources" />
+  <mod-manager v-model:show="showMods" />
+  <access-manager v-model:show="showAccessManager" />
+  <world-data-manager v-model:show="showWorldData" />
+  <pal-defender-manager v-model:show="showPalDefender" />
+  <breeding-lab v-model:show="showBreedingLab" />
+  <workshop-manager v-model:show="showWorkshop" />
+  <astr-bot-manager v-model:show="showAstrBot" />
   <whitelist-manager
     v-model:show="showWhiteListModal"
     :players="playerList"

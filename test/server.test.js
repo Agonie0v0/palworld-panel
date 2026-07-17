@@ -12,6 +12,7 @@ const {
   isDue,
   isWhitelisted,
   issueAuthToken,
+  decodeAuthToken,
   normalizeLivePlayers,
   parseDfOutput,
   parsePsOutput,
@@ -19,6 +20,8 @@ const {
   testSaveSource,
   trimBackups,
   verifyAuthToken,
+  permissionsForRole,
+  principalCan,
   watchdogSettings
 } = require("../src/server");
 
@@ -41,6 +44,27 @@ test("JWT tokens expire and are invalidated when the password changes", () => {
   assert.equal(verifyAuthToken(config, `${token.slice(0, -1)}x`, now + 1000), false);
   assert.equal(verifyAuthToken(config, token, now + 25 * 60 * 60 * 1000), false);
   assert.equal(verifyAuthToken(authConfig("new-password-hash"), token, now + 1000), false);
+});
+
+test("JWT tokens preserve user role and permission checks", () => {
+  const config = authConfig();
+  const now = Date.now();
+  const token = issueAuthToken(config, now, {
+    id: "operator-1",
+    name: "operator",
+    role: "operator",
+    tokenVersion: 4,
+  });
+  const payload = decodeAuthToken(config, token, now + 1000);
+  assert.equal(payload.uid, "operator-1");
+  assert.equal(payload.sub, "operator");
+  assert.equal(payload.role, "operator");
+  assert.equal(payload.ver, 4);
+  assert.equal(principalCan({ permissions: permissionsForRole("viewer") }, "read"), true);
+  assert.equal(principalCan({ permissions: permissionsForRole("viewer") }, "server:write"), false);
+  assert.equal(principalCan({ permissions: permissionsForRole("admin") }, "security:write"), true);
+  assert.equal(principalCan({ permissions: permissionsForRole("integration") }, "integrations:write"), true);
+  assert.equal(principalCan({ permissions: permissionsForRole("integration") }, "read"), false);
 });
 
 test("RCON Base64 mode encodes commands and decodes valid responses", () => {

@@ -6,7 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/upstream-compat.js",
+    "check": "node --check src/server.js && node --check src/upstream-compat.js && node --check src/advanced-features.js",
     "test": "node --test test/*.test.js",
     "build:web": "pnpm --dir upstream-web build",
     "test:web": "pnpm --dir upstream-web test"
@@ -16,6 +16,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "cron-parser": "^4.9.0"
+    "busboy": "^1.6.0",
+    "cron-parser": "^4.9.0",
+    "yauzl": "^3.2.0"
   }
 }

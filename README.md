@@ -247,7 +247,7 @@ http://游戏服务器IP:8081/sync
 
 ### 桌面端
 
-左侧固定显示四个主视图和九个工具入口，不需要展开“控制中心”或二级菜单。高分辨率屏幕会自动扩大工作区和工具按钮。
+左侧固定显示四个主视图；服务器运维、配置、备份、RCON、高级功能等 18 个工具集中在顶部工具架，不需要展开“控制中心”或二级菜单。高分辨率屏幕会自动扩大工作区和工具按钮。
 
 ### 移动端
 
@@ -257,7 +257,7 @@ http://游戏服务器IP:8081/sync
 概览 | 玩家 | 公会 | 地图 | 工具
 ```
 
-点击“工具”后可以打开全部九个管理工具。工具面板会先关闭，再打开对应功能弹窗，避免出现多层弹窗。
+点击“工具”后可以打开全部 18 个管理工具。工具面板会先关闭，再打开对应功能弹窗，避免出现多层弹窗。
 
 ### 主题与语言
 
@@ -854,6 +854,83 @@ sudo PANEL_PORT=19190 bash scripts/install-panel.sh
 
 优先使用安装时保存的 Panel Token 登录，然后在 `PST 配置 -> 管理员安全` 中设置新密码。
 
+## 高级功能
+
+### 运维中心
+
+“运维中心”集中显示服务器日志、主机历史负载、后台任务、失败告警、计划任务和操作审计。备份校验、恢复、Workshop 安装、PalDefender 安装等耗时操作会进入后台任务队列，不会阻塞浏览器页面。
+
+### 备份与 WebDAV
+
+“备份与恢复”支持：
+
+- 创建、下载和删除备份
+- SHA-256 与压缩包结构校验
+- 恢复前自动创建保护备份
+- 恢复失败时自动回滚原世界
+- WebDAV 连接测试、远程目录创建和单个备份上传
+
+安全恢复必须输入完整备份文件名确认。公网 WebDAV 地址必须使用 HTTPS，局域网和回环地址可以使用 HTTP。
+
+### 存档源与世界数据
+
+“存档源”可以管理当前服务器世界、服务器本地目录和 ZIP 导入世界。每个存档源都可以切换为当前解析源并重建索引。
+
+“世界数据”提供独立的基地、全局仓储容器和全部帕鲁视图。1.0 存档解析器会输出玩家六类背包、所有 `ItemContainerSaveData` 容器、基地、公会和帕鲁数据。
+
+### 本地模组与 Workshop
+
+“模组管理”支持 Pak、LogicMods、UE4SS 文件扫描、ZIP/PAK/UTOC/UCAS/DLL 上传、启用、停用和删除。
+
+“Steam Workshop”支持：
+
+- Steam Web API 搜索和真实预览图
+- 公开 Workshop 详情读取
+- SteamCMD 后台安装和更新
+- 已安装模组启用、停用和删除
+- OpenAI 兼容接口翻译标题与说明
+
+Workshop 搜索需要管理员在设置中填写 Steam Web API Key。翻译接口公网地址必须使用 HTTPS，API Key 只保存在面板服务器。
+
+### 配种实验室
+
+配种实验室使用固定版本 [PalCalc v1.17.6](https://github.com/tylercamp/palcalc/tree/v1.17.6) 的 MIT 数据，包含 299 种帕鲁和 44,851 组配种结果。支持：
+
+- 双亲查询子代
+- 按目标帕鲁反查全部亲本组合
+- 从当前启用存档和自定义素材库中已拥有的帕鲁求多代路线
+- 设置目标性别、必须/可选被动、最低 IV、最大代数、迭代数和线程数
+- 后台配种任务排队、暂停、继续、取消和进度查看
+- 结果历史、存档变化过期标记、成功率/蛋数/耗时估算
+- 完整配种预设和自定义帕鲁素材库管理
+
+PalCalc 数据被压缩为平台无关的只读目录，因此 AMD64 和 ARM64 面板都能直接使用，不需要额外运行 .NET 服务。
+
+### PalDefender
+
+“PalDefender”提供运行环境检测、最新稳定版查询、摘要校验安装、事务回滚、`Config.json` 编辑、回环 REST 连接和完整在线 GM 工作台。GM 工作台包括背包、成长资源、科技学习/遗忘、玩家帕鲁、帕鲁模板、物品发放、私聊、广播、屏幕警报、踢出、封禁、解封、封禁记录库和受限 REST 调试。浏览器不会得到 PalDefender Bearer Token。
+
+PalDefender 是 Win64 DLL。只有 Win64/Wine Palworld 运行目录并且已经安装 UE4SS 时才允许自动安装。Oracle ARM 原生 Linux 服务不能直接加载该 DLL，可以通过 Agent 管理另一台兼容服务器。
+
+### 多管理员与 API Key
+
+“账号权限”支持管理员、运维员、只读账号和可撤销 API Key。修改账号密码或角色后，旧登录令牌立即失效。
+
+| 角色 | 主要权限 |
+| --- | --- |
+| 管理员 | 所有功能，包括账号、密钥、PalDefender 和敏感第三方配置 |
+| 运维员 | 服务、玩家、备份、模组、计划任务等日常运维 |
+| 只读 | 查看服务器和存档数据 |
+| 机器人集成 | AstrBot 查询、绑定、签到、配种、登录链接，以及面板授权 QQ 的机器人管理员操作 |
+
+API Key 只在创建时显示一次，面板只保存 SHA-256 摘要。
+
+### AstrBot / QQ
+
+项目内置 [`astrbot_plugin_palworld_panel`](astrbot_plugin_palworld_panel) 插件目录，适用于 AstrBot `>=4.18,<5`。支持在线玩家、游戏内验证码绑定、每日签到、积分与流水、受限配种计算、一次性只读面板链接，以及人工绑定、解绑、冻结、解冻和积分调整。
+
+安装插件后，在 AstrBot 中填写面板 URL 和“机器人集成”角色的 API Key。可用命令见插件目录中的 README。
+
 ## 安全建议
 
 - 部署后立即修改默认 Palworld `AdminPassword`。
@@ -910,6 +987,8 @@ npm start
 感谢 zaigie 及该项目贡献者长期维护并公开这些成果。
 
 主机监控、内存阈值和维护重启的产品思路参考了 [Hoshinonyaruko/palworld-go](https://github.com/Hoshinonyaruko/palworld-go)。本项目针对 Linux、AMD64、ARM64 和远程 Agent 架构独立实现，没有复制其 Go 或 Vue 源码。`palworld-go` 中依赖 Windows DLL、UE4SS、PalGuard 和 RAMMap 的功能不适用于当前 Oracle ARM64 部署，因此没有直接移植。
+
+多存档、PalCalc 配种任务、AstrBot 积分、WebDAV、Workshop 与 PalDefender GM 工作流的产品体验参考了 [uitok/palworld-panel](https://github.com/uitok/palworld-panel)。该项目使用 GPL-3.0-or-later；本项目仅根据公开功能说明和 API 行为进行独立实现，没有复制其 Go、React 或其他 GPL 源码。
 
 `palworld-server-tool` 使用 Apache License 2.0，版权声明为 `Copyright 2024 zaigie`。对应许可证保存在：
 

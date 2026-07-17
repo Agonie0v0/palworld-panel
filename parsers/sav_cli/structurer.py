@@ -111,6 +111,34 @@ def _index_item_containers():
     return index
 
 
+def _slot_items(slots):
+    items = []
+    for slot in slots or []:
+        raw = slot["RawData"]["value"]
+        if not raw:
+            continue
+        static_id = raw["item"]["static_id"]
+        if not static_id or static_id.lower() == "none":
+            continue
+        items.append(
+            {
+                "SlotIndex": raw["slot_index"],
+                "ItemId": static_id.lower(),
+                "StackCount": raw["count"],
+            }
+        )
+    return items
+
+
+def structure_item_containers():
+    """Return every decoded world container for global storage inspection."""
+    return [
+        {"id": container_id, "items": _slot_items(slots)}
+        for container_id, slots in _index_item_containers().items()
+        if slots
+    ]
+
+
 def getPlayerItems(player_uid, dir_path, item_containers):
     containers_data = {k: [] for k in PLAYER_CONTAINER_KEYS}
 
@@ -142,22 +170,10 @@ def getPlayerItems(player_uid, dir_path, item_containers):
         slots = item_containers.get(container_id)
         if slots is None:
             continue
-        items = []
-        for slot in slots:
-            raw = slot["RawData"]["value"]
-            if not raw:  # empty slot decodes to None
-                continue
-            static_id = raw["item"]["static_id"]
-            if not static_id or static_id.lower() == "none":
-                continue
-            items.append(
-                {
-                    "SlotIndex": raw["slot_index"],
-                    "ItemId": static_id.lower(),
-                    "StackCount": raw["count"],
-                }
-            )
-        containers_data[key] = items
+        containers_data[key] = [
+            {**item, "ContainerId": container_id}
+            for item in _slot_items(slots)
+        ]
     return containers_data, False
 
 

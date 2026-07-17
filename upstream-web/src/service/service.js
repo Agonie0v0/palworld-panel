@@ -13,9 +13,11 @@ class Service {
       updateDataOnError: true,
       beforeFetch({ options }) {
         const token = localStorage.getItem("palworld_token");
+        const isFormData =
+          typeof FormData !== "undefined" && options.body instanceof FormData;
         options.headers = {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+          ...(isFormData ? {} : { "Content-Type": "application/json" }),
           ...options.headers,
           "Remote-Ip-Address": localStorage.getItem("ip") || "127.0.0.1",
         };

@@ -22,7 +22,13 @@ import argparse
 from urllib.parse import urljoin
 
 from logger import configure_logging, log
-from structurer import convert_sav, structure_player, structure_guild
+from structurer import (
+    convert_sav,
+    structure_player,
+    structure_guild,
+    structure_base_camp,
+    structure_item_containers,
+)
 
 MAX_ERROR_BODY_LENGTH = 512
 
@@ -125,6 +131,8 @@ def main():
     phase_start = time.perf_counter()
     players, player_save_warnings = structure_player(dir_path, filetime=filetime)
     guilds = structure_guild(filetime)
+    bases = structure_base_camp()
+    containers = structure_item_containers()
 
     # Fill save_last_online from the player's guild membership record.
     for player in players:
@@ -150,7 +158,15 @@ def main():
     if args.request == "":
         with open(output, "w", encoding="utf-8") as f:
             json.dump(
-                {"players": players, "guilds": guilds}, f, indent=4, ensure_ascii=False
+                {
+                    "players": players,
+                    "guilds": guilds,
+                    "bases": bases,
+                    "containers": containers,
+                },
+                f,
+                indent=4,
+                ensure_ascii=False,
             )
         log(f"Wrote structured save: {output}")
     else:

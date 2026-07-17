@@ -2,7 +2,7 @@
 import PcHome from "@/views/PcHome/PcHome.vue";
 import MobileHome from "@/views/MobileHome/MobileHome.vue";
 import pageStore from "@/stores/model/page";
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import userStore from "@/stores/model/user";
 import ApiService from "@/service/api";
 import FirstRunSetup from "@/components/FirstRunSetup.vue";
@@ -15,6 +15,17 @@ const initialized = ref(false);
 const showConfig = ref(false);
 
 onMounted(async () => {
+  const currentUrl = new URL(window.location.href);
+  const issuedToken = currentUrl.searchParams.get("auth_token");
+  if (issuedToken) {
+    localStorage.setItem(PALWORLD_TOKEN, issuedToken);
+    currentUrl.searchParams.delete("auth_token");
+    window.history.replaceState(
+      {},
+      "",
+      `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+    );
+  }
   let token = localStorage.getItem(PALWORLD_TOKEN);
   if (token) userStore().setIsLogin(true, token);
   const { data, statusCode } = await new ApiService().getConfigStatus();

@@ -15,6 +15,8 @@ COPY public ./public
 COPY upstream-web/dist ./upstream-web/dist
 COPY upstream-web/public ./upstream-web/public
 COPY parsers ./parsers
+COPY resources ./resources
+COPY astrbot_plugin_palworld_panel ./astrbot_plugin_palworld_panel
 COPY scripts ./scripts
 
 ARG PST_TOOLS_REF=8cb429ae3b1460a6a6a0c31c9964ca8cedb65cc5

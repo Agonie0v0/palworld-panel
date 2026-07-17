@@ -9,6 +9,7 @@ const net = require("net");
 const crypto = require("crypto");
 const packageInfo = require("../package.json");
 const { createUpstreamCompatibility } = require("./upstream-compat");
+const { createAdvancedFeatures } = require("./advanced-features");
 
 const rootDir = path.resolve(__dirname, "..");
 const configPath = process.env.PAL_PANEL_CONFIG || path.join(rootDir, "data", "config.json");
@@ -192,11 +193,32 @@ function authSigningKey(config) {
   return crypto.createHash("sha256").update(String(material)).digest();
 }
 
-function issueAuthToken(config, now = Date.now()) {
+const rolePermissions = {
+  admin: ["*"],
+  operator: [
+    "read",
+    "server:write",
+    "players:write",
+    "backups:write",
+    "mods:write",
+    "schedules:write",
+  ],
+  viewer: ["read"],
+  integration: ["integrations:write"],
+};
+
+function permissionsForRole(role) {
+  return rolePermissions[role] || rolePermissions.viewer;
+}
+
+function issueAuthToken(config, now = Date.now(), principal = {}) {
   const issuedAt = Math.floor(now / 1000);
   const header = encodeBase64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const payload = encodeBase64Url(JSON.stringify({
-    sub: config.panel.adminUser || "admin",
+    sub: principal.name || config.panel.adminUser || "admin",
+    uid: principal.id || "primary",
+    role: principal.role || "admin",
+    ver: Number(principal.tokenVersion || 1),
     iat: issuedAt,
     exp: issuedAt + authTokenTtlSeconds
   }));
@@ -204,20 +226,24 @@ function issueAuthToken(config, now = Date.now()) {
   return `${header}.${payload}.${signature}`;
 }
 
-function verifyAuthToken(config, token, now = Date.now()) {
+function decodeAuthToken(config, token, now = Date.now()) {
   const parts = String(token || "").split(".");
-  if (parts.length !== 3) return false;
+  if (parts.length !== 3) return null;
   const expected = crypto.createHmac("sha256", authSigningKey(config)).update(`${parts[0]}.${parts[1]}`).digest("base64url");
   const actualBuffer = Buffer.from(parts[2]);
   const expectedBuffer = Buffer.from(expected);
-  if (actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return false;
+  if (actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return null;
   try {
     const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
     const current = Math.floor(now / 1000);
-    return Number(payload.exp) > current && Number(payload.iat) <= current + 60;
+    return Number(payload.exp) > current && Number(payload.iat) <= current + 60 ? payload : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function verifyAuthToken(config, token, now = Date.now()) {
+  return Boolean(decodeAuthToken(config, token, now));
 }
 
 async function ensureConfig() {
@@ -272,6 +298,94 @@ function isAuthorized(req, config) {
   if (!header.startsWith("Bearer ")) return false;
   const token = header.slice(7);
   return (Boolean(expected) && expected !== "change-me" && token === expected) || verifyAuthToken(config, token);
+}
+
+function publicPrincipal(user) {
+  return {
+    id: user.id,
+    name: user.username || user.name,
+    role: user.role || "viewer",
+    permissions: permissionsForRole(user.role || "viewer"),
+    primary: Boolean(user.primary),
+    createdAt: user.createdAt || "",
+  };
+}
+
+async function listAccessUsers(config) {
+  const stored = await loadJsonFile("access-users.json", []);
+  return [
+    {
+      id: "primary",
+      username: config.panel.adminUser || "admin",
+      role: "admin",
+      passwordSalt: config.panel.adminPasswordSalt,
+      passwordHash: config.panel.adminPasswordHash,
+      tokenVersion: 1,
+      primary: true,
+      createdAt: "",
+    },
+    ...(Array.isArray(stored) ? stored : []),
+  ];
+}
+
+async function authenticateRequest(req, config) {
+  const header = String(req.headers.authorization || "");
+  if (!header.startsWith("Bearer ")) return null;
+  const token = header.slice(7);
+  const staticToken = effectivePanelToken(config);
+  if (staticToken && staticToken !== "change-me" && token === staticToken) {
+    return publicPrincipal({ id: "token", username: config.panel.adminUser || "admin", role: "admin", primary: true });
+  }
+
+  const jwt = decodeAuthToken(config, token);
+  if (jwt) {
+    const users = await listAccessUsers(config);
+    const user = users.find((row) => row.id === (jwt.uid || "primary"));
+    if (!user || Number(user.tokenVersion || 1) !== Number(jwt.ver || 1)) return null;
+    return publicPrincipal(user);
+  }
+
+  if (token.startsWith("pal_")) {
+    const keys = await loadJsonFile("api-keys.json", []);
+    const digest = crypto.createHash("sha256").update(token).digest("hex");
+    const key = (Array.isArray(keys) ? keys : []).find((row) => row.hash === digest && !row.revokedAt);
+    if (!key) return null;
+    key.lastUsedAt = new Date().toISOString();
+    await saveJsonFile("api-keys.json", keys);
+    return {
+      id: `key:${key.id}`,
+      name: key.name,
+      role: key.role || "viewer",
+      permissions: Array.isArray(key.permissions) && key.permissions.length
+        ? key.permissions
+        : permissionsForRole(key.role || "viewer"),
+      apiKey: true,
+    };
+  }
+  return null;
+}
+
+function requiredPermission(req) {
+  const pathname = new URL(req.url, "http://panel.local").pathname;
+  if (
+    pathname.startsWith("/api/access/") ||
+    pathname.startsWith("/api/security/") ||
+    pathname.includes("paldefender") ||
+    pathname.includes("/workshop/config") ||
+    pathname.includes("/astrbot/config")
+  ) return "security:write";
+  if (pathname.includes("astrbot")) return "integrations:write";
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return "read";
+  if (pathname.includes("backup")) return "backups:write";
+  if (pathname.includes("mod") || pathname.includes("workshop")) return "mods:write";
+  if (pathname.includes("schedule") || pathname.includes("rcon/task")) return "schedules:write";
+  if (pathname.includes("player") || pathname.includes("whitelist") || pathname.includes("broadcast")) return "players:write";
+  return "server:write";
+}
+
+function principalCan(principal, permission) {
+  const permissions = principal?.permissions || [];
+  return permissions.includes("*") || permissions.includes(permission);
 }
 
 async function loadJsonFile(name, fallback) {
@@ -887,7 +1001,10 @@ async function testSaveSource(sourceMode, target) {
 
 async function prepareSaveSource(config, purpose) {
   if (config.automation.saveSourceMode !== "agent") {
-    return { directory: path.join(config.server.saveDir, "SaveGames"), cleanup: async () => {} };
+    const configuredSource = purpose === "decode" && config.automation.saveSourcePath
+      ? config.automation.saveSourcePath
+      : config.server.saveDir;
+    return { directory: path.resolve(configuredSource), cleanup: async () => {} };
   }
   const sourceUrl = remoteSaveSourceUrl(config);
   if (!sourceUrl) throw new Error("Save Agent URL is not configured.");
@@ -1199,6 +1316,8 @@ async function querySaveData(config) {
     guilds: [],
     pals: [],
     inventory: [],
+    bases: [],
+    containers: [],
     map: null,
     source: "not_configured",
     message: "Configure server.saveParserCommand to parse Level.sav data."
@@ -1233,6 +1352,10 @@ async function querySaveData(config) {
       guilds: Array.isArray(parsed.guilds) ? parsed.guilds : [],
       pals,
       inventory,
+      bases: Array.isArray(parsed.bases)
+        ? parsed.bases
+        : (Array.isArray(parsed.guilds) ? parsed.guilds : []).flatMap((guild) => guild.base_camp || []),
+      containers: Array.isArray(parsed.containers) ? parsed.containers : [],
       map: parsed.map || null,
       source: config.automation.saveSourceMode === "agent" ? "agent" : "parser"
     };
@@ -1330,6 +1453,29 @@ async function applySettings(config, settings) {
   return next;
 }
 
+const advancedFeatures = createAdvancedFeatures({
+  dataDir,
+  exec,
+  sendJson,
+  sendError,
+  readBody,
+  loadJsonFile,
+  saveJsonFile,
+  saveConfig,
+  managedCall,
+  collectHostMetrics,
+  createBackup,
+  querySaveData,
+  liveServerData,
+  saveSyncedSaveData,
+  serviceStatus,
+  runAction,
+  rcon,
+  performManagedRestart: managedRestart,
+  issueViewerToken: (config, principal) => issueAuthToken(config, Date.now(), principal),
+  proxyAgentUpload,
+});
+
 async function executeAgentOperation(operation, payload, config) {
   const operations = {
     profile: async () => ({
@@ -1414,7 +1560,7 @@ async function executeAgentOperation(operation, payload, config) {
     settings: async () => (await applySettings(config, payload.settings || {})).settings
   };
   const handler = operations[operation];
-  if (!handler) throw new Error("Unsupported Agent operation.");
+  if (!handler) return advancedFeatures.executeAgentOperation(operation, payload, config);
   return handler();
 }
 
@@ -1434,6 +1580,11 @@ async function handleAgentApi(req, res, config) {
     const body = await readBody(req);
     const value = await executeAgentOperation(body.operation, body.payload || {}, config);
     return sendJson(res, 200, { ok: true, value });
+  }
+
+  const uploadMatch = req.url.match(/^\/agent\/upload\/(save-source|mod)$/);
+  if (req.method === "POST" && uploadMatch) {
+    return advancedFeatures.handleAgentUpload(req, res, config, uploadMatch[1]);
   }
 
   if (req.method === "GET" && req.url.startsWith("/agent/backup/")) {
@@ -1518,8 +1669,10 @@ const upstreamCompat = createUpstreamCompatibility({
 
 async function handleApi(req, res, config) {
   if (await upstreamCompat.handlePublic(req, res, config)) return;
+  if (await advancedFeatures.handlePublicApi(req, res, config)) return;
 
-  const authorized = isAuthorized(req, config);
+  const principal = await authenticateRequest(req, config);
+  const authorized = Boolean(principal);
   if (await upstreamCompat.handleOptional(req, res, config, authorized)) return;
 
   if (req.method === "GET" && req.url === "/api/auth/status") {
@@ -1550,21 +1703,152 @@ async function handleApi(req, res, config) {
         adminPasswordSalt: password.salt
       }
     });
-    return sendJson(res, 200, { ok: true, token: issueAuthToken(next), username: next.panel.adminUser });
+    return sendJson(res, 200, {
+      ok: true,
+      token: issueAuthToken(next, Date.now(), { id: "primary", name: next.panel.adminUser, role: "admin" }),
+      username: next.panel.adminUser,
+      role: "admin",
+    });
   }
 
   if (req.method === "POST" && req.url === "/api/login") {
     const body = await readBody(req);
     const panelToken = effectivePanelToken(config);
-    const ok = body.token === panelToken
-      || body.password === panelToken
-      || (body.password && verifyPassword(body.password, config.panel.adminPasswordSalt, config.panel.adminPasswordHash))
-      || (body.username === config.panel.adminUser && verifyPassword(body.password, config.panel.adminPasswordSalt, config.panel.adminPasswordHash));
-    if (!ok) return sendError(res, 401, "Invalid login.");
-    return sendJson(res, 200, { ok: true, token: issueAuthToken(config) });
+    if (body.token === panelToken || body.password === panelToken) {
+      return sendJson(res, 200, {
+        ok: true,
+        token: issueAuthToken(config, Date.now(), { id: "primary", name: config.panel.adminUser, role: "admin" }),
+        username: config.panel.adminUser,
+        role: "admin",
+      });
+    }
+    const users = await listAccessUsers(config);
+    const requestedName = String(body.username || "").trim();
+    const user = requestedName
+      ? users.find((row) => row.username === requestedName)
+      : users.find((row) => row.primary);
+    if (!user || !verifyPassword(body.password, user.passwordSalt, user.passwordHash)) {
+      return sendError(res, 401, "Invalid login.");
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      token: issueAuthToken(config, Date.now(), {
+        id: user.id,
+        name: user.username,
+        role: user.role,
+        tokenVersion: user.tokenVersion,
+      }),
+      username: user.username,
+      role: user.role,
+    });
   }
 
   if (!authorized) return sendError(res, 401, "Unauthorized.");
+
+  const permission = requiredPermission(req);
+  if (!principalCan(principal, permission)) return sendError(res, 403, `Permission required: ${permission}`);
+
+  if (req.method === "GET" && req.url === "/api/auth/me") {
+    return sendJson(res, 200, { ok: true, user: principal });
+  }
+
+  if (req.method === "GET" && req.url === "/api/access/users") {
+    if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
+    return sendJson(res, 200, { ok: true, users: (await listAccessUsers(config)).map(publicPrincipal) });
+  }
+
+  if (req.method === "POST" && req.url === "/api/access/users") {
+    if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
+    const body = await readBody(req);
+    const username = String(body.username || "").trim();
+    const role = ["admin", "operator", "viewer"].includes(body.role) ? body.role : "viewer";
+    if (!/^[A-Za-z0-9_.-]{3,64}$/.test(username)) return sendError(res, 400, "Username must be 3-64 safe characters.");
+    if (String(body.password || "").length < 8) return sendError(res, 400, "Password must be at least 8 characters.");
+    const users = await listAccessUsers(config);
+    if (users.some((row) => row.username.toLowerCase() === username.toLowerCase())) return sendError(res, 409, "Username already exists.");
+    const password = hashPassword(body.password);
+    const stored = await loadJsonFile("access-users.json", []);
+    const user = {
+      id: crypto.randomUUID(),
+      username,
+      role,
+      passwordSalt: password.salt,
+      passwordHash: password.hash,
+      tokenVersion: 1,
+      createdAt: new Date().toISOString(),
+    };
+    await saveJsonFile("access-users.json", [user, ...(Array.isArray(stored) ? stored : [])]);
+    return sendJson(res, 201, { ok: true, user: publicPrincipal(user) });
+  }
+
+  const accessUserMatch = req.url.match(/^\/api\/access\/users\/([^/?]+)$/);
+  if (accessUserMatch && ["PATCH", "DELETE"].includes(req.method)) {
+    if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
+    const id = decodeURIComponent(accessUserMatch[1]);
+    if (id === "primary") return sendError(res, 400, "The primary administrator is managed in Panel settings.");
+    const stored = await loadJsonFile("access-users.json", []);
+    const index = (Array.isArray(stored) ? stored : []).findIndex((row) => row.id === id);
+    if (index < 0) return sendError(res, 404, "User not found.");
+    if (req.method === "DELETE") {
+      stored.splice(index, 1);
+      await saveJsonFile("access-users.json", stored);
+      return sendJson(res, 200, { ok: true });
+    }
+    const body = await readBody(req);
+    if (["admin", "operator", "viewer"].includes(body.role)) stored[index].role = body.role;
+    if (body.password) {
+      if (String(body.password).length < 8) return sendError(res, 400, "Password must be at least 8 characters.");
+      const password = hashPassword(body.password);
+      stored[index].passwordSalt = password.salt;
+      stored[index].passwordHash = password.hash;
+    }
+    stored[index].tokenVersion = Number(stored[index].tokenVersion || 1) + 1;
+    await saveJsonFile("access-users.json", stored);
+    return sendJson(res, 200, { ok: true, user: publicPrincipal(stored[index]) });
+  }
+
+  if (req.method === "GET" && req.url === "/api/access/api-keys") {
+    if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
+    const keys = await loadJsonFile("api-keys.json", []);
+    return sendJson(res, 200, {
+      ok: true,
+      keys: (Array.isArray(keys) ? keys : []).map(({ hash, ...key }) => key),
+    });
+  }
+
+  if (req.method === "POST" && req.url === "/api/access/api-keys") {
+    if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
+    const body = await readBody(req);
+    const role = ["admin", "operator", "viewer", "integration"].includes(body.role) ? body.role : "viewer";
+    const raw = `pal_${crypto.randomBytes(32).toString("base64url")}`;
+    const keys = await loadJsonFile("api-keys.json", []);
+    const key = {
+      id: crypto.randomUUID(),
+      name: String(body.name || "API key").slice(0, 80),
+      prefix: raw.slice(0, 12),
+      hash: crypto.createHash("sha256").update(raw).digest("hex"),
+      role,
+      permissions: Array.isArray(body.permissions) ? body.permissions.slice(0, 30) : permissionsForRole(role),
+      createdAt: new Date().toISOString(),
+      lastUsedAt: "",
+      revokedAt: "",
+    };
+    await saveJsonFile("api-keys.json", [key, ...(Array.isArray(keys) ? keys : [])]);
+    const { hash, ...visible } = key;
+    return sendJson(res, 201, { ok: true, key: visible, token: raw });
+  }
+
+  const apiKeyMatch = req.url.match(/^\/api\/access\/api-keys\/([^/?]+)$/);
+  if (apiKeyMatch && req.method === "DELETE") {
+    if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
+    const id = decodeURIComponent(apiKeyMatch[1]);
+    const keys = await loadJsonFile("api-keys.json", []);
+    const key = (Array.isArray(keys) ? keys : []).find((row) => row.id === id);
+    if (!key) return sendError(res, 404, "API key not found.");
+    key.revokedAt = new Date().toISOString();
+    await saveJsonFile("api-keys.json", keys);
+    return sendJson(res, 200, { ok: true });
+  }
 
   if (await upstreamCompat.handleAuthorized(req, res, config)) return;
 
@@ -1820,7 +2104,43 @@ async function handleApi(req, res, config) {
     return sendJson(res, 200, { ok: true, config: next });
   }
 
+  if (await advancedFeatures.handleApi(req, res, config, {
+    principal,
+    agentEnabled: agentIsEnabled(await loadAgentConfig()),
+  })) return;
+
   return sendError(res, 404, "API route not found.");
+}
+
+async function proxyAgentUpload(req, res, kind) {
+  const agent = await loadAgentConfig();
+  if (!agentIsEnabled(agent)) throw new Error("Remote Agent is not enabled.");
+  const endpoint = agentEndpoint(agent, `/agent/upload/${encodeURIComponent(kind)}`);
+  const transport = endpoint.protocol === "https:" ? https : http;
+  await new Promise((resolve, reject) => {
+    const outgoing = transport.request(
+      endpoint,
+      {
+        method: "POST",
+        headers: {
+          "x-agent-token": agent.token || "",
+          "content-type": req.headers["content-type"] || "application/octet-stream",
+          ...(req.headers["content-length"] ? { "content-length": req.headers["content-length"] } : {}),
+        },
+        timeout: 30 * 60 * 1000,
+      },
+      (agentRes) => {
+        res.writeHead(agentRes.statusCode || 502, {
+          "content-type": agentRes.headers["content-type"] || "application/json; charset=utf-8",
+        });
+        agentRes.pipe(res);
+        agentRes.on("end", resolve);
+      },
+    );
+    outgoing.on("timeout", () => outgoing.destroy(new Error("Agent upload timed out.")));
+    outgoing.on("error", reject);
+    req.pipe(outgoing);
+  });
 }
 
 function numberInRange(value, fallback, minimum, maximum) {
@@ -1955,6 +2275,7 @@ async function schedulerTick() {
   try {
     const config = await loadConfig();
     const now = Date.now();
+    await advancedFeatures.tick(config);
     const playerInterval = Math.max(0, Number(config.automation.playerSyncInterval || 0));
     if (isDue(schedulerState.playerSync, playerInterval, now)) {
       schedulerState.playerSync = now;
@@ -2092,6 +2413,7 @@ if (require.main === module) {
 
 module.exports = {
   authSigningKey,
+  decodeAuthToken,
   decodeRconResponse,
   encodeRconCommand,
   formatPlayerMessage,
@@ -2099,6 +2421,8 @@ module.exports = {
   isWhitelisted,
   issueAuthToken,
   normalizeLivePlayers,
+  permissionsForRole,
+  principalCan,
   parseDfOutput,
   parsePsOutput,
   playerUidFromId,

@@ -1,0 +1,7 @@
+name: palworld_panel
+display_name: Palworld Panel
+desc: QQ binding, check-in points, breeding routes, and one-time panel login
+version: 1.0.0
+author: Agonie0v0
+repo: https://github.com/Agonie0v0/palworld-panel
+astrbot_version: ">=4.18,<5"

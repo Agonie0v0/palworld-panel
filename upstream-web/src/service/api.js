@@ -6,6 +6,44 @@ class ApiService extends Service {
     return this.fetch(`/api/login`).post(data).json();
   }
 
+  async getCurrentUser() {
+    return this.fetch(`/api/auth/me`).get().json();
+  }
+
+  async getAccessUsers() {
+    return this.fetch(`/api/access/users`).get().json();
+  }
+
+  async createAccessUser(user) {
+    return this.fetch(`/api/access/users`).post(user).json();
+  }
+
+  async updateAccessUser(id, changes) {
+    return this.fetch(`/api/access/users/${encodeURIComponent(id)}`)
+      .patch(changes)
+      .json();
+  }
+
+  async deleteAccessUser(id) {
+    return this.fetch(`/api/access/users/${encodeURIComponent(id)}`)
+      .delete()
+      .json();
+  }
+
+  async getApiKeys() {
+    return this.fetch(`/api/access/api-keys`).get().json();
+  }
+
+  async createApiKey(key) {
+    return this.fetch(`/api/access/api-keys`).post(key).json();
+  }
+
+  async revokeApiKey(id) {
+    return this.fetch(`/api/access/api-keys/${encodeURIComponent(id)}`)
+      .delete()
+      .json();
+  }
+
   async getConfigStatus() {
     return this.fetch(`/api/config/status`).get().json();
   }
@@ -83,6 +121,10 @@ class ApiService extends Service {
   async getGuild(param) {
     const { adminPlayerUid } = param;
     return this.fetch(`/api/guild/${adminPlayerUid}`).get().json();
+  }
+
+  async getWorldData() {
+    return this.fetch(`/api/save-data`).get().json();
   }
 
   async getWhitelist() {
@@ -210,6 +252,423 @@ class ApiService extends Service {
 
   async updateWatchdog(settings) {
     return this.fetch(`/api/watchdog`).put({ settings }).json();
+  }
+
+  async getAdvancedFeatures() {
+    return this.fetch(`/api/advanced/features`).get().json();
+  }
+
+  async getServerLogs(lines = 300) {
+    return this.fetch(`/api/advanced/logs?lines=${lines}`).get().json();
+  }
+
+  async getMonitorHistory(limit = 360) {
+    return this.fetch(`/api/advanced/monitor/history?limit=${limit}`)
+      .get()
+      .json();
+  }
+
+  async getAdvancedJobs() {
+    return this.fetch(`/api/advanced/jobs`).get().json();
+  }
+
+  async getAdvancedAlerts() {
+    return this.fetch(`/api/advanced/alerts`).get().json();
+  }
+
+  async acknowledgeAlert(id) {
+    return this.fetch(`/api/advanced/alerts/${encodeURIComponent(id)}/ack`)
+      .post({})
+      .json();
+  }
+
+  async getAuditLog(limit = 300) {
+    return this.fetch(`/api/advanced/audit?limit=${limit}`).get().json();
+  }
+
+  async getSchedules() {
+    return this.fetch(`/api/advanced/schedules`).get().json();
+  }
+
+  async saveSchedule(schedule) {
+    return this.fetch(`/api/advanced/schedules`).post(schedule).json();
+  }
+
+  async runSchedule(id) {
+    return this.fetch(`/api/advanced/schedules/${encodeURIComponent(id)}/run`)
+      .post({})
+      .json();
+  }
+
+  async deleteSchedule(id) {
+    return this.fetch(`/api/advanced/schedules/${encodeURIComponent(id)}`)
+      .delete()
+      .json();
+  }
+
+  async verifyBackup(name) {
+    return this.fetch(
+      `/api/advanced/backups/${encodeURIComponent(name)}/verify`,
+    )
+      .post({})
+      .json();
+  }
+
+  async restoreBackup(name) {
+    return this.fetch(
+      `/api/advanced/backups/${encodeURIComponent(name)}/restore`,
+    )
+      .post({})
+      .json();
+  }
+
+  async uploadBackupWebDav(name) {
+    return this.fetch(
+      `/api/advanced/backups/${encodeURIComponent(name)}/webdav`,
+    )
+      .post({})
+      .json();
+  }
+
+  async getWebDavConfig() {
+    return this.fetch(`/api/advanced/backups/webdav`).get().json();
+  }
+
+  async updateWebDavConfig(webdav) {
+    return this.fetch(`/api/advanced/backups/webdav`).put({ webdav }).json();
+  }
+
+  async testWebDavConfig(webdav) {
+    return this.fetch(`/api/advanced/backups/webdav/test`)
+      .post({ webdav })
+      .json();
+  }
+
+  async getSaveSources() {
+    return this.fetch(`/api/advanced/save-sources`).get().json();
+  }
+
+  async importSaveSourcePath(path, name) {
+    return this.fetch(`/api/advanced/save-sources/path`)
+      .post({ path, name })
+      .json();
+  }
+
+  async uploadSaveSource(file, name) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("name", name || file.name);
+    return this.fetch(`/api/advanced/save-sources/upload`).post(form).json();
+  }
+
+  async activateSaveSource(id) {
+    return this.fetch(
+      `/api/advanced/save-sources/${encodeURIComponent(id)}/activate`,
+    )
+      .post({})
+      .json();
+  }
+
+  async rebuildSaveSource(id) {
+    return this.fetch(
+      `/api/advanced/save-sources/${encodeURIComponent(id)}/rebuild`,
+    )
+      .post({})
+      .json();
+  }
+
+  async renameSaveSource(id, name) {
+    return this.fetch(`/api/advanced/save-sources/${encodeURIComponent(id)}`)
+      .patch({ name })
+      .json();
+  }
+
+  async deleteSaveSource(id) {
+    return this.fetch(`/api/advanced/save-sources/${encodeURIComponent(id)}`)
+      .delete()
+      .json();
+  }
+
+  async getMods() {
+    return this.fetch(`/api/advanced/mods`).get().json();
+  }
+
+  async scanMods() {
+    return this.fetch(`/api/advanced/mods/scan`).post({}).json();
+  }
+
+  async uploadMod(file, type = "pak") {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("type", type);
+    return this.fetch(`/api/advanced/mods/upload`).post(form).json();
+  }
+
+  async setModEnabled(id, enabled) {
+    return this.fetch(
+      `/api/advanced/mods/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`,
+    )
+      .post({})
+      .json();
+  }
+
+  async deleteMod(id) {
+    return this.fetch(`/api/advanced/mods/${encodeURIComponent(id)}`)
+      .delete()
+      .json();
+  }
+
+  async getPalDefenderStatus() {
+    return this.fetch(`/api/advanced/paldefender/status`).get().json();
+  }
+
+  async getPalDefenderRelease() {
+    return this.fetch(`/api/advanced/paldefender/release`).get().json();
+  }
+
+  async installPalDefender() {
+    return this.fetch(`/api/advanced/paldefender/install`).post({}).json();
+  }
+
+  async rollbackPalDefender() {
+    return this.fetch(`/api/advanced/paldefender/rollback`).post({}).json();
+  }
+
+  async getPalDefenderBridge() {
+    return this.fetch(`/api/advanced/paldefender/bridge`).get().json();
+  }
+
+  async updatePalDefenderBridge(bridge) {
+    return this.fetch(`/api/advanced/paldefender/bridge`)
+      .put({ bridge })
+      .json();
+  }
+
+  async getPalDefenderConfig() {
+    return this.fetch(`/api/advanced/paldefender/config`).get().json();
+  }
+
+  async updatePalDefenderConfig(config) {
+    return this.fetch(`/api/advanced/paldefender/config`)
+      .put({ config })
+      .json();
+  }
+
+  async testPalDefender() {
+    return this.fetch(`/api/advanced/paldefender/test`).post({}).json();
+  }
+
+  async palDefenderRequest(method, path, body) {
+    return this.fetch(`/api/advanced/paldefender/proxy`)
+      .post({ method, path, body })
+      .json();
+  }
+
+  async getPalDefenderTemplates() {
+    return this.fetch(`/api/advanced/paldefender/templates`).get().json();
+  }
+
+  async savePalDefenderTemplate(payload) {
+    return this.fetch(`/api/advanced/paldefender/templates`)
+      .post(payload)
+      .json();
+  }
+
+  async getPlayerBans() {
+    return this.fetch(`/api/advanced/bans`).get().json();
+  }
+
+  async savePlayerBan(payload) {
+    return this.fetch(`/api/advanced/bans`).post(payload).json();
+  }
+
+  async runPlayerBanAction(playerId, action, payload = {}) {
+    return this.fetch(
+      `/api/advanced/bans/${encodeURIComponent(playerId)}/${action}`,
+    )
+      .post(payload)
+      .json();
+  }
+
+  async deletePlayerBan(playerId) {
+    return this.fetch(`/api/advanced/bans/${encodeURIComponent(playerId)}`)
+      .delete()
+      .json();
+  }
+
+  async deletePalDefenderTemplate(id) {
+    return this.fetch(
+      `/api/advanced/paldefender/templates/${encodeURIComponent(id)}`,
+    )
+      .delete()
+      .json();
+  }
+
+  async getBreedingCatalog() {
+    return this.fetch(`/api/advanced/breeding/catalog`).get().json();
+  }
+
+  async getBreedingResult(payload) {
+    return this.fetch(`/api/advanced/breeding/direct`).post(payload).json();
+  }
+
+  async getBreedingParents(target) {
+    return this.fetch(
+      `/api/advanced/breeding/parents?target=${encodeURIComponent(target)}`,
+    )
+      .get()
+      .json();
+  }
+
+  async solveBreeding(target, maxSteps = 4) {
+    const payload = typeof target === "object" ? target : { target, maxSteps };
+    return this.fetch(`/api/advanced/breeding/solve`)
+      .post(payload)
+      .json();
+  }
+
+  async getBreedingJobs() {
+    return this.fetch(`/api/advanced/breeding/jobs`).get().json();
+  }
+
+  async createBreedingJob(payload) {
+    return this.fetch(`/api/advanced/breeding/jobs`).post(payload).json();
+  }
+
+  async controlBreedingJob(id, action) {
+    return this.fetch(
+      `/api/advanced/breeding/jobs/${encodeURIComponent(id)}/${action}`,
+    )
+      .post({})
+      .json();
+  }
+
+  async getBreedingHistory() {
+    return this.fetch(`/api/advanced/breeding/history`).get().json();
+  }
+
+  async getBreedingContainers() {
+    return this.fetch(`/api/advanced/breeding/containers`).get().json();
+  }
+
+  async saveBreedingContainer(container) {
+    return this.fetch(`/api/advanced/breeding/containers`)
+      .post(container)
+      .json();
+  }
+
+  async deleteBreedingContainer(id) {
+    return this.fetch(
+      `/api/advanced/breeding/containers/${encodeURIComponent(id)}`,
+    )
+      .delete()
+      .json();
+  }
+
+  async getBreedingPresets() {
+    return this.fetch(`/api/advanced/breeding/presets`).get().json();
+  }
+
+  async saveBreedingPreset(preset) {
+    return this.fetch(`/api/advanced/breeding/presets`).post(preset).json();
+  }
+
+  async deleteBreedingPreset(id) {
+    return this.fetch(
+      `/api/advanced/breeding/presets/${encodeURIComponent(id)}`,
+    )
+      .delete()
+      .json();
+  }
+
+  async getWorkshopConfig() {
+    return this.fetch(`/api/advanced/workshop/config`).get().json();
+  }
+
+  async updateWorkshopConfig(config) {
+    return this.fetch(`/api/advanced/workshop/config`).put({ config }).json();
+  }
+
+  async searchWorkshop(query, page = 1) {
+    return this.fetch(
+      `/api/advanced/workshop/search?q=${encodeURIComponent(query)}&page=${page}`,
+    )
+      .get()
+      .json();
+  }
+
+  async getWorkshopDetails(id) {
+    return this.fetch(
+      `/api/advanced/workshop/details?id=${encodeURIComponent(id)}`,
+    )
+      .get()
+      .json();
+  }
+
+  async getInstalledWorkshopMods() {
+    return this.fetch(`/api/advanced/workshop/installed`).get().json();
+  }
+
+  async installWorkshopMod(id) {
+    return this.fetch(`/api/advanced/workshop/install`).post({ id }).json();
+  }
+
+  async setWorkshopModEnabled(id, enabled) {
+    return this.fetch(
+      `/api/advanced/workshop/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`,
+    )
+      .post({})
+      .json();
+  }
+
+  async deleteWorkshopMod(id) {
+    return this.fetch(`/api/advanced/workshop/${encodeURIComponent(id)}`)
+      .delete()
+      .json();
+  }
+
+  async translateWorkshopMod(id, language = "zh-CN") {
+    return this.fetch(`/api/advanced/workshop/translate`)
+      .post({ id, language })
+      .json();
+  }
+
+  async getAstrBotConfig() {
+    return this.fetch(`/api/advanced/astrbot/config`).get().json();
+  }
+
+  async updateAstrBotConfig(config) {
+    return this.fetch(`/api/advanced/astrbot/config`).put({ config }).json();
+  }
+
+  async getAstrBotPlayers() {
+    return this.fetch(`/api/advanced/astrbot/players`).get().json();
+  }
+
+  async getAstrBotAccount(qq) {
+    return this.fetch(
+      `/api/advanced/astrbot/account?qq=${encodeURIComponent(qq)}`,
+    )
+      .get()
+      .json();
+  }
+
+  async getAstrBotAccounts() {
+    return this.fetch(`/api/advanced/astrbot/accounts`).get().json();
+  }
+
+  async manageAstrBotAccount(payload) {
+    return this.fetch(`/api/advanced/astrbot/accounts/manage`)
+      .post(payload)
+      .json();
+  }
+
+  async getAstrBotLedger(qq = "") {
+    return this.fetch(
+      `/api/advanced/astrbot/ledger${qq ? `?qq=${encodeURIComponent(qq)}` : ""}`,
+    )
+      .get()
+      .json();
   }
 }
 
