@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import dayjs from "dayjs";
 import { useI18n } from "vue-i18n";
 import { Refresh } from "@vicons/tabler";
@@ -17,6 +17,8 @@ const loading = ref(false);
 const onlinePlayers = ref([]);
 const backups = ref([]);
 const tasks = ref([]);
+const hostMetrics = ref({});
+let hostRefreshTimer;
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
 const latestBackup = computed(
@@ -75,18 +77,50 @@ const latestBackupAge = computed(() => {
   if (hours < 24) return t("overview.hoursAgo", { hours });
   return t("overview.daysAgo", { days: Math.floor(hours / 24) });
 });
+const cpuPercent = computed(() => Number(hostMetrics.value?.cpu?.usedPercent || 0));
+const memoryPercent = computed(() => Number(hostMetrics.value?.memory?.usedPercent || 0));
+const diskPercent = computed(() => Number(hostMetrics.value?.disk?.usedPercent || 0));
+const processMemoryPercent = computed(() => Number(hostMetrics.value?.process?.memoryPercent || 0));
+
+const loadTone = (value) => {
+  if (value >= 90) return "is-danger";
+  if (value >= 75) return "is-warning";
+  return "is-success";
+};
+
+const formatBytes = (bytes) => {
+  const value = Number(bytes || 0);
+  if (!value) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+  return `${(value / 1024 ** index).toFixed(index >= 3 ? 1 : 0)} ${units[index]}`;
+};
+
+const formatHostUptime = (seconds) => {
+  const total = Math.max(0, Number(seconds || 0));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  return days > 0 ? t("overview.uptimeDays", { days, hours }) : t("overview.uptimeHours", { hours });
+};
+
+const loadHostMetrics = async () => {
+  const response = await api.getHostMetrics();
+  hostMetrics.value = response.data.value?.metrics || {};
+};
 
 const loadOverview = async () => {
   loading.value = true;
   try {
-    const [onlineResponse, backupResponse, taskResponse] = await Promise.all([
+    const [onlineResponse, backupResponse, taskResponse, metricsResponse] = await Promise.all([
       api.getOnlinePlayerList(),
       api.getBackupList({}),
       api.getRconTasks(),
+      api.getHostMetrics(),
     ]);
     onlinePlayers.value = asArray(onlineResponse.data.value);
     backups.value = asArray(backupResponse.data.value);
     tasks.value = asArray(taskResponse.data.value);
+    hostMetrics.value = metricsResponse.data.value?.metrics || {};
   } finally {
     loading.value = false;
   }
@@ -95,7 +129,12 @@ const loadOverview = async () => {
 const formatTime = (value) =>
   value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "—";
 
-onMounted(loadOverview);
+onMounted(() => {
+  loadOverview();
+  hostRefreshTimer = setInterval(() => loadHostMetrics().catch(() => {}), 30000);
+});
+
+onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 </script>
 
 <template>
@@ -183,6 +222,60 @@ onMounted(loadOverview);
                 ? formatTime(latestBackup.save_time)
                 : $t("overview.noBackupShort")
             }}</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="overview-host" :aria-label="$t('overview.hostLoad')">
+        <header class="overview-host-header">
+          <div>
+            <h3>{{ $t("overview.hostLoad") }}</h3>
+            <p>{{ $t("overview.hostLoadHint") }}</p>
+          </div>
+          <div class="overview-host-identity">
+            <strong>{{ hostMetrics.hostname || "—" }}</strong>
+            <span>{{ $t("overview.hostUptime") }} {{ formatHostUptime(hostMetrics.uptimeSeconds) }}</span>
+          </div>
+        </header>
+
+        <n-alert v-if="hostMetrics.unavailable" type="warning" :bordered="false" class="overview-host-alert">
+          {{ hostMetrics.error || $t("operations.metricsUnavailable") }}
+        </n-alert>
+        <div v-else class="overview-host-grid">
+          <div class="host-reading" :class="loadTone(cpuPercent)">
+            <div class="host-reading-head">
+              <span>{{ $t("operations.cpuUsage") }}</span>
+              <strong>{{ cpuPercent.toFixed(1) }}%</strong>
+            </div>
+            <div class="host-meter"><span :style="{ width: `${cpuPercent}%` }"></span></div>
+            <small>{{ hostMetrics.cpu?.cores || "—" }} {{ $t("operations.cpuCores") }}</small>
+          </div>
+          <div class="host-reading" :class="loadTone(memoryPercent)">
+            <div class="host-reading-head">
+              <span>{{ $t("operations.memoryUsage") }}</span>
+              <strong>{{ memoryPercent.toFixed(1) }}%</strong>
+            </div>
+            <div class="host-meter"><span :style="{ width: `${memoryPercent}%` }"></span></div>
+            <small>{{ formatBytes(hostMetrics.memory?.used) }} / {{ formatBytes(hostMetrics.memory?.total) }}</small>
+          </div>
+          <div class="host-reading" :class="loadTone(diskPercent)">
+            <div class="host-reading-head">
+              <span>{{ $t("operations.diskUsage") }}</span>
+              <strong>{{ hostMetrics.disk ? `${diskPercent.toFixed(1)}%` : "—" }}</strong>
+            </div>
+            <div v-if="hostMetrics.disk" class="host-meter"><span :style="{ width: `${diskPercent}%` }"></span></div>
+            <small>{{ hostMetrics.disk ? `${formatBytes(hostMetrics.disk.used)} / ${formatBytes(hostMetrics.disk.total)}` : $t("operations.metricUnavailable") }}</small>
+          </div>
+          <div class="host-reading" :class="loadTone(processMemoryPercent)">
+            <div class="host-reading-head">
+              <span>{{ $t("overview.palworldProcess") }}</span>
+              <strong>{{ hostMetrics.process ? `${processMemoryPercent.toFixed(1)}%` : "—" }}</strong>
+            </div>
+            <div v-if="hostMetrics.process" class="host-meter"><span :style="{ width: `${processMemoryPercent}%` }"></span></div>
+            <small v-if="hostMetrics.process">
+              CPU {{ Number(hostMetrics.process.cpuPercent || 0).toFixed(1) }}% · {{ formatBytes(hostMetrics.process.memoryBytes) }}
+            </small>
+            <small v-else>{{ $t("operations.processUnavailable") }}</small>
           </div>
         </div>
       </section>
@@ -450,6 +543,109 @@ onMounted(loadOverview);
   font-weight: 700;
 }
 
+.overview-host {
+  margin-top: 16px;
+  overflow: hidden;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+}
+
+.overview-host-header,
+.host-reading-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.overview-host-header {
+  padding: 16px 18px;
+}
+
+.overview-host-header h3 {
+  color: var(--app-ink);
+  font-size: 14px;
+}
+
+.overview-host-header p,
+.overview-host-identity span,
+.host-reading-head span,
+.host-reading small {
+  color: var(--app-ink-muted);
+  font-size: 11px;
+}
+
+.overview-host-header p {
+  margin-top: 2px;
+}
+
+.overview-host-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  text-align: right;
+}
+
+.overview-host-identity strong {
+  color: var(--app-ink);
+  font-size: 13px;
+}
+
+.overview-host-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--app-border);
+  border-top: 1px solid var(--app-border);
+}
+
+.host-reading {
+  min-width: 0;
+  padding: 17px 18px;
+  background: var(--app-surface);
+}
+
+.host-reading-head strong {
+  color: var(--app-ink);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.host-meter {
+  height: 5px;
+  margin: 13px 0 9px;
+  overflow: hidden;
+  background: var(--app-surface-muted);
+  border-radius: 3px;
+}
+
+.host-meter span {
+  display: block;
+  height: 100%;
+  background: var(--app-success);
+  border-radius: inherit;
+}
+
+.host-reading.is-warning .host-meter span {
+  background: var(--app-warning);
+}
+
+.host-reading.is-danger .host-meter span {
+  background: var(--app-danger);
+}
+
+.host-reading small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-host-alert {
+  margin: 0 18px 18px;
+}
+
 .overview-detail-grid {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
@@ -601,6 +797,15 @@ onMounted(loadOverview);
     margin-top: 20px;
   }
 
+  .overview-host {
+    margin-top: 20px;
+  }
+
+  .overview-host-header,
+  .host-reading {
+    padding: 20px 22px;
+  }
+
   .overview-panel {
     min-height: 280px;
     padding: 22px;
@@ -661,6 +866,10 @@ onMounted(loadOverview);
     grid-template-columns: 1fr 1fr;
   }
 
+  .overview-host-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .overview-panel--players {
     grid-column: 1 / -1;
   }
@@ -677,6 +886,17 @@ onMounted(loadOverview);
 
   .overview-header p {
     max-width: 30ch;
+  }
+
+  .overview-host-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .overview-host-identity {
+    width: 100%;
+    justify-content: space-between;
+    text-align: left;
   }
 
   .overview-pulse-readings,
@@ -701,6 +921,10 @@ onMounted(loadOverview);
   .overview-panel--players {
     min-height: 0;
     grid-column: auto;
+  }
+
+  .host-reading {
+    padding: 15px;
   }
 }
 </style>
