@@ -482,86 +482,6 @@ onMounted(async () => {
         </button>
       </nav>
 
-      <div v-if="isLogin" class="ops-tools-section">
-        <div class="ops-nav-label ops-nav-label--tools">
-          {{ $t("button.tools") }}
-        </div>
-        <div class="ops-tool-grid">
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleToolAction('operations')"
-          >
-            <n-icon><GuiManagement /></n-icon>
-            <span>{{ $t("operations.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleToolAction('settings')"
-          >
-            <n-icon><Settings /></n-icon>
-            <span>{{ $t("configuration.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleToolAction('game-settings')"
-          >
-            <n-icon><ConstructOutline /></n-icon>
-            <span>{{ $t("gameSettings.title") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleToolAction('palconf')"
-          >
-            <n-icon><Settings /></n-icon>
-            <span>{{ $t("button.palconf") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleRconDrawer"
-          >
-            <n-icon><Terminal /></n-icon>
-            <span>{{ $t("button.rcon") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleBackupList"
-          >
-            <n-icon><ArchiveOutlined /></n-icon>
-            <span>{{ $t("button.backup") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleWhiteList"
-          >
-            <n-icon><ShieldCheckmarkSharp /></n-icon>
-            <span>{{ $t("button.whitelist") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            @click="handleStartBrodcast"
-          >
-            <n-icon><BroadcastTower /></n-icon>
-            <span>{{ $t("button.broadcast") }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button ops-menu-button--danger"
-            @click="handleShutdown"
-          >
-            <n-icon><SettingsPowerRound /></n-icon>
-            <span>{{ $t("button.shutdown") }}</span>
-          </button>
-        </div>
-      </div>
-
       <div class="ops-sidebar-footer">
         <div class="ops-sidebar-preferences">
           <n-button
@@ -649,6 +569,88 @@ onMounted(async () => {
           </div>
         </div>
       </header>
+
+      <section
+        v-if="isLogin"
+        class="ops-command-shelf"
+        :aria-label="$t('button.tools')"
+      >
+        <div class="ops-command-title">{{ $t("button.tools") }}</div>
+        <div class="ops-command-grid">
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('operations')"
+          >
+            <n-icon><GuiManagement /></n-icon>
+            <span>{{ $t("operations.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('settings')"
+          >
+            <n-icon><Settings /></n-icon>
+            <span>{{ $t("configuration.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('game-settings')"
+          >
+            <n-icon><ConstructOutline /></n-icon>
+            <span>{{ $t("gameSettings.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleToolAction('palconf')"
+          >
+            <n-icon><Settings /></n-icon>
+            <span>{{ $t("button.palconf") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleRconDrawer"
+          >
+            <n-icon><Terminal /></n-icon>
+            <span>{{ $t("button.rcon") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleBackupList"
+          >
+            <n-icon><ArchiveOutlined /></n-icon>
+            <span>{{ $t("button.backup") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleWhiteList"
+          >
+            <n-icon><ShieldCheckmarkSharp /></n-icon>
+            <span>{{ $t("button.whitelist") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button"
+            @click="handleStartBrodcast"
+          >
+            <n-icon><BroadcastTower /></n-icon>
+            <span>{{ $t("button.broadcast") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-command-button ops-command-button--danger"
+            @click="handleShutdown"
+          >
+            <n-icon><SettingsPowerRound /></n-icon>
+            <span>{{ $t("button.shutdown") }}</span>
+          </button>
+        </div>
+      </section>
 
       <section class="ops-workspace-content">
         <div v-if="loading" class="ops-loading">

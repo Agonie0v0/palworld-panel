@@ -221,319 +221,361 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
         </n-button>
       </header>
 
-      <section class="overview-pulse" :aria-label="$t('overview.pulse')">
-        <div class="overview-signal-rail" aria-hidden="true">
-          <span
-            v-for="segment in signalSegments"
-            :key="segment.key"
-            :class="segment.tone"
-            :title="segment.label"
-          ></span>
-        </div>
-        <div class="overview-pulse-identity">
-          <div class="overview-pulse-heading">
-            <span class="overview-pulse-label">{{ $t("overview.pulse") }}</span>
-            <n-tag :type="healthType" size="small" :bordered="false">
-              {{
-                serverOnline
-                  ? $t("status.online")
-                  : $t("status.serverUnavailable")
-              }}
-            </n-tag>
+      <div class="overview-dashboard-grid">
+        <section class="overview-pulse" :aria-label="$t('overview.pulse')">
+          <div class="overview-signal-rail" aria-hidden="true">
+            <span
+              v-for="segment in signalSegments"
+              :key="segment.key"
+              :class="segment.tone"
+              :title="segment.label"
+            ></span>
           </div>
-          <strong>{{
-            serverInfo?.name || $t("status.serverUnavailable")
-          }}</strong>
-          <span>{{ serverInfo?.version || "Unknown" }}</span>
-          <dl class="overview-pulse-meta">
-            <div>
-              <dt>{{ $t("item.serverUptime") }}</dt>
-              <dd>{{ uptime }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("item.serverDays") }}</dt>
-              <dd>{{ serverMetrics?.days ?? "—" }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div class="overview-pulse-readings">
-          <div class="overview-reading" :class="fpsTone">
-            <div class="overview-reading-head">
-              <span>{{ $t("item.serverFps") }}</span>
-              <strong>{{ serverMetrics?.server_fps ?? "—" }}</strong>
-            </div>
-            <div class="overview-meter" aria-hidden="true">
-              <span :style="{ width: `${fpsPercent}%` }"></span>
-            </div>
-            <small>{{
-              $t("overview.fpsTarget", { percent: fpsPercent })
-            }}</small>
-          </div>
-
-          <div class="overview-reading is-info">
-            <div class="overview-reading-head">
-              <span>{{ $t("overview.onlinePlayers") }}</span>
-              <strong>
-                {{ currentPlayers }}
-                <small>/ {{ maxPlayers || "—" }}</small>
-              </strong>
-            </div>
-            <div class="overview-meter" aria-hidden="true">
-              <span :style="{ width: `${playerPercent}%` }"></span>
-            </div>
-            <small>{{
-              $t("overview.capacityUsed", { percent: playerPercent })
-            }}</small>
-          </div>
-
-          <div class="overview-reading is-backup">
-            <div class="overview-reading-head">
-              <span>{{ $t("overview.backupStatus") }}</span>
-              <strong>{{ backups.length }}</strong>
-            </div>
-            <div class="overview-backup-time">{{ latestBackupAge }}</div>
-            <small>{{
-              latestBackup
-                ? formatTime(latestBackup.save_time)
-                : $t("overview.noBackupShort")
-            }}</small>
-          </div>
-        </div>
-      </section>
-
-      <section class="overview-host" :aria-label="$t('overview.hostLoad')">
-        <header class="overview-host-header">
-          <div class="overview-host-heading">
-            <span class="overview-host-mark" aria-hidden="true">
-              <n-icon><Server /></n-icon>
-            </span>
-            <div>
-              <h3>{{ $t("overview.hostLoad") }}</h3>
-              <p>{{ $t("overview.hostLoadHint") }}</p>
-            </div>
-          </div>
-          <div class="overview-host-summary">
-            <n-tag
-              v-if="!hostMetrics.unavailable"
-              :type="hostHealthType"
-              size="small"
-              :bordered="false"
-            >
-              {{ hostHealthLabel }}
-            </n-tag>
-            <div class="overview-host-identity">
-              <strong>{{ hostMetrics.hostname || "—" }}</strong>
-              <span>
-                {{ hostMetrics.platform || "—" }}/{{
-                  hostMetrics.arch || "—"
+          <div class="overview-pulse-identity">
+            <div class="overview-pulse-heading">
+              <span class="overview-pulse-label">{{
+                $t("overview.pulse")
+              }}</span>
+              <n-tag :type="healthType" size="small" :bordered="false">
+                {{
+                  serverOnline
+                    ? $t("status.online")
+                    : $t("status.serverUnavailable")
                 }}
-                · {{ $t("overview.hostUptime") }}
-                {{ formatHostUptime(hostMetrics.uptimeSeconds) }}
-              </span>
+              </n-tag>
+            </div>
+            <strong>{{
+              serverInfo?.name || $t("status.serverUnavailable")
+            }}</strong>
+            <span>{{ serverInfo?.version || "Unknown" }}</span>
+            <dl class="overview-pulse-meta">
+              <div>
+                <dt>{{ $t("item.serverUptime") }}</dt>
+                <dd>{{ uptime }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("item.serverDays") }}</dt>
+                <dd>{{ serverMetrics?.days ?? "—" }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="overview-pulse-readings">
+            <div class="overview-reading" :class="fpsTone">
+              <div class="overview-reading-head">
+                <span>{{ $t("item.serverFps") }}</span>
+                <strong>{{ serverMetrics?.server_fps ?? "—" }}</strong>
+              </div>
+              <div class="overview-meter" aria-hidden="true">
+                <span :style="{ width: `${fpsPercent}%` }"></span>
+              </div>
+              <small>{{
+                $t("overview.fpsTarget", { percent: fpsPercent })
+              }}</small>
+            </div>
+
+            <div class="overview-reading is-info">
+              <div class="overview-reading-head">
+                <span>{{ $t("overview.onlinePlayers") }}</span>
+                <strong>
+                  {{ currentPlayers }}
+                  <small>/ {{ maxPlayers || "—" }}</small>
+                </strong>
+              </div>
+              <div class="overview-meter" aria-hidden="true">
+                <span :style="{ width: `${playerPercent}%` }"></span>
+              </div>
+              <small>{{
+                $t("overview.capacityUsed", { percent: playerPercent })
+              }}</small>
+            </div>
+
+            <div class="overview-reading is-backup">
+              <div class="overview-reading-head">
+                <span>{{ $t("overview.backupStatus") }}</span>
+                <strong>{{ backups.length }}</strong>
+              </div>
+              <div class="overview-backup-time">{{ latestBackupAge }}</div>
+              <small>{{
+                latestBackup
+                  ? formatTime(latestBackup.save_time)
+                  : $t("overview.noBackupShort")
+              }}</small>
             </div>
           </div>
-        </header>
+        </section>
 
-        <n-alert
-          v-if="hostMetrics.unavailable"
-          type="warning"
-          :bordered="false"
-          class="overview-host-alert"
-        >
-          {{ hostMetrics.error || $t("operations.metricsUnavailable") }}
-        </n-alert>
-        <div v-else class="overview-host-grid">
-          <div class="host-reading" :class="loadTone(cpuPercent)">
-            <div class="host-reading-head">
+        <section class="overview-host" :aria-label="$t('overview.hostLoad')">
+          <header class="overview-host-header">
+            <div class="overview-host-heading">
+              <span class="overview-host-mark" aria-hidden="true">
+                <n-icon><Server /></n-icon>
+              </span>
+              <div>
+                <h3>{{ $t("overview.hostLoad") }}</h3>
+                <p>{{ $t("overview.hostLoadHint") }}</p>
+              </div>
+            </div>
+            <div class="overview-host-summary">
+              <n-tag
+                v-if="!hostMetrics.unavailable"
+                :type="hostHealthType"
+                size="small"
+                :bordered="false"
+              >
+                {{ hostHealthLabel }}
+              </n-tag>
+              <div class="overview-host-identity">
+                <strong>{{ hostMetrics.hostname || "—" }}</strong>
+                <span>
+                  {{ hostMetrics.platform || "—" }}/{{
+                    hostMetrics.arch || "—"
+                  }}
+                  · {{ $t("overview.hostUptime") }}
+                  {{ formatHostUptime(hostMetrics.uptimeSeconds) }}
+                </span>
+              </div>
+            </div>
+          </header>
+
+          <n-alert
+            v-if="hostMetrics.unavailable"
+            type="warning"
+            :bordered="false"
+            class="overview-host-alert"
+          >
+            {{ hostMetrics.error || $t("operations.metricsUnavailable") }}
+          </n-alert>
+          <div v-else class="overview-host-grid">
+            <div
+              class="host-reading"
+              :class="loadTone(cpuPercent)"
+              :style="{ '--metric-value': cpuPercent }"
+            >
               <div class="host-reading-title">
                 <span class="host-reading-icon" aria-hidden="true">
                   <n-icon><Cpu /></n-icon>
                 </span>
                 <span>{{ $t("operations.cpuUsage") }}</span>
               </div>
-              <strong>{{ cpuPercent.toFixed(1) }}%</strong>
+              <div class="host-reading-body">
+                <div class="host-dial" aria-hidden="true">
+                  <div class="host-dial-core">
+                    <strong>{{ cpuPercent.toFixed(1) }}<small>%</small></strong>
+                  </div>
+                </div>
+                <div class="host-reading-meta">
+                  <small>
+                    {{ hostMetrics.cpu?.cores || "—" }}
+                    {{ $t("operations.cpuCores") }}
+                  </small>
+                  <small>{{
+                    $t("overview.loadAverage", {
+                      value:
+                        hostMetrics.cpu?.loadAverage?.[0]?.toFixed?.(2) || "—",
+                    })
+                  }}</small>
+                </div>
+              </div>
             </div>
-            <div class="host-meter">
-              <span :style="{ width: `${cpuPercent}%` }"></span>
-            </div>
-            <div class="host-reading-meta">
-              <small
-                >{{ hostMetrics.cpu?.cores || "—" }}
-                {{ $t("operations.cpuCores") }}</small
-              >
-              <small>{{
-                $t("overview.loadAverage", {
-                  value: hostMetrics.cpu?.loadAverage?.[0]?.toFixed?.(2) || "—",
-                })
-              }}</small>
-            </div>
-          </div>
-          <div class="host-reading" :class="loadTone(memoryPercent)">
-            <div class="host-reading-head">
+
+            <div
+              class="host-reading"
+              :class="loadTone(memoryPercent)"
+              :style="{ '--metric-value': memoryPercent }"
+            >
               <div class="host-reading-title">
                 <span class="host-reading-icon" aria-hidden="true">
                   <n-icon><DeviceDesktopAnalytics /></n-icon>
                 </span>
                 <span>{{ $t("operations.memoryUsage") }}</span>
               </div>
-              <strong>{{ memoryPercent.toFixed(1) }}%</strong>
+              <div class="host-reading-body">
+                <div class="host-dial" aria-hidden="true">
+                  <div class="host-dial-core">
+                    <strong
+                      >{{ memoryPercent.toFixed(1) }}<small>%</small></strong
+                    >
+                  </div>
+                </div>
+                <div class="host-reading-meta">
+                  <small>
+                    {{ formatBytes(hostMetrics.memory?.used) }} /
+                    {{ formatBytes(hostMetrics.memory?.total) }}
+                  </small>
+                  <small>{{
+                    $t("overview.freeMemory", {
+                      value: formatBytes(hostMetrics.memory?.free),
+                    })
+                  }}</small>
+                </div>
+              </div>
             </div>
-            <div class="host-meter">
-              <span :style="{ width: `${memoryPercent}%` }"></span>
-            </div>
-            <div class="host-reading-meta">
-              <small
-                >{{ formatBytes(hostMetrics.memory?.used) }} /
-                {{ formatBytes(hostMetrics.memory?.total) }}</small
-              >
-              <small>{{
-                $t("overview.freeMemory", {
-                  value: formatBytes(hostMetrics.memory?.free),
-                })
-              }}</small>
-            </div>
-          </div>
-          <div class="host-reading" :class="loadTone(diskPercent)">
-            <div class="host-reading-head">
+
+            <div
+              class="host-reading"
+              :class="loadTone(diskPercent)"
+              :style="{ '--metric-value': hostMetrics.disk ? diskPercent : 0 }"
+            >
               <div class="host-reading-title">
                 <span class="host-reading-icon" aria-hidden="true">
                   <n-icon><Database /></n-icon>
                 </span>
                 <span>{{ $t("operations.diskUsage") }}</span>
               </div>
-              <strong>{{
-                hostMetrics.disk ? `${diskPercent.toFixed(1)}%` : "—"
-              }}</strong>
+              <div class="host-reading-body">
+                <div class="host-dial" aria-hidden="true">
+                  <div class="host-dial-core">
+                    <strong>
+                      {{ hostMetrics.disk ? diskPercent.toFixed(1) : "—" }}
+                      <small v-if="hostMetrics.disk">%</small>
+                    </strong>
+                  </div>
+                </div>
+                <div class="host-reading-meta">
+                  <small>{{
+                    hostMetrics.disk
+                      ? `${formatBytes(hostMetrics.disk.used)} / ${formatBytes(hostMetrics.disk.total)}`
+                      : $t("operations.metricUnavailable")
+                  }}</small>
+                  <small v-if="hostMetrics.disk">{{
+                    hostMetrics.disk.mount
+                  }}</small>
+                </div>
+              </div>
             </div>
-            <div v-if="hostMetrics.disk" class="host-meter">
-              <span :style="{ width: `${diskPercent}%` }"></span>
-            </div>
-            <div class="host-reading-meta">
-              <small>{{
-                hostMetrics.disk
-                  ? `${formatBytes(hostMetrics.disk.used)} / ${formatBytes(hostMetrics.disk.total)}`
-                  : $t("operations.metricUnavailable")
-              }}</small>
-              <small v-if="hostMetrics.disk">{{
-                hostMetrics.disk.mount
-              }}</small>
-            </div>
-          </div>
-          <div class="host-reading" :class="loadTone(processMemoryPercent)">
-            <div class="host-reading-head">
+
+            <div
+              class="host-reading"
+              :class="loadTone(processMemoryPercent)"
+              :style="{
+                '--metric-value': hostMetrics.process
+                  ? processMemoryPercent
+                  : 0,
+              }"
+            >
               <div class="host-reading-title">
                 <span class="host-reading-icon" aria-hidden="true">
                   <n-icon><Activity /></n-icon>
                 </span>
                 <span>{{ $t("overview.palworldProcess") }}</span>
               </div>
-              <strong>{{
-                hostMetrics.process
-                  ? `${processMemoryPercent.toFixed(1)}%`
-                  : "—"
-              }}</strong>
-            </div>
-            <div v-if="hostMetrics.process" class="host-meter">
-              <span :style="{ width: `${processMemoryPercent}%` }"></span>
-            </div>
-            <div class="host-reading-meta">
-              <small v-if="hostMetrics.process">
-                CPU
-                {{ Number(hostMetrics.process.cpuPercent || 0).toFixed(1) }}% ·
-                {{ formatBytes(hostMetrics.process.memoryBytes) }}
-              </small>
-              <small v-else>{{ $t("operations.processUnavailable") }}</small>
-              <small v-if="hostMetrics.process">
-                {{ $t("operations.processUptime") }}
-                {{ formatHostUptime(hostMetrics.process.uptimeSeconds) }}
-              </small>
+              <div class="host-reading-body">
+                <div class="host-dial" aria-hidden="true">
+                  <div class="host-dial-core">
+                    <strong>
+                      {{
+                        hostMetrics.process
+                          ? processMemoryPercent.toFixed(1)
+                          : "—"
+                      }}
+                      <small v-if="hostMetrics.process">%</small>
+                    </strong>
+                  </div>
+                </div>
+                <div class="host-reading-meta">
+                  <small v-if="hostMetrics.process">
+                    CPU
+                    {{
+                      Number(hostMetrics.process.cpuPercent || 0).toFixed(1)
+                    }}% ·
+                    {{ formatBytes(hostMetrics.process.memoryBytes) }}
+                  </small>
+                  <small v-else>{{
+                    $t("operations.processUnavailable")
+                  }}</small>
+                  <small v-if="hostMetrics.process">
+                    {{ $t("operations.processUptime") }}
+                    {{ formatHostUptime(hostMetrics.process.uptimeSeconds) }}
+                  </small>
+                </div>
+              </div>
             </div>
           </div>
+        </section>
+
+        <div class="overview-detail-grid">
+          <section class="overview-panel overview-panel--players">
+            <header class="overview-panel-header">
+              <div>
+                <h3>{{ $t("overview.onlineNow") }}</h3>
+                <p>
+                  {{ $t("overview.totalPlayers", { count: players.length }) }}
+                </p>
+              </div>
+              <span class="overview-count overview-count--players">
+                {{ onlinePlayers.length }}
+              </span>
+            </header>
+            <n-empty
+              v-if="onlinePlayers.length === 0"
+              size="small"
+              :description="$t('overview.noOnlinePlayers')"
+            />
+            <ul v-else class="overview-player-list">
+              <li
+                v-for="player in onlinePlayers.slice(0, 8)"
+                :key="player.player_uid"
+              >
+                <span>{{ player.nickname }}</span>
+                <n-tag size="small" type="success">Lv.{{ player.level }}</n-tag>
+              </li>
+            </ul>
+          </section>
+
+          <section class="overview-panel overview-panel--automation">
+            <header class="overview-panel-header">
+              <div>
+                <h3>{{ $t("overview.automation") }}</h3>
+                <p>{{ $t("overview.automationHint") }}</p>
+              </div>
+              <span class="overview-count overview-count--tasks">
+                {{ activeTasks.length }}
+              </span>
+            </header>
+            <dl class="overview-definition-list">
+              <div>
+                <dt>{{ $t("overview.activeTasks") }}</dt>
+                <dd>{{ activeTasks.length }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("overview.nextTask") }}</dt>
+                <dd>{{ nextTask?.name || "—" }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("overview.nextRun") }}</dt>
+                <dd>{{ formatTime(nextTask?.next_run_at) }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="overview-panel overview-panel--backup">
+            <header class="overview-panel-header">
+              <div>
+                <h3>{{ $t("overview.backupStatus") }}</h3>
+                <p>{{ $t("overview.backupHint") }}</p>
+              </div>
+              <span class="overview-count overview-count--backup">
+                {{ backups.length }}
+              </span>
+            </header>
+            <n-empty
+              v-if="!latestBackup"
+              size="small"
+              :description="$t('overview.noBackup')"
+            />
+            <dl v-else class="overview-definition-list">
+              <div>
+                <dt>{{ $t("overview.latestBackup") }}</dt>
+                <dd>{{ formatTime(latestBackup.save_time) }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("overview.backupCount") }}</dt>
+                <dd>{{ backups.length }}</dd>
+              </div>
+            </dl>
+          </section>
         </div>
-      </section>
-
-      <div class="overview-detail-grid">
-        <section class="overview-panel overview-panel--players">
-          <header class="overview-panel-header">
-            <div>
-              <h3>{{ $t("overview.onlineNow") }}</h3>
-              <p>
-                {{ $t("overview.totalPlayers", { count: players.length }) }}
-              </p>
-            </div>
-            <span class="overview-count overview-count--players">
-              {{ onlinePlayers.length }}
-            </span>
-          </header>
-          <n-empty
-            v-if="onlinePlayers.length === 0"
-            size="small"
-            :description="$t('overview.noOnlinePlayers')"
-          />
-          <ul v-else class="overview-player-list">
-            <li
-              v-for="player in onlinePlayers.slice(0, 8)"
-              :key="player.player_uid"
-            >
-              <span>{{ player.nickname }}</span>
-              <n-tag size="small" type="success">Lv.{{ player.level }}</n-tag>
-            </li>
-          </ul>
-        </section>
-
-        <section class="overview-panel overview-panel--automation">
-          <header class="overview-panel-header">
-            <div>
-              <h3>{{ $t("overview.automation") }}</h3>
-              <p>{{ $t("overview.automationHint") }}</p>
-            </div>
-            <span class="overview-count overview-count--tasks">
-              {{ activeTasks.length }}
-            </span>
-          </header>
-          <dl class="overview-definition-list">
-            <div>
-              <dt>{{ $t("overview.activeTasks") }}</dt>
-              <dd>{{ activeTasks.length }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("overview.nextTask") }}</dt>
-              <dd>{{ nextTask?.name || "—" }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("overview.nextRun") }}</dt>
-              <dd>{{ formatTime(nextTask?.next_run_at) }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="overview-panel overview-panel--backup">
-          <header class="overview-panel-header">
-            <div>
-              <h3>{{ $t("overview.backupStatus") }}</h3>
-              <p>{{ $t("overview.backupHint") }}</p>
-            </div>
-            <span class="overview-count overview-count--backup">
-              {{ backups.length }}
-            </span>
-          </header>
-          <n-empty
-            v-if="!latestBackup"
-            size="small"
-            :description="$t('overview.noBackup')"
-          />
-          <dl v-else class="overview-definition-list">
-            <div>
-              <dt>{{ $t("overview.latestBackup") }}</dt>
-              <dd>{{ formatTime(latestBackup.save_time) }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("overview.backupCount") }}</dt>
-              <dd>{{ backups.length }}</dd>
-            </div>
-          </dl>
-        </section>
       </div>
     </div>
   </n-scrollbar>
@@ -585,7 +627,18 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   font-size: 13px;
 }
 
+.overview-dashboard-grid {
+  display: grid;
+  grid-template-areas:
+    "pulse host"
+    "details host";
+  grid-template-columns: minmax(0, 1.45fr) minmax(420px, 0.75fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
 .overview-pulse {
+  grid-area: pulse;
   display: grid;
   grid-template-columns: minmax(250px, 0.8fr) minmax(0, 2.2fr);
   overflow: hidden;
@@ -778,30 +831,29 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 }
 
 .overview-host {
-  margin-top: 16px;
+  display: flex;
+  min-height: 0;
+  grid-area: host;
+  flex-direction: column;
   overflow: hidden;
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: 8px;
 }
 
-.overview-host-header,
-.host-reading-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
 .overview-host-header {
-  padding: 17px 18px;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
   background: var(--app-surface-raised);
 }
 
 .overview-host-heading,
 .overview-host-summary,
 .host-reading-title,
-.host-reading-meta {
+.host-reading-body {
   display: flex;
   align-items: center;
 }
@@ -842,15 +894,16 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 }
 
 .overview-host-summary {
-  flex: 0 0 auto;
-  justify-content: flex-end;
+  width: 100%;
+  justify-content: space-between;
   gap: 12px;
 }
 
 .overview-host-identity {
   display: grid;
-  justify-items: end;
-  text-align: right;
+  min-width: 0;
+  justify-items: start;
+  text-align: left;
 }
 
 .overview-host-identity strong {
@@ -861,23 +914,43 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
 .overview-host-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-top: 1px solid var(--app-border);
 }
 
 .host-reading {
+  --metric-color: var(--app-success);
+
+  display: flex;
   min-width: 0;
-  padding: 18px;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
   background: var(--app-surface);
 }
 
-.host-reading + .host-reading {
+.host-reading:nth-child(even) {
   border-left: 1px solid var(--app-border);
+}
+
+.host-reading:nth-child(n + 3) {
+  border-top: 1px solid var(--app-border);
 }
 
 .host-reading-title {
   min-width: 0;
   gap: 9px;
+}
+
+.host-reading-title > span:last-child {
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .host-reading-icon {
@@ -893,43 +966,67 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 }
 
 .host-reading.is-warning .host-reading-icon {
+  --metric-color: var(--app-warning);
   color: var(--app-warning);
   background: var(--app-warning-soft);
 }
 
 .host-reading.is-danger .host-reading-icon {
+  --metric-color: var(--app-danger);
   color: var(--app-danger);
   background: var(--app-danger-soft);
 }
 
-.host-reading-head strong {
+.host-reading.is-warning {
+  --metric-color: var(--app-warning);
+}
+
+.host-reading.is-danger {
+  --metric-color: var(--app-danger);
+}
+
+.host-reading-body {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.host-dial {
+  display: grid;
+  width: 92px;
+  height: 92px;
+  flex: 0 0 92px;
+  place-items: center;
+  background: conic-gradient(
+    var(--metric-color) calc(var(--metric-value) * 1%),
+    var(--app-surface-muted) 0
+  );
+  border-radius: 50%;
+  transform: rotate(-90deg);
+}
+
+.host-dial-core {
+  display: grid;
+  width: 70px;
+  height: 70px;
+  place-items: center;
+  background: var(--app-surface);
+  border-radius: 50%;
+  transform: rotate(90deg);
+}
+
+.host-dial strong {
   color: var(--app-ink);
   font-family: var(--app-font-data);
   font-size: 20px;
   font-variant-numeric: tabular-nums;
 }
 
-.host-meter {
-  height: 7px;
-  margin: 16px 0 10px;
-  overflow: hidden;
-  background: var(--app-surface-muted);
-  border-radius: 3px;
-}
-
-.host-meter span {
-  display: block;
-  height: 100%;
-  background: var(--app-success);
-  border-radius: inherit;
-}
-
-.host-reading.is-warning .host-meter span {
-  background: var(--app-warning);
-}
-
-.host-reading.is-danger .host-meter span {
-  background: var(--app-danger);
+.host-dial strong small {
+  margin-left: 1px;
+  color: var(--app-ink-muted);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .host-reading small {
@@ -941,12 +1038,14 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 }
 
 .host-reading-meta {
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 7px;
 }
 
 .host-reading-meta small:last-child {
-  text-align: right;
+  color: var(--app-ink-secondary);
 }
 
 .overview-host-alert {
@@ -955,9 +1054,9 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
 .overview-detail-grid {
   display: grid;
+  grid-area: details;
   grid-template-columns: 1.2fr 1fr 1fr;
   gap: 0;
-  margin-top: 16px;
   overflow: hidden;
   background: var(--app-surface);
   border: 1px solid var(--app-border);
@@ -1109,11 +1208,6 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
   .overview-detail-grid {
     gap: 0;
-    margin-top: 20px;
-  }
-
-  .overview-host {
-    margin-top: 20px;
   }
 
   .overview-host-header,
@@ -1135,7 +1229,18 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
     font-size: 19px;
   }
 
-  .host-reading-head strong {
+  .host-dial {
+    width: 104px;
+    height: 104px;
+    flex-basis: 104px;
+  }
+
+  .host-dial-core {
+    width: 78px;
+    height: 78px;
+  }
+
+  .host-dial strong {
     font-size: 22px;
   }
 
@@ -1161,8 +1266,12 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
 @media (min-width: 2400px) and (min-height: 1100px) {
   .overview-page {
-    width: min(2100px, 100%);
+    width: min(2400px, 100%);
     padding: 40px 48px 48px;
+  }
+
+  .overview-header h2 {
+    font-size: 24px;
   }
 
   .overview-pulse {
@@ -1176,12 +1285,51 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
 
   .overview-detail-grid {
     gap: 0;
-    margin-top: 24px;
   }
 
   .overview-panel {
     min-height: 320px;
     padding: 26px;
+  }
+}
+
+@media (max-width: 1879px) {
+  .overview-dashboard-grid {
+    grid-template-areas:
+      "pulse"
+      "host"
+      "details";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview-host-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .overview-host-header {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .overview-host-summary {
+    width: auto;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+  }
+
+  .overview-host-identity {
+    justify-items: end;
+    text-align: right;
+  }
+
+  .host-reading:nth-child(n) {
+    border-top: 0;
+    border-left: 0;
+  }
+
+  .host-reading + .host-reading {
+    border-left: 1px solid var(--app-border);
   }
 }
 
@@ -1203,12 +1351,22 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .host-reading:nth-child(3) {
+  .host-reading:nth-child(n) {
+    border-top: 0;
     border-left: 0;
   }
 
-  .host-reading:nth-child(n + 3) {
+  .host-reading:nth-child(even) {
+    border-left: 1px solid var(--app-border);
+  }
+
+  .host-reading:nth-child(3),
+  .host-reading:nth-child(4) {
     border-top: 1px solid var(--app-border);
+  }
+
+  .host-reading:nth-child(3) {
+    border-left: 0;
   }
 
   .overview-panel--players {
@@ -1249,6 +1407,11 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   }
 
   .overview-host-identity {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .overview-host-identity {
     text-align: left;
     justify-items: start;
   }
@@ -1285,6 +1448,10 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
   .host-reading {
     padding: 15px;
   }
+
+  .host-reading-body {
+    align-items: center;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1292,10 +1459,12 @@ onBeforeUnmount(() => clearInterval(hostRefreshTimer));
     grid-template-columns: 1fr;
   }
 
-  .host-reading + .host-reading,
-  .host-reading:nth-child(3) {
-    border-top: 1px solid var(--app-border);
+  .host-reading:nth-child(n) {
     border-left: 0;
+  }
+
+  .host-reading + .host-reading {
+    border-top: 1px solid var(--app-border);
   }
 }
 </style>

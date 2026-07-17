@@ -31,9 +31,11 @@ Letter spacing remains zero. Data uses tabular numerals where possible.
 
 ## Structure
 
-- Sidebar: identity, managed-server state, primary navigation, tools, preferences.
+- Sidebar: identity, managed-server state, primary navigation, and preferences.
 - Workspace header: current view and a compact live telemetry strip.
-- Overview: world pulse, host health, then one continuous operations band.
+- Command shelf: all server tools remain one click away across the desktop.
+- Overview: an asymmetric control room with world pulse, host telemetry, and an
+  operations band.
 - Mobile: preserve the bottom navigation and use a bottom tool drawer.
 
 Use borders and dividers to express grouping. Cards are reserved for distinct
