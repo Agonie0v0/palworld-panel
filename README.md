@@ -915,15 +915,8 @@ PalCalc 数据被压缩为平台无关的只读目录，因此 AMD64 和 ARM64 �
 | 管理员 | 所有功能，包括账号、密钥和敏感第三方配置 |
 | 运维员 | 服务、玩家、备份、模组、计划任务等日常运维 |
 | 只读 | 查看服务器和存档数据 |
-| 机器人集成 | AstrBot 查询、绑定、签到、配种、登录链接，以及面板授权 QQ 的机器人管理员操作 |
 
 API Key 只在创建时显示一次，面板只保存 SHA-256 摘要。
-
-### AstrBot / QQ
-
-项目内置 [`astrbot_plugin_palworld_panel`](astrbot_plugin_palworld_panel) 插件目录，适用于 AstrBot `>=4.18,<5`。支持在线玩家、RCON 公告验证码绑定、每日签到、积分与流水、受限配种计算、一次性只读面板链接，以及人工绑定、解绑、冻结、解冻和积分调整。验证码公告会显示玩家标识和有效期，在线玩家都能看到。
-
-安装插件后，在 AstrBot 中填写面板 URL 和“机器人集成”角色的 API Key。可用命令见插件目录中的 README。
 
 ## 安全建议
 
@@ -982,7 +975,7 @@ npm start
 
 主机监控、内存阈值和维护重启的产品思路参考了 [Hoshinonyaruko/palworld-go](https://github.com/Hoshinonyaruko/palworld-go)。本项目针对 Linux、AMD64、ARM64 和远程 Agent 架构独立实现，没有复制其 Go 或 Vue 源码。`palworld-go` 中依赖 Windows DLL、UE4SS、PalGuard 和 RAMMap 的功能不适用于当前 Oracle ARM64 部署，因此没有直接移植。
 
-多存档、PalCalc 配种任务、AstrBot 积分、WebDAV 与 Workshop 工作流的产品体验参考了 [uitok/palworld-panel](https://github.com/uitok/palworld-panel)。该项目使用 GPL-3.0-or-later；本项目仅根据公开功能说明和 API 行为进行独立实现，没有复制其 Go、React 或其他 GPL 源码。
+多存档、PalCalc 配种任务、WebDAV 与 Workshop 工作流的产品体验参考了 [uitok/palworld-panel](https://github.com/uitok/palworld-panel)。该项目使用 GPL-3.0-or-later；本项目仅根据公开功能说明和 API 行为进行独立实现，没有复制其 Go、React 或其他 GPL 源码。
 
 `palworld-server-tool` 使用 Apache License 2.0，版权声明为 `Copyright 2024 zaigie`。对应许可证保存在：
 

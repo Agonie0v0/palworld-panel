@@ -63,8 +63,6 @@ test("JWT tokens preserve user role and permission checks", () => {
   assert.equal(principalCan({ permissions: permissionsForRole("viewer") }, "read"), true);
   assert.equal(principalCan({ permissions: permissionsForRole("viewer") }, "server:write"), false);
   assert.equal(principalCan({ permissions: permissionsForRole("admin") }, "security:write"), true);
-  assert.equal(principalCan({ permissions: permissionsForRole("integration") }, "integrations:write"), true);
-  assert.equal(principalCan({ permissions: permissionsForRole("integration") }, "read"), false);
 });
 
 test("RCON Base64 mode encodes commands and decodes valid responses", () => {

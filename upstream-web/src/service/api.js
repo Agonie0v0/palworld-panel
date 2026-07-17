@@ -547,43 +547,6 @@ class ApiService extends Service {
       .json();
   }
 
-  async getAstrBotConfig() {
-    return this.fetch(`/api/advanced/astrbot/config`).get().json();
-  }
-
-  async updateAstrBotConfig(config) {
-    return this.fetch(`/api/advanced/astrbot/config`).put({ config }).json();
-  }
-
-  async getAstrBotPlayers() {
-    return this.fetch(`/api/advanced/astrbot/players`).get().json();
-  }
-
-  async getAstrBotAccount(qq) {
-    return this.fetch(
-      `/api/advanced/astrbot/account?qq=${encodeURIComponent(qq)}`,
-    )
-      .get()
-      .json();
-  }
-
-  async getAstrBotAccounts() {
-    return this.fetch(`/api/advanced/astrbot/accounts`).get().json();
-  }
-
-  async manageAstrBotAccount(payload) {
-    return this.fetch(`/api/advanced/astrbot/accounts/manage`)
-      .post(payload)
-      .json();
-  }
-
-  async getAstrBotLedger(qq = "") {
-    return this.fetch(
-      `/api/advanced/astrbot/ledger${qq ? `?qq=${encodeURIComponent(qq)}` : ""}`,
-    )
-      .get()
-      .json();
-  }
 }
 
 export default ApiService;

@@ -204,7 +204,6 @@ const rolePermissions = {
     "schedules:write",
   ],
   viewer: ["read"],
-  integration: ["integrations:write"],
 };
 
 function permissionsForRole(role) {
@@ -370,10 +369,8 @@ function requiredPermission(req) {
   if (
     pathname.startsWith("/api/access/") ||
     pathname.startsWith("/api/security/") ||
-    pathname.includes("/workshop/config") ||
-    pathname.includes("/astrbot/config")
+    pathname.includes("/workshop/config")
   ) return "security:write";
-  if (pathname.includes("astrbot")) return "integrations:write";
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return "read";
   if (pathname.includes("backup")) return "backups:write";
   if (pathname.includes("mod") || pathname.includes("workshop")) return "mods:write";
@@ -1471,7 +1468,6 @@ const advancedFeatures = createAdvancedFeatures({
   runAction,
   rcon,
   performManagedRestart: managedRestart,
-  issueViewerToken: (config, principal) => issueAuthToken(config, Date.now(), principal),
   proxyAgentUpload,
 });
 
@@ -1818,7 +1814,7 @@ async function handleApi(req, res, config) {
   if (req.method === "POST" && req.url === "/api/access/api-keys") {
     if (!principalCan(principal, "security:write")) return sendError(res, 403, "Administrator access required.");
     const body = await readBody(req);
-    const role = ["admin", "operator", "viewer", "integration"].includes(body.role) ? body.role : "viewer";
+    const role = ["admin", "operator", "viewer"].includes(body.role) ? body.role : "viewer";
     const raw = `pal_${crypto.randomBytes(32).toString("base64url")}`;
     const keys = await loadJsonFile("api-keys.json", []);
     const key = {

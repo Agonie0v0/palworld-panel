@@ -21,7 +21,6 @@ import { GuiManagement } from "@vicons/carbon";
 import { BroadcastTower } from "@vicons/fa";
 import {
   Activity,
-  BrandHipchat,
   BrandSteam,
   Database,
   Dna,
@@ -49,7 +48,6 @@ import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
-import AstrBotManager from "@/components/AstrBotManager.vue";
 import whitelistStore from "@/stores/model/whitelist";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import { watch } from "vue";
@@ -216,7 +214,6 @@ const showAccessManager = ref(false);
 const showWorldData = ref(false);
 const showBreedingLab = ref(false);
 const showWorkshop = ref(false);
-const showAstrBot = ref(false);
 const handleRconDrawer = () => {
   if (checkAuthToken()) {
     showRconDrawer.value = true;
@@ -283,12 +280,6 @@ const handleToolAction = (key) => {
     }
   } else if (key === "workshop") {
     if (checkAuthToken()) showWorkshop.value = true;
-    else {
-      message.error(t("message.requireauth"));
-      showLoginModal.value = true;
-    }
-  } else if (key === "astrbot") {
-    if (checkAuthToken()) showAstrBot.value = true;
     else {
       message.error(t("message.requireauth"));
       showLoginModal.value = true;
@@ -745,15 +736,6 @@ onMounted(async () => {
             <span>Workshop</span>
           </button>
           <button
-            v-if="isAdmin"
-            type="button"
-            class="ops-command-button"
-            @click="handleToolAction('astrbot')"
-          >
-            <n-icon><BrandHipchat /></n-icon>
-            <span>AstrBot / QQ</span>
-          </button>
-          <button
             type="button"
             class="ops-command-button"
             @click="handleToolAction('palconf')"
@@ -895,7 +877,6 @@ onMounted(async () => {
   <world-data-manager v-model:show="showWorldData" />
   <breeding-lab v-model:show="showBreedingLab" />
   <workshop-manager v-model:show="showWorkshop" />
-  <astr-bot-manager v-model:show="showAstrBot" />
   <whitelist-manager
     v-model:show="showWhiteListModal"
     :players="playerList"

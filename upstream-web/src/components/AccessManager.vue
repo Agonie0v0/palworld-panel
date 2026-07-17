@@ -40,7 +40,6 @@ const copy = computed(() =>
         admin: "管理员",
         operator: "运维员",
         viewer: "只读",
-        integration: "机器人集成",
         primary: "主管理员",
         save: "保存",
         cancel: "取消",
@@ -78,7 +77,6 @@ const copy = computed(() =>
         admin: "Administrator",
         operator: "Operator",
         viewer: "Read only",
-        integration: "Bot integration",
         primary: "Primary administrator",
         save: "Save",
         cancel: "Cancel",
@@ -110,10 +108,7 @@ const roleOptions = computed(() => [
   { label: copy.value.operator, value: "operator" },
   { label: copy.value.viewer, value: "viewer" },
 ]);
-const keyRoleOptions = computed(() => [
-  ...roleOptions.value,
-  { label: copy.value.integration, value: "integration" },
-]);
+const keyRoleOptions = roleOptions;
 const result = (response) => response?.data?.value || {};
 const fail = (response, fallback) =>
   message.error(result(response).error || fallback);

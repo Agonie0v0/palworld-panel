@@ -9,7 +9,6 @@ import {
 } from "@vicons/material";
 import {
   Activity,
-  BrandHipchat,
   BrandSteam,
   ChevronsLeft,
   Database,
@@ -53,7 +52,6 @@ import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
-import AstrBotManager from "@/components/AstrBotManager.vue";
 import MapView from "@/views/PcHome/component/MapView.vue";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import themeStore from "@/stores/model/theme.js";
@@ -290,7 +288,6 @@ const showAccessManager = ref(false);
 const showWorldData = ref(false);
 const showBreedingLab = ref(false);
 const showWorkshop = ref(false);
-const showAstrBot = ref(false);
 const handleShutdown = () => {
   if (checkAuthToken()) {
     showShutdownDialog.value = true;
@@ -319,7 +316,6 @@ const executeAdminAction = (key) => {
   if (key === "world-data") openAuthenticated(showWorldData);
   if (key === "breeding") openAuthenticated(showBreedingLab);
   if (key === "workshop") openAuthenticated(showWorkshop);
-  if (key === "astrbot") openAuthenticated(showAstrBot);
   if (key === "settings") {
     if (checkAuthToken()) emit("open-config");
     else {
@@ -773,15 +769,6 @@ onBeforeUnmount(() => {
           <span>Workshop</span>
         </button>
         <button
-          v-if="isAdmin"
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('astrbot')"
-        >
-          <n-icon><BrandHipchat /></n-icon>
-          <span>AstrBot / QQ</span>
-        </button>
-        <button
           type="button"
           class="mobile-tool-button"
           @click="handleAdminAction('palconf')"
@@ -898,7 +885,6 @@ onBeforeUnmount(() => {
   <world-data-manager v-model:show="showWorldData" />
   <breeding-lab v-model:show="showBreedingLab" />
   <workshop-manager v-model:show="showWorkshop" />
-  <astr-bot-manager v-model:show="showAstrBot" />
   <whitelist-manager
     v-model:show="showWhitelistManager"
     :players="playerList"
