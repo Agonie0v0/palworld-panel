@@ -12,7 +12,12 @@ const close = () => emit("update:show", false);
 </script>
 
 <template>
-  <section v-if="embedded" class="tool-surface" :aria-label="title">
+  <section
+    v-if="embedded"
+    class="tool-surface"
+    :style="{ width: '100%', maxWidth: 'none' }"
+    :aria-label="title"
+  >
     <header class="tool-surface__header">
       <div class="tool-surface__heading">
         <h2>{{ title }}</h2>
@@ -48,6 +53,7 @@ const close = () => emit("update:show", false);
 
 <style scoped>
 .tool-surface {
+  width: 100%;
   min-width: 0;
   min-height: 0;
   color: var(--app-ink);
@@ -109,7 +115,7 @@ const close = () => emit("update:show", false);
   }
 
   .tool-surface__body {
-    padding: 28px;
+    padding: 32px;
   }
 }
 

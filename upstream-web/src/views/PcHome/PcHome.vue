@@ -495,11 +495,11 @@ onMounted(async () => {
 
       <template v-if="canOperate">
         <div class="ops-nav-label ops-nav-label--group">
-          {{ locale === "zh" ? "\u670d\u52a1\u5668" : "Server" }}
+          {{ locale === "zh" ? "\u5e38\u7528\u5de5\u5177" : "Common tools" }}
         </div>
         <nav
           class="ops-nav ops-nav--list"
-          :aria-label="locale === 'zh' ? '\u670d\u52a1\u5668' : 'Server'"
+          :aria-label="locale === 'zh' ? '\u5e38\u7528\u5de5\u5177' : 'Common tools'"
         >
           <button
             type="button"
@@ -518,6 +518,30 @@ onMounted(async () => {
           >
             <n-icon><ConstructOutline /></n-icon
             ><span>{{ $t("gameSettings.title") }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'breeding' }"
+            @click="selectWorkspace('breeding')"
+          >
+            <n-icon><Dna /></n-icon
+            ><span>{{
+              locale === "zh"
+                ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4"
+                : "Breeding lab"
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="ops-menu-button"
+            :class="{ 'is-active': currentDisplay === 'mods' }"
+            @click="selectWorkspace('mods')"
+          >
+            <n-icon><Package /></n-icon
+            ><span>{{
+              locale === "zh" ? "\u6a21\u7ec4\u7ba1\u7406" : "Mods"
+            }}</span>
           </button>
           <button
             type="button"
@@ -619,30 +643,6 @@ onMounted(async () => {
             <n-icon><Activity /></n-icon
             ><span>{{
               locale === "zh" ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'breeding' }"
-            @click="selectWorkspace('breeding')"
-          >
-            <n-icon><Dna /></n-icon
-            ><span>{{
-              locale === "zh"
-                ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4"
-                : "Breeding lab"
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="ops-menu-button"
-            :class="{ 'is-active': currentDisplay === 'mods' }"
-            @click="selectWorkspace('mods')"
-          >
-            <n-icon><Package /></n-icon
-            ><span>{{
-              locale === "zh" ? "\u6a21\u7ec4\u7ba1\u7406" : "Mods"
             }}</span>
           </button>
           <button
