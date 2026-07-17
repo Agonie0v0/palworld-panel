@@ -1,6 +1,6 @@
 # Palworld Panel
 
-面向《幻兽帕鲁》1.0 专用服务器的 Web 管理面板，支持 AMD64、ARM64、Oracle Cloud Ampere A1、单机部署、Docker 面板和远程 Agent。
+面向《幻兽帕鲁》1.0 专用服务器的 Web 管理面板，支持 AMD64、ARM64，以及单机和远程 Agent 两种部署架构。
 
 项目以 [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool) 作为主要功能与兼容体验基线，并增加了一键部署、Oracle ARM64 运行、服务器运维、完整参数管理、定时 RCON、远程 Agent 和现代化桌面/移动端界面。
 
@@ -15,11 +15,7 @@
 
 - [项目能力](#项目能力)
 - [数据从哪里来](#数据从哪里来)
-- [选择部署方式](#选择部署方式)
-- [Oracle ARM64 快速部署](#oracle-arm64-快速部署)
-- [通用单机部署](#通用单机部署)
-- [Docker 部署面板](#docker-部署面板)
-- [Agent 分离部署](#agent-分离部署)
+- [部署](#部署)
 - [首次使用](#首次使用)
 - [界面与菜单说明](#界面与菜单说明)
 - [主视图](#主视图)
@@ -78,51 +74,20 @@ flowchart LR
 
 如果实时在线人数正常，但玩家详情、公会或地图没有数据，通常应检查存档解析器，而不是 RCON。
 
-## 选择部署方式
+## 部署
 
-| 使用场景 | 推荐方式 |
+项目只有两种部署架构：
+
+| 架构 | 适用场景 |
 | --- | --- |
-| Oracle Cloud Ampere A1，面板和游戏服在同一台机器 | `scripts/install-oci-arm.sh` |
-| Ubuntu/Debian AMD64 或 ARM64，先装面板再从 WebUI 开服 | `scripts/install-panel.sh` |
-| 只希望用 Docker 运行面板 | `deploy/docker-compose.yml` |
-| Docker 面板需要管理宿主机 systemd 游戏服 | Docker 面板 + 宿主机 Agent |
-| 面板和游戏服分别位于两台机器 | 面板 + 游戏服务器 Agent |
-| 已经运行 zaigie 的 `pst-agent`，只需要同步存档 | PST 配置中的 `pst-agent` 存档来源 |
+| 单机部署（推荐） | 面板和 Palworld 服务器安装在同一台 AMD64 或 ARM64 Linux 机器 |
+| Agent 分离部署 | 面板与游戏服务器位于不同机器，或 Docker 面板需要控制宿主机服务 |
 
 自动安装脚本当前面向 Ubuntu/Debian。其他 Linux 发行版可以手动运行 Node.js 服务，但一键部署脚本需要自行适配包管理器和 systemd。
 
-## Oracle ARM64 快速部署
+### 单机部署（推荐）
 
-这是 Oracle Cloud Ampere A1 最直接的方式，会同时安装面板、存档解析器、DepotDownloader、box64、Palworld 服务端和 systemd 服务。
-
-```bash
-sudo apt-get update
-sudo apt-get install -y git
-git clone https://github.com/Agonie0v0/palworld-panel.git
-cd palworld-panel
-sudo PANEL_PORT=19090 \
-  SERVER_NAME="My Palworld Server" \
-  bash scripts/install-oci-arm.sh
-```
-
-安装完成后，脚本会输出：
-
-- 面板地址
-- Panel Token
-- Palworld `AdminPassword`
-- 玩家连接端口
-
-访问：
-
-```text
-http://服务器公网IP:19090
-```
-
-只安装面板、不立即安装游戏服务器时，请使用通用单机部署，然后在 WebUI 的“服务器运维”中点击“部署服务器”。
-
-## 通用单机部署
-
-适用于 Ubuntu/Debian AMD64 和 ARM64。安装面板后，可以直接在 WebUI 中一键部署游戏服务器。
+这是大多数用户应该选择的方式。先安装面板，再打开 WebUI，通过“服务器运维”一键部署 Palworld 服务器。
 
 ```bash
 sudo apt-get update
@@ -141,10 +106,10 @@ sudo PANEL_PORT=19090 bash scripts/install-panel.sh
 | `PANEL_TOKEN` | 自动生成 | 备用管理登录 Token |
 | `INSTALL_SAVE_PARSER` | `1` | 是否安装存档解析器 |
 
-安装脚本会创建并启动：
+脚本会创建并启动 `palworld-panel.service`。安装完成后访问：
 
 ```text
-palworld-panel.service
+http://服务器公网IP:19090
 ```
 
 打开面板后进入“服务器运维”，填写安装目录、服务名称、服务器名称、管理员密码和端口，然后点击“部署服务器”。
@@ -156,7 +121,17 @@ palworld-panel.service
 | `x86_64` / AMD64 | SteamCMD + 官方 Linux 服务端 |
 | `aarch64` / ARM64 | DepotDownloader ARM64 + box64 运行 x64 服务端 |
 
-## Docker 部署面板
+Oracle Cloud Ampere A1 用户如果希望一次安装面板和游戏服务器，可以改用：
+
+```bash
+sudo PANEL_PORT=19090 \
+  SERVER_NAME="My Palworld Server" \
+  bash scripts/install-oci-arm.sh
+```
+
+该脚本会额外安装 DepotDownloader、box64 和 Palworld systemd 服务，并输出面板地址、管理 Token、游戏管理员密码和玩家连接端口。
+
+需要将面板本身运行在 Docker 中时，使用：
 
 ```bash
 git clone https://github.com/Agonie0v0/palworld-panel.git
@@ -187,9 +162,9 @@ Docker 镜像包含：
 | 备份 | `palworld-backups:/backups` |
 | 游戏目录 | `deploy/palworld:/palworld` |
 
-Docker 容器不能直接控制宿主机 systemd。如果 Palworld 作为宿主机的 `palworld.service` 运行，请安装 Agent；挂载 Docker Socket 只适用于面板管理 Docker 工作负载，不等于获得宿主机 systemd 权限。
+Docker 容器不能直接控制宿主机 systemd。如果 Palworld 运行在宿主机上，请使用下面的 Agent 分离部署；挂载 Docker Socket 不等于获得宿主机 systemd 权限。
 
-## Agent 分离部署
+### Agent 分离部署
 
 Agent 用于让面板管理另一台机器，或让 Docker 面板管理宿主机上的游戏服务。
 
@@ -234,7 +209,7 @@ http://host.docker.internal:8081
 
 只允许面板机器访问 Agent 端口，不要将 Agent Token 和端口公开给所有公网来源。
 
-### 兼容 pst-agent 存档同步
+### 仅兼容 pst-agent 存档同步
 
 如果已经部署 [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool) 的 `pst-agent`，可以只复用它的存档同步接口。
 
@@ -244,7 +219,7 @@ http://host.docker.internal:8081
 http://游戏服务器IP:8081/sync
 ```
 
-面板会下载 `sav.zip` 并解析。该模式只负责存档传输，不负责远程启停、更新、RCON 或 REST；需要完整远程管理时仍应使用本项目 Agent。
+面板会下载 `sav.zip` 并解析。`pst-agent` 只是兼容的存档来源，不是一种完整部署方式：它不负责远程启停、更新、RCON 或 REST。需要完整远程管理时，请使用本项目 Agent。
 
 ## 首次使用
 
