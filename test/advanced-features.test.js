@@ -154,3 +154,33 @@ test("custom breeding materials are normalized and save hashes are deterministic
     breedingSourceHash([{ type: "Lamball" }, pal]),
   );
 });
+
+test("failed background jobs preserve deployment logs and result details", async () => {
+  const store = new Map();
+  const features = createAdvancedFeatures({
+    dataDir: path.join(os.tmpdir(), "palworld-panel-job-tests"),
+    loadJsonFile: async (name, fallback) => store.has(name) ? store.get(name) : fallback,
+    saveJsonFile: async (name, value) => {
+      store.set(name, value);
+      return value;
+    },
+  });
+  const queued = await features.queueJob("server-deploy", "Deploy server", async (progress) => {
+    await progress(42, "Installing server", { logs: ["[1/2] Prepare", "[2/2] Install"] });
+    const error = new Error("Installation failed");
+    error.logs = ["[1/2] Prepare", "[2/2] Install", "disk full"];
+    error.result = { code: 1, stderr: "disk full" };
+    throw error;
+  });
+
+  let failed;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    failed = (store.get("jobs.json") || []).find((job) => job.id === queued.id);
+    if (failed?.status === "failed") break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  assert.equal(failed.status, "failed");
+  assert.deepEqual(failed.logs, ["[1/2] Prepare", "[2/2] Install", "disk full"]);
+  assert.equal(failed.result.stderr, "disk full");
+});

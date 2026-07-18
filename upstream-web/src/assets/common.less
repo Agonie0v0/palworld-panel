@@ -443,13 +443,23 @@ a {
 }
 
 .ops-auth-state {
-  display: flex;
-  min-width: 0;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   align-items: center;
-  gap: 7px;
+  justify-items: center;
   color: var(--app-success);
+  background: var(--app-success-soft);
+  border-radius: 11px;
   font-size: 12px;
   font-weight: 600;
+  outline: none;
+}
+
+.ops-auth-state:hover,
+.ops-auth-state:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-success) 30%, transparent);
 }
 
 .ops-main {
@@ -1598,8 +1608,12 @@ a {
 }
 
 .ops-telemetry-item--players {
-  background: var(--app-surface-muted);
-  box-shadow: inset 0 0 0 1px var(--app-border);
+  background: color-mix(in srgb, var(--app-accent) 10%, var(--app-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 20%, transparent);
+}
+
+.ops-telemetry-item--players strong {
+  color: color-mix(in srgb, var(--app-accent) 82%, var(--app-ink));
 }
 
 .ops-header-actions .n-button {

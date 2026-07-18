@@ -97,10 +97,11 @@ function createAdvancedFeatures(deps) {
       state.runningJobs.add(job.id);
       await updateJob(job.id, { status: "running", progress: 5, message: "Running" });
       try {
-        const result = await runner((progress, message) =>
+        const result = await runner((progress, message, details = {}) =>
           updateJob(job.id, {
             progress: Math.max(0, Math.min(100, Number(progress || 0))),
             message: message || "Running",
+            ...(Array.isArray(details.logs) ? { logs: details.logs.slice(-500) } : {}),
           }),
         );
         await updateJob(job.id, {
@@ -116,6 +117,8 @@ function createAdvancedFeatures(deps) {
           progress: 100,
           message: "Failed",
           error: message,
+          ...(Array.isArray(error?.logs) ? { logs: error.logs.slice(-500) } : {}),
+          ...(error?.result ? { result: error.result } : {}),
         });
         await recordAlert({
           severity: "error",

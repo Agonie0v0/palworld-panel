@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDialog, useMessage } from "naive-ui";
 import {
@@ -16,7 +16,7 @@ import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
-const emit = defineEmits(["update:show"]);
+const emit = defineEmits(["update:show", "server-changed"]);
 const { t } = useI18n();
 const message = useMessage();
 const dialog = useDialog();
@@ -29,6 +29,9 @@ const plan = ref({});
 const agent = ref({ enabled: false, mode: "local", endpoint: "", token: "" });
 const hostMetrics = ref({});
 const watchdogState = ref({});
+const deploymentModal = ref(false);
+const deploymentJob = ref(null);
+let deploymentPollTimer;
 const watchdog = ref({
   watchdogEnabled: false,
   watchdogCheckIntervalSeconds: 30,
@@ -62,6 +65,28 @@ const memoryPercent = computed(() => Number(hostMetrics.value?.memory?.usedPerce
 const diskPercent = computed(() => Number(hostMetrics.value?.disk?.usedPercent || 0));
 const cpuPercent = computed(() => Number(hostMetrics.value?.cpu?.usedPercent || 0));
 const processMemoryPercent = computed(() => Number(hostMetrics.value?.process?.memoryPercent || 0));
+const deploymentActive = computed(() => ["queued", "running"].includes(deploymentJob.value?.status));
+const deploymentLogs = computed(() => {
+  if (Array.isArray(deploymentJob.value?.logs)) return deploymentJob.value.logs;
+  if (Array.isArray(deploymentJob.value?.result?.logs)) return deploymentJob.value.result.logs;
+  return [];
+});
+const deploymentStatusType = computed(() => {
+  if (deploymentJob.value?.status === "completed") return "success";
+  if (deploymentJob.value?.status === "failed") return "error";
+  if (deploymentJob.value?.status === "queued") return "warning";
+  return "info";
+});
+const deploymentStatusText = computed(() => {
+  const status = deploymentJob.value?.status || "queued";
+  const key = {
+    queued: "operations.deployQueued",
+    running: "operations.deployRunning",
+    completed: "operations.deployCompleted",
+    failed: "operations.deployFailed",
+  }[status];
+  return key ? t(key) : status;
+});
 
 const formatBytes = (bytes) => {
   const value = Number(bytes || 0);
@@ -121,6 +146,39 @@ watch(
   },
 );
 
+const stopDeploymentPolling = () => {
+  if (deploymentPollTimer) clearInterval(deploymentPollTimer);
+  deploymentPollTimer = undefined;
+};
+
+const pollDeploymentJob = async (jobId) => {
+  const { data } = await api.getAdvancedJobs();
+  const jobs = Array.isArray(data.value?.jobs) ? data.value.jobs : [];
+  const job = jobs.find((row) => row.id === jobId);
+  if (!job) return;
+  const previousStatus = deploymentJob.value?.status;
+  deploymentJob.value = job;
+  if (!["completed", "failed"].includes(job.status)) return;
+  stopDeploymentPolling();
+  busy.value = "";
+  if (previousStatus === job.status) return;
+  if (job.status === "completed") {
+    message.success(t("operations.deploySuccess"));
+    await refresh();
+    emit("server-changed");
+  } else {
+    message.error(job.error || t("operations.deployFailed"));
+  }
+};
+
+const startDeploymentPolling = (jobId) => {
+  stopDeploymentPolling();
+  pollDeploymentJob(jobId).catch(() => {});
+  deploymentPollTimer = setInterval(() => pollDeploymentJob(jobId).catch(() => {}), 1000);
+};
+
+onBeforeUnmount(stopDeploymentPolling);
+
 const runAction = async (action) => {
   busy.value = action;
   const { data, statusCode } = await api.runServerAction(action);
@@ -141,13 +199,41 @@ const submitDeploy = () => {
     negativeText: t("button.cancel"),
     onPositiveClick: async () => {
       busy.value = "deploy";
+      deploymentModal.value = true;
+      deploymentJob.value = {
+        status: "queued",
+        progress: 0,
+        message: t("operations.deployWaiting"),
+        logs: [],
+      };
       const { data, statusCode } = await api.deployServer(deploy.value);
-      busy.value = "";
-      if (statusCode.value === 200 && data.value?.ok) {
-        message.success(t("operations.deploySuccess"));
-        await refresh();
+      if ([200, 202].includes(statusCode.value) && data.value?.ok) {
+        if (data.value.job?.id) {
+          deploymentJob.value = data.value.job;
+          startDeploymentPolling(data.value.job.id);
+        } else {
+          busy.value = "";
+          deploymentJob.value = {
+            status: "completed",
+            progress: 100,
+            message: t("operations.deployCompleted"),
+            result: data.value.result || {},
+          };
+          message.success(t("operations.deploySuccess"));
+          await refresh();
+          emit("server-changed");
+        }
       } else {
-        message.error(data.value?.result?.stderr || data.value?.error || t("operations.deployFailed"));
+        busy.value = "";
+        const error = data.value?.result?.stderr || data.value?.error || t("operations.deployFailed");
+        deploymentJob.value = {
+          status: "failed",
+          progress: 100,
+          message: t("operations.deployFailed"),
+          error,
+          result: data.value?.result || {},
+        };
+        message.error(error);
       }
     },
   });
@@ -197,6 +283,7 @@ const maintenance = (operation) => {
       if (statusCode.value === 200 && data.value?.ok) {
         message.success(t("operations.actionSuccess"));
         await refresh();
+        emit("server-changed");
       } else {
         message.error(data.value?.result?.stderr || data.value?.error || t("operations.actionFailed"));
       }
@@ -280,6 +367,9 @@ const maintenance = (operation) => {
               <n-form-item-gi :label="$t('operations.autoStart')"><n-switch v-model:value="deploy.autoStart" /></n-form-item-gi>
             </n-grid>
           </n-form>
+          <n-alert type="info" :bordered="false" class="deploy-port-hint">
+            {{ $t('operations.portFirewallHint') }}
+          </n-alert>
           <n-flex justify="end"><n-button type="primary" :disabled="plan.profile && !plan.profile.supported" :loading="busy === 'deploy'" @click="submitDeploy"><template #icon><n-icon><CloudDownloadOutlined /></n-icon></template>{{ $t('operations.deploy') }}</n-button></n-flex>
           </section>
         </n-tab-pane>
@@ -429,6 +519,60 @@ const maintenance = (operation) => {
       </div>
     </n-scrollbar>
   </tool-surface>
+
+  <n-modal
+    v-model:show="deploymentModal"
+    :mask-closable="false"
+    :close-on-esc="!deploymentActive"
+  >
+    <n-card
+      class="deployment-progress-card"
+      :title="$t('operations.deployProgressTitle')"
+      :closable="!deploymentActive"
+      @close="deploymentModal = false"
+    >
+      <div class="deployment-progress-head">
+        <div>
+          <n-tag :type="deploymentStatusType" :bordered="false">
+            {{ deploymentStatusText }}
+          </n-tag>
+          <p>{{ deploymentJob?.message || $t('operations.deployWaiting') }}</p>
+        </div>
+        <strong>{{ Math.round(deploymentJob?.progress || 0) }}%</strong>
+      </div>
+      <n-progress
+        type="line"
+        :percentage="Math.round(deploymentJob?.progress || 0)"
+        :status="deploymentJob?.status === 'failed' ? 'error' : deploymentJob?.status === 'completed' ? 'success' : 'default'"
+        :show-indicator="false"
+      />
+      <n-alert
+        v-if="deploymentJob?.error"
+        type="error"
+        :bordered="false"
+        class="deployment-error"
+      >
+        {{ deploymentJob.error }}
+      </n-alert>
+      <div class="deployment-log-heading">
+        <span>{{ $t('operations.deployLogs') }}</span>
+        <small>{{ deploymentLogs.length }}</small>
+      </div>
+      <n-scrollbar class="deployment-log-scroll" trigger="none">
+        <pre aria-live="polite">{{ deploymentLogs.length ? deploymentLogs.join('\n') : $t('operations.deployWaitingForLogs') }}</pre>
+      </n-scrollbar>
+      <template #footer>
+        <n-flex justify="end">
+          <n-button
+            :disabled="deploymentActive"
+            @click="deploymentModal = false"
+          >
+            {{ $t('button.close') }}
+          </n-button>
+        </n-flex>
+      </template>
+    </n-card>
+  </n-modal>
 </template>
 
 <style scoped>
@@ -447,6 +591,7 @@ const maintenance = (operation) => {
 }
 .service-facts { box-shadow: none !important; }
 .service-actions { gap: 10px; }
+.deploy-port-hint { margin-bottom: 16px; }
 .section-heading {
   display: flex;
   align-items: flex-start;
@@ -492,6 +637,62 @@ const maintenance = (operation) => {
 .watchdog-footer { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--app-border); }
 .maintenance-list { box-shadow: var(--app-shadow-sm); }
 :deep(.maintenance-list .n-list-item) { min-height: 92px; padding: 20px 22px; }
+.deployment-progress-card {
+  width: min(92vw, 760px);
+  border-radius: 14px;
+}
+.deployment-progress-head,
+.deployment-log-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.deployment-progress-head { margin-bottom: 14px; }
+.deployment-progress-head > div { min-width: 0; }
+.deployment-progress-head p {
+  margin: 8px 0 0;
+  overflow: hidden;
+  color: var(--app-ink-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deployment-progress-head strong {
+  color: var(--app-ink);
+  font-family: var(--app-font-data);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+.deployment-error { margin-top: 16px; }
+.deployment-log-heading {
+  margin-top: 20px;
+  color: var(--app-ink-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+.deployment-log-heading small {
+  color: var(--app-ink-muted);
+  font-family: var(--app-font-data);
+  font-weight: 500;
+}
+.deployment-log-scroll {
+  height: min(42vh, 360px);
+  margin-top: 8px;
+  background: #101817;
+  border-radius: 10px;
+}
+.deployment-log-scroll pre {
+  min-height: 100%;
+  margin: 0;
+  padding: 16px;
+  color: #d5e8e3;
+  font-family: var(--app-font-data);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 @media (max-width: 640px) {
   .operations-modal-body { padding-right: 4px; }
   :deep(.n-descriptions-table-content) { min-width: 560px; }
@@ -502,5 +703,7 @@ const maintenance = (operation) => {
   .watchdog-footer { align-items: stretch; flex-direction: column; }
   .ops-bento-section { padding: 18px; }
   .section-heading { align-items: stretch; flex-direction: column; }
+  .deployment-progress-card { width: calc(100vw - 24px); }
+  .deployment-progress-head p { white-space: normal; }
 }
 </style>

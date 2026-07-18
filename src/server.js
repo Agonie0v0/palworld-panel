@@ -3,7 +3,7 @@ const https = require("https");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
-const { execFile } = require("child_process");
+const { execFile, spawn } = require("child_process");
 const os = require("os");
 const net = require("net");
 const crypto = require("crypto");
@@ -503,6 +503,76 @@ function exec(command, args, options = {}) {
   });
 }
 
+function spawnWithLogs(command, args, options = {}, onLine = () => {}) {
+  const timeout = Number(options.timeout || 120000);
+  const spawnOptions = { ...options };
+  delete spawnOptions.timeout;
+  return new Promise((resolve) => {
+    const stdoutLines = [];
+    const stderrLines = [];
+    let stdoutBuffer = "";
+    let stderrBuffer = "";
+    let settled = false;
+    let timedOut = false;
+    let child;
+    let timer;
+
+    const pushLine = (stream, line) => {
+      const clean = String(line || "").replace(/\r$/, "");
+      if (!clean) return;
+      const rows = stream === "stderr" ? stderrLines : stdoutLines;
+      rows.push(clean);
+      if (rows.length > 2000) rows.splice(0, rows.length - 2000);
+      Promise.resolve(onLine(clean, stream)).catch(() => {});
+    };
+    const flush = () => {
+      if (stdoutBuffer) pushLine("stdout", stdoutBuffer);
+      if (stderrBuffer) pushLine("stderr", stderrBuffer);
+      stdoutBuffer = "";
+      stderrBuffer = "";
+    };
+    const finish = (code, error = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      flush();
+      resolve({
+        ok: !error && !timedOut && code === 0,
+        code: Number.isFinite(Number(code)) ? Number(code) : 1,
+        stdout: stdoutLines.join("\n").trim(),
+        stderr: timedOut
+          ? `Process timed out after ${Math.round(timeout / 1000)} seconds.`
+          : (stderrLines.join("\n").trim() || error?.message || "")
+      });
+    };
+
+    try {
+      child = spawn(command, args, { ...spawnOptions, stdio: ["ignore", "pipe", "pipe"] });
+    } catch (error) {
+      finish(1, error);
+      return;
+    }
+    child.stdout.on("data", (chunk) => {
+      stdoutBuffer += chunk.toString("utf8");
+      const lines = stdoutBuffer.split(/\r?\n/);
+      stdoutBuffer = lines.pop() || "";
+      lines.forEach((line) => pushLine("stdout", line));
+    });
+    child.stderr.on("data", (chunk) => {
+      stderrBuffer += chunk.toString("utf8");
+      const lines = stderrBuffer.split(/\r?\n/);
+      stderrBuffer = lines.pop() || "";
+      lines.forEach((line) => pushLine("stderr", line));
+    });
+    child.on("error", (error) => finish(1, error));
+    child.on("close", (code) => finish(code));
+    timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeout);
+  });
+}
+
 async function dockerCompose(config, args) {
   const options = { cwd: config.server.composeProjectDir || config.server.installDir };
   const modern = await exec("docker", ["compose", ...args], options);
@@ -511,7 +581,7 @@ async function dockerCompose(config, args) {
   return legacy.ok ? legacy : modern;
 }
 
-async function deployServer(config, body = {}) {
+async function deployServer(config, body = {}, onProgress = () => {}) {
   const profile = hostProfile();
   if (!profile.supported) {
     return {
@@ -537,10 +607,11 @@ async function deployServer(config, body = {}) {
   };
   const installDir = body.installDir || config.server.installDir;
   const appRoot = path.dirname(installDir);
+  const freshInstall = !fs.existsSync(path.join(installDir, "Pal", "Saved", "SaveGames"));
   const updaterPath = body.steamcmdPath
     || (hostProfile().runner === "box64" ? "/opt/depotdownloader/DepotDownloader" : config.server.steamcmdPath)
     || "/opt/steamcmd/steamcmd.sh";
-  const nextConfig = await saveConfig({
+  const nextConfig = mergeConfig(defaultConfig, {
     ...config,
     server: {
       ...config.server,
@@ -559,8 +630,22 @@ async function deployServer(config, body = {}) {
     },
     settings: nextSettings
   });
+  const logs = [];
+  let currentProgress = 3;
+  let currentMessage = "Preparing deployment";
+  let lineCount = 0;
+  let reportChain = Promise.resolve();
+  const report = (progress, message) => {
+    currentProgress = Math.max(currentProgress, Math.min(98, Number(progress || currentProgress)));
+    currentMessage = message || currentMessage;
+    reportChain = reportChain
+      .then(() => onProgress(currentProgress, currentMessage, { logs: logs.slice(-500) }))
+      .catch(() => {});
+    return reportChain;
+  };
+  await report(3, "Preparing deployment environment");
 
-  return exec("bash", [deployScriptPath], {
+  const result = await spawnWithLogs("bash", [deployScriptPath], {
     timeout: 30 * 60 * 1000,
     env: {
       ...process.env,
@@ -579,7 +664,31 @@ async function deployServer(config, body = {}) {
       REST_PORT: String(nextSettings.RESTAPIPort),
       AUTO_START: body.autoStart ? "1" : "0"
     }
+  }, (line, stream) => {
+    const logLine = stream === "stderr" ? `[stderr] ${line}` : line;
+    logs.push(logLine);
+    if (logs.length > 500) logs.splice(0, logs.length - 500);
+    lineCount += 1;
+    const step = line.match(/^\[(\d+)\/(\d+)\]\s*(.+)$/);
+    if (step) {
+      const stepNumber = Number(step[1]);
+      const stepTotal = Math.max(1, Number(step[2]));
+      report(5 + Math.round((stepNumber / stepTotal) * 85), step[3]);
+    } else if (lineCount % 12 === 0) {
+      report(currentProgress, currentMessage);
+    }
   });
+  await reportChain;
+  const deploymentResult = { ...result, logs: logs.slice(-500), freshInstall };
+  if (!result.ok) return deploymentResult;
+
+  await report(96, "Saving panel configuration");
+  await saveConfig(nextConfig);
+  await report(98, "Deployment completed");
+  return {
+    ...deploymentResult,
+    message: "Server deployment completed."
+  };
 }
 
 function packet(id, type, body) {
@@ -1663,6 +1772,18 @@ const upstreamCompat = createUpstreamCompatibility({
   downloadBackup: downloadCompatibleBackup
 });
 
+async function clearServerPlayerData(reason) {
+  const clearedAt = new Date().toISOString();
+  await upstreamCompat.clearSaveData(reason);
+  await saveJsonFile("online-players.json", {
+    players: [],
+    source: "cleared",
+    reason,
+    synced_at: clearedAt
+  });
+  previousOnlinePlayers = null;
+}
+
 async function handleApi(req, res, config) {
   if (await upstreamCompat.handlePublic(req, res, config)) return;
   if (await advancedFeatures.handlePublicApi(req, res, config)) return;
@@ -1897,19 +2018,54 @@ async function handleApi(req, res, config) {
 
   if (req.method === "POST" && req.url === "/api/deploy/server") {
     const body = await readBody(req);
-    const result = await managedCall("deploy", body, () => deployServer(config, body));
-    return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
+    const job = await advancedFeatures.queueJob(
+      "server-deploy",
+      `Deploy ${body.serverName || config.settings.ServerName || "Palworld server"}`,
+      async (progress) => {
+        const remoteAgent = agentIsEnabled(await loadAgentConfig());
+        const remoteLogs = [remoteAgent
+          ? "Sending deployment request to the remote Agent."
+          : "Starting deployment on the local host."];
+        await progress(2, "Deployment request accepted", { logs: remoteLogs });
+        let result;
+        try {
+          result = await managedCall(
+            "deploy",
+            body,
+            () => deployServer(config, body, progress)
+          );
+        } catch (error) {
+          error.logs = Array.isArray(error.logs) ? error.logs : remoteLogs;
+          throw error;
+        }
+        if (remoteAgent) {
+          remoteLogs.push("Remote Agent finished the deployment request.");
+          await progress(94, "Remote deployment finished", { logs: remoteLogs });
+        }
+        if (!result?.ok) {
+          const error = new Error(result?.stderr || result?.stdout || "Server deployment failed.");
+          error.logs = Array.isArray(result?.logs) ? result.logs : remoteLogs;
+          error.result = result || {};
+          throw error;
+        }
+        if (result.freshInstall) await clearServerPlayerData("server-deploy");
+        return result;
+      }
+    );
+    return sendJson(res, 202, { ok: true, job });
   }
 
   if (req.method === "POST" && req.url === "/api/server/reset-world") {
     const body = await readBody(req);
     const result = await managedCall("resetWorld", body, () => resetWorld(config, body));
+    if (result.ok) await clearServerPlayerData("world-reset");
     return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
   }
 
   if (req.method === "POST" && req.url === "/api/server/uninstall") {
     const body = await readBody(req);
     const result = await managedCall("uninstallServer", body, () => uninstallServer(config, body));
+    if (result.ok) await clearServerPlayerData("server-uninstall");
     return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
   }
 

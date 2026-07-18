@@ -198,3 +198,12 @@ test("backup cleanup applies retention days before the count limit", async () =>
     await fs.rm(directory, { recursive: true, force: true });
   }
 });
+
+test("deployment service command binds Palworld to the selected game port", async () => {
+  const script = await fs.readFile(
+    path.join(__dirname, "..", "scripts", "deploy-palworld-server.sh"),
+    "utf8",
+  );
+  assert.match(script, /EXEC_START="\$BOX64_BIN \$PAL_BINARY Pal -port=\$PUBLIC_PORT/);
+  assert.match(script, /PalServer\.sh -port=\$PUBLIC_PORT/);
+});

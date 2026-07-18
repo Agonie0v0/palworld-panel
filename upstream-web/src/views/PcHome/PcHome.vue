@@ -179,6 +179,9 @@ const getOnlineList = async () => {
   const { data } = await new ApiService().getOnlinePlayerList();
   onlinePlayerList.value = asArray(data.value);
 };
+const refreshManagedServerData = async () => {
+  await Promise.all([getServerInfo(), getServerMetrics(), getPlayerList()]);
+};
 
 // login
 const showLoginModal = ref(false);
@@ -487,10 +490,19 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
           ></template>
           {{ $t("button.auth") }}
         </n-button>
-        <div v-else class="ops-auth-state">
-          <n-icon><AdminPanelSettingsOutlined /></n-icon>
-          <span>{{ $t("status.authenticated") }}</span>
-        </div>
+        <n-tooltip v-else trigger="hover">
+          <template #trigger>
+            <div
+              class="ops-auth-state"
+              role="status"
+              tabindex="0"
+              :aria-label="$t('status.authenticated')"
+            >
+              <n-icon><AdminPanelSettingsOutlined /></n-icon>
+            </div>
+          </template>
+          {{ $t("status.authenticated") }}
+        </n-tooltip>
       </div>
     </aside>
 
@@ -509,10 +521,7 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
               class="ops-status-dot"
               :class="{ 'is-online': serverInfo?.name }"
             ></span>
-            <div>
-              <span>{{ $t("operations.state") }}</span>
-              <strong>{{ serverInfo?.name ? $t("status.online") : $t("status.serverUnavailable") }}</strong>
-            </div>
+            <strong>{{ serverInfo?.name ? $t("status.online") : $t("status.serverUnavailable") }}</strong>
           </div>
           <div class="ops-telemetry-item">
             <span>{{ $t("item.serverFps") }}</span>
@@ -549,6 +558,7 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
             v-if="currentDisplay === 'operations'"
             :show="true"
             embedded
+            @server-changed="refreshManagedServerData"
           />
           <game-settings-manager
             v-if="currentDisplay === 'game-settings'"

@@ -83,13 +83,16 @@ function extractOnlinePlayers(live = {}) {
   return players.map(normalizeOnlinePlayer);
 }
 
-function normalizePlayer(player = {}, online = []) {
-  const match = online.find((candidate) =>
-    (candidate.player_uid && String(candidate.player_uid) === String(player.player_uid))
+function sameStablePlayer(player = {}, candidate = {}) {
+  return Boolean(
+    (candidate.player_uid && player.player_uid && String(candidate.player_uid) === String(player.player_uid))
     || (candidate.user_id && player.user_id && candidate.user_id === player.user_id)
     || (candidate.steam_id && player.steam_id && candidate.steam_id === player.steam_id)
-    || (candidate.nickname && player.nickname && candidate.nickname === player.nickname)
   );
+}
+
+function normalizePlayer(player = {}, online = []) {
+  const match = online.find((candidate) => sameStablePlayer(player, candidate));
   const onlineFields = match || {};
   return {
     ...player,
@@ -309,6 +312,20 @@ function createUpstreamCompatibility(deps) {
     return next;
   }
 
+  async function clearSaveData(reason = "server-reset") {
+    const next = {
+      players: [],
+      guilds: [],
+      pals: [],
+      source: "cleared",
+      reason,
+      synced_at: new Date().toISOString()
+    };
+    if (deps.saveSyncedSaveData) await deps.saveSyncedSaveData(next);
+    saveCache = { expiresAt: Date.now() + 15000, data: next };
+    return next;
+  }
+
   async function getSaveData(config, force = false) {
     if (!force && saveCache.data && Date.now() < saveCache.expiresAt) return saveCache.data;
     if (!force) {
@@ -337,7 +354,13 @@ function createUpstreamCompatibility(deps) {
   async function getPlayers(config) {
     const [saveData, live] = await Promise.all([getSaveData(config), getLive(config)]);
     const online = extractOnlinePlayers(live);
-    return asArray(saveData.players).map((player) => normalizePlayer(player, online));
+    const players = asArray(saveData.players).map((player) => normalizePlayer(player, online));
+    for (const livePlayer of online) {
+      if (!players.some((player) => sameStablePlayer(player, livePlayer))) {
+        players.push(normalizePlayer(livePlayer, [livePlayer]));
+      }
+    }
+    return players;
   }
 
   async function getCommands() {
@@ -929,7 +952,19 @@ function createUpstreamCompatibility(deps) {
     if (changed) await deps.saveRconTasks(tasks);
   }
 
-  return { handlePublic, handleOptional, handleAuthorized, runScheduledTasks };
+  return {
+    clearSaveData,
+    handlePublic,
+    handleOptional,
+    handleAuthorized,
+    runScheduledTasks,
+    __test: { getPlayers, getSaveData }
+  };
 }
 
-module.exports = { createUpstreamCompatibility, DEFAULT_COMMANDS };
+module.exports = {
+  createUpstreamCompatibility,
+  DEFAULT_COMMANDS,
+  normalizePlayer,
+  sameStablePlayer
+};

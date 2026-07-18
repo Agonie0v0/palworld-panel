@@ -121,9 +121,9 @@ if [[ "$USE_BOX64" == "1" ]]; then
     exit 1
   fi
   chmod +x "$PAL_BINARY"
-  EXEC_START="$BOX64_BIN $PAL_BINARY Pal -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS"
+  EXEC_START="$BOX64_BIN $PAL_BINARY Pal -port=$PUBLIC_PORT -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS"
 else
-  EXEC_START="$SERVER_DIR/PalServer.sh -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS"
+  EXEC_START="$SERVER_DIR/PalServer.sh -port=$PUBLIC_PORT -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS"
 fi
 
 cat >"/etc/systemd/system/$SERVICE_NAME.service" <<EOF
