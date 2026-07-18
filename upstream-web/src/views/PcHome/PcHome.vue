@@ -35,14 +35,13 @@ import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
+import ConfigManager from "@/components/ConfigManager.vue";
 import SidebarWorkspaceNav from "./component/SidebarWorkspaceNav.vue";
 import whitelistStore from "@/stores/model/whitelist";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import { watch } from "vue";
 import userStore from "@/stores/model/user";
 import themeStore from "@/stores/model/theme.js";
-
-const emit = defineEmits(["open-config"]);
 
 const { t, locale } = useI18n();
 
@@ -84,6 +83,7 @@ const currentViewLabel = computed(() => {
     guilds: () => t("button.guilds"),
     map: () => t("button.map"),
     operations: () => t("operations.title"),
+    settings: () => t("configuration.title"),
     "game-settings": () => t("gameSettings.title"),
     advanced: () =>
       locale.value === "zh" ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center",
@@ -217,7 +217,7 @@ const handleLogin = async () => {
 };
 const selectWorkspace = (key) => {
   if (key === "settings") {
-    if (checkAuthToken()) emit("open-config");
+    if (checkAuthToken()) currentDisplay.value = "settings";
     else {
       message.error(t("message.requireauth"));
       showLoginModal.value = true;
@@ -618,6 +618,11 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
           />
           <game-settings-manager
             v-if="currentDisplay === 'game-settings'"
+            :show="true"
+            embedded
+          />
+          <config-manager
+            v-if="currentDisplay === 'settings'"
             :show="true"
             embedded
           />

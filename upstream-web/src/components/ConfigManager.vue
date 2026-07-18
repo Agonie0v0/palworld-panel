@@ -5,8 +5,12 @@ import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
 import userStore from "@/stores/model/user";
 import DirectoryPicker from "@/components/DirectoryPicker.vue";
+import ToolSurface from "@/components/ToolSurface.vue";
 
-const props = defineProps({ show: Boolean });
+const props = defineProps({
+  show: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
+});
 const emit = defineEmits(["update:show"]);
 const { t } = useI18n();
 const message = useMessage();
@@ -158,7 +162,7 @@ const save = async () => {
   } else {
     message.success(t("configuration.savedImmediately"));
   }
-  emit("update:show", false);
+  if (!props.embedded) emit("update:show", false);
 };
 
 const selectDirectory = (path) => {
@@ -173,17 +177,16 @@ watch(
   (show) => {
     if (show) load();
   },
+  { immediate: true },
 );
 </script>
 
 <template>
-  <n-modal
+  <tool-surface
     :show="show"
-    preset="card"
-    class="config-card"
-    style="width: min(94vw, 860px); max-height: calc(100vh - 64px)"
-    content-style="overflow: hidden"
+    :embedded="embedded"
     :title="$t('configuration.title')"
+    width="min(94vw, 980px)"
     @update:show="emit('update:show', $event)"
   >
     <n-spin :show="loading">
@@ -196,7 +199,7 @@ watch(
 
       <n-scrollbar
         class="config-scroll"
-        style="max-height: min(52vh, 560px); padding-right: 10px"
+        :style="embedded ? undefined : 'max-height: min(62vh, 680px); padding-right: 10px'"
       >
         <n-collapse :default-expanded-names="['save', 'rcon', 'rest']">
           <n-collapse-item :title="$t('configuration.saveSection')" name="save">
@@ -493,17 +496,17 @@ watch(
       </n-scrollbar>
     </n-spin>
 
-    <template #footer>
+    <div class="config-actions">
       <n-space justify="end">
-        <n-button @click="emit('update:show', false)">{{
+        <n-button v-if="!embedded" @click="emit('update:show', false)">{{
           $t("button.cancel")
         }}</n-button>
         <n-button type="primary" :loading="saving" @click="save">{{
           $t("button.save")
         }}</n-button>
       </n-space>
-    </template>
-  </n-modal>
+    </div>
+  </tool-surface>
 
   <directory-picker
     v-model:show="showDirectoryPicker"
@@ -517,6 +520,16 @@ watch(
 <style scoped>
 .config-scroll {
   min-height: 220px;
+}
+.config-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin-top: 18px;
+  padding: 16px 20px;
+  background: rgb(255 255 255 / 96%);
+  border-radius: 16px;
+  box-shadow: 0 -8px 24px rgb(30 41 59 / 5%);
 }
 .form-grid {
   display: grid;

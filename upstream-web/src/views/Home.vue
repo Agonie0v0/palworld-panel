@@ -43,7 +43,7 @@ const handleInitialized = () => {
 <template>
   <div v-if="configReady">
     <template v-if="initialized">
-      <pc-home v-if="pageWidth >= 768" @open-config="showConfig = true" />
+      <pc-home v-if="pageWidth >= 768" />
       <mobile-home v-else @open-config="showConfig = true" />
     </template>
     <first-run-setup :show="!initialized" @initialized="handleInitialized" />
