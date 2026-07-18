@@ -421,8 +421,9 @@ const getUnknowPalAvatar = (is_boss = false) => {
   }
   return new URL("@/assets/pals/unknown.png", import.meta.url).href;
 };
-const isPlayerOnline = (last_online) => {
-  return dayjs() - dayjs(last_online) < 80000;
+const isPlayerOnline = (player) => {
+  if (typeof player?.online === "boolean") return player.online;
+  return dayjs() - dayjs(player?.last_online) < 80000;
 };
 const getPlatformColor = (userId) => {
   if (!userId) return platformColors.default;
@@ -473,6 +474,12 @@ const mergeItems = () => {
     });
   }
 };
+
+watch(
+  () => playerInfo.value,
+  () => mergeItems(),
+  { immediate: true },
+);
 
 const createPlayerItemsColumns = () => {
   return [
@@ -532,13 +539,13 @@ const createPlayerItemsColumns = () => {
               <n-tag
                 :bordered="false"
                 :type="
-                  isPlayerOnline(playerInfo?.last_online) ? 'success' : 'error'
+                  isPlayerOnline(playerInfo) ? 'success' : 'error'
                 "
                 size="small"
                 round
               >
                 {{
-                  isPlayerOnline(playerInfo?.last_online)
+                  isPlayerOnline(playerInfo)
                     ? $t("status.online")
                     : $t("status.offline")
                 }}

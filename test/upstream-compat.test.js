@@ -13,8 +13,18 @@ test("players with the same nickname do not share online state without a stable 
   const normalized = normalizePlayer(saved, [online]);
 
   assert.equal(sameStablePlayer(saved, online), false);
+  assert.equal(normalized.online, false);
   assert.equal(normalized.ip, "10.0.0.1");
   assert.equal(normalized.player_uid, "100");
+});
+
+test("stable REST identity marks the saved player explicitly online", () => {
+  const saved = { player_uid: "100", nickname: "SavedName" };
+  const online = { player_uid: "100", nickname: "LiveName", ip: "10.0.0.2" };
+  const normalized = normalizePlayer(saved, [online]);
+
+  assert.equal(normalized.online, true);
+  assert.equal(normalized.ip, "10.0.0.2");
 });
 
 test("clearing save data invalidates stale cached players immediately", async () => {
@@ -63,6 +73,8 @@ test("live players from a new world are added without inheriting stale nickname 
 
   const players = await compatibility.__test.getPlayers({});
   assert.equal(players.length, 2);
+  assert.equal(players.find((player) => player.player_uid === "100").online, false);
+  assert.equal(players.find((player) => player.player_uid === "200").online, true);
   assert.equal(players.find((player) => player.player_uid === "100").ip, "10.0.0.1");
   assert.equal(players.find((player) => player.player_uid === "200").ip, "10.0.0.2");
 });

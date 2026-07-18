@@ -118,8 +118,9 @@ onMounted(async () => {
 });
 
 // 其他操作
-const isPlayerOnline = (last_online) => {
-  return dayjs() - dayjs(last_online) < 80000;
+const isPlayerOnline = (player) => {
+  if (typeof player?.online === "boolean") return player.online;
+  return dayjs() - dayjs(player?.last_online) < 80000;
 };
 const platformOptions = computed(() => {
   const platforms = new Set(
@@ -162,7 +163,7 @@ const filteredPlayers = computed(() => {
       .join(" ")
       .toLowerCase();
     if (keyword && !searchable.includes(keyword)) return false;
-    const online = isPlayerOnline(player.last_online);
+    const online = isPlayerOnline(player);
     if (statusFilter.value === "online" && !online) return false;
     if (statusFilter.value === "offline" && online) return false;
     const platform = player.user_id?.split("_")[0];
@@ -193,7 +194,7 @@ const filteredPlayers = computed(() => {
               <span>{{ $t("filter.resultCount", { count: filteredPlayers.length }) }}</span>
             </div>
             <n-tag :bordered="false" type="success" round>
-              {{ playerList.filter((player) => isPlayerOnline(player.last_online)).length }}
+              {{ playerList.filter(isPlayerOnline).length }}
               {{ $t("status.online") }}
             </n-tag>
           </div>
@@ -268,10 +269,10 @@ const filteredPlayers = computed(() => {
               <span class="player-ip">{{ player.ip || "-" }}</span>
               <span
                 class="player-status"
-                :class="isPlayerOnline(player.last_online) ? 'is-online' : 'is-offline'"
+                :class="isPlayerOnline(player) ? 'is-online' : 'is-offline'"
               >
                 <span class="status-dot"></span>
-                {{ isPlayerOnline(player.last_online) ? $t("status.online") : $t("status.offline") }}
+                {{ isPlayerOnline(player) ? $t("status.online") : $t("status.offline") }}
               </span>
               <n-icon class="row-chevron" size="18"><ChevronForward /></n-icon>
             </div>

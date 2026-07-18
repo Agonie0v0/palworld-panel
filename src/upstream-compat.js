@@ -96,6 +96,7 @@ function normalizePlayer(player = {}, online = []) {
   const onlineFields = match || {};
   return {
     ...player,
+    online: Boolean(match),
     player_uid: stringFrom(player, ["player_uid", "playerUid"]),
     nickname: stringFrom(player, ["nickname", "name"]),
     level: numberFrom(player, ["level"]),
