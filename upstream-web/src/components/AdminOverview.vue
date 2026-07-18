@@ -4,11 +4,14 @@ import dayjs from "dayjs";
 import { useI18n } from "vue-i18n";
 import {
   Activity,
+  Archive,
   Cpu,
   Database,
   DeviceDesktopAnalytics,
   Refresh,
   Server,
+  Terminal2,
+  Users,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
 
@@ -17,1454 +20,235 @@ const props = defineProps({
   serverMetrics: { type: Object, default: () => ({}) },
   players: { type: Array, default: () => [] },
 });
-
-const { t } = useI18n();
+const emit = defineEmits(["navigate"]);
+const { locale } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
 const onlinePlayers = ref([]);
 const backups = ref([]);
 const tasks = ref([]);
 const hostMetrics = ref({});
-let hostRefreshTimer;
-const asArray = (value) => (Array.isArray(value) ? value : []);
+let refreshTimer;
 
-const latestBackup = computed(
-  () =>
-    [...backups.value].sort(
-      (a, b) => new Date(b.save_time) - new Date(a.save_time),
-    )[0],
-);
-const activeTasks = computed(() => tasks.value.filter((task) => task.enabled));
-const nextTask = computed(
-  () =>
-    activeTasks.value
-      .filter((task) => task.next_run_at)
-      .sort((a, b) => new Date(a.next_run_at) - new Date(b.next_run_at))[0],
-);
+const zh = computed(() => locale.value === "zh");
+const copy = computed(() => zh.value ? {
+  controlRoom: "服务器控制台",
+  refresh: "刷新数据",
+  online: "服务器在线",
+  offline: "服务器离线",
+  onlinePlayers: "在线玩家",
+  serverFps: "服务器 FPS",
+  uptime: "运行时长",
+  playerActivity: "在线玩家动态",
+  playerActivityHint: "实时读取当前连接的玩家",
+  noPlayers: "当前没有玩家在线",
+  host: "主机负载",
+  hostHint: "CPU、内存与磁盘实时使用情况",
+  automation: "自动化与保护",
+  automationHint: "备份与定时任务一目了然",
+  activeTasks: "启用任务",
+  latestBackup: "最近备份",
+  never: "从未备份",
+  quickActions: "常用操作",
+  operations: "服务器运维",
+  rcon: "RCON 命令",
+  backup: "备份管理",
+  target: "目标 60 FPS",
+  playersTotal: "玩家总数",
+  unavailable: "暂无主机数据",
+} : {
+  controlRoom: "Server control room",
+  refresh: "Refresh",
+  online: "Server online",
+  offline: "Server offline",
+  onlinePlayers: "Online players",
+  serverFps: "Server FPS",
+  uptime: "Uptime",
+  playerActivity: "Live player activity",
+  playerActivityHint: "Players currently connected to this server",
+  noPlayers: "No players are online right now",
+  host: "Host load",
+  hostHint: "Live CPU, memory, and disk usage",
+  automation: "Automation & protection",
+  automationHint: "Backups and scheduled work at a glance",
+  activeTasks: "Active tasks",
+  latestBackup: "Latest backup",
+  never: "Never backed up",
+  quickActions: "Quick actions",
+  operations: "Server operations",
+  rcon: "RCON commands",
+  backup: "Backups",
+  target: "60 FPS target",
+  playersTotal: "Total players",
+  unavailable: "Host metrics unavailable",
+});
+
+const asArray = (value) => Array.isArray(value) ? value : [];
 const serverOnline = computed(() => Boolean(props.serverInfo?.name));
-const currentPlayers = computed(() =>
-  Number(
-    props.serverMetrics?.current_player_num ?? onlinePlayers.value.length ?? 0,
-  ),
-);
-const maxPlayers = computed(() =>
-  Number(props.serverMetrics?.max_player_num || 0),
-);
-const playerPercent = computed(() =>
-  maxPlayers.value > 0
-    ? Math.min(100, Math.round((currentPlayers.value / maxPlayers.value) * 100))
-    : 0,
-);
+const currentPlayers = computed(() => Number(props.serverMetrics?.current_player_num ?? onlinePlayers.value.length ?? 0));
+const maxPlayers = computed(() => Number(props.serverMetrics?.max_player_num || 0));
 const fps = computed(() => Number(props.serverMetrics?.server_fps || 0));
-const fpsPercent = computed(() =>
-  Math.min(100, Math.max(0, Math.round((fps.value / 60) * 100))),
-);
-const uptime = computed(() => {
-  const seconds = Number(props.serverMetrics?.uptime || 0);
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  return days > 0
-    ? t("overview.uptimeDays", { days, hours })
-    : t("overview.uptimeHours", { hours });
-});
-const healthType = computed(() => {
-  if (!serverOnline.value) return "warning";
-  return fps.value > 0 && fps.value < 30 ? "warning" : "success";
-});
-const fpsTone = computed(() => {
-  if (!serverOnline.value || fps.value < 30) return "is-warning";
-  return "is-success";
-});
-const latestBackupAge = computed(() => {
-  if (!latestBackup.value?.save_time) return t("overview.never");
-  const hours = Math.max(
-    0,
-    dayjs().diff(dayjs(latestBackup.value.save_time), "hour"),
-  );
-  if (hours < 24) return t("overview.hoursAgo", { hours });
-  return t("overview.daysAgo", { days: Math.floor(hours / 24) });
-});
-const cpuPercent = computed(() =>
-  Number(hostMetrics.value?.cpu?.usedPercent || 0),
-);
-const memoryPercent = computed(() =>
-  Number(hostMetrics.value?.memory?.usedPercent || 0),
-);
-const diskPercent = computed(() =>
-  Number(hostMetrics.value?.disk?.usedPercent || 0),
-);
-const processMemoryPercent = computed(() =>
-  Number(hostMetrics.value?.process?.memoryPercent || 0),
-);
-const hostPeakPercent = computed(() =>
-  Math.max(
-    cpuPercent.value,
-    memoryPercent.value,
-    hostMetrics.value?.disk ? diskPercent.value : 0,
-  ),
-);
-const hostHealthType = computed(() => {
-  if (hostPeakPercent.value >= 90) return "error";
-  if (hostPeakPercent.value >= 75) return "warning";
-  return "success";
-});
-const hostHealthLabel = computed(() => {
-  if (hostPeakPercent.value >= 90) return t("overview.hostCritical");
-  if (hostPeakPercent.value >= 75) return t("overview.hostElevated");
-  return t("overview.hostHealthy");
-});
-const signalSegments = computed(() => [
-  {
-    key: "server",
-    label: t("overview.serverStatus"),
-    tone: serverOnline.value ? "is-success" : "is-warning",
-  },
-  {
-    key: "fps",
-    label: t("item.serverFps"),
-    tone: fpsTone.value,
-  },
-  {
-    key: "players",
-    label: t("overview.onlinePlayers"),
-    tone: playerPercent.value >= 85 ? "is-warning" : "is-info",
-  },
-  {
-    key: "backup",
-    label: t("overview.backupStatus"),
-    tone: latestBackup.value ? "is-success" : "is-warning",
-  },
-  {
-    key: "host",
-    label: t("overview.hostLoad"),
-    tone: loadTone(hostPeakPercent.value),
-  },
+const fpsPercent = computed(() => Math.min(100, Math.max(0, (fps.value / 60) * 100)));
+const latestBackup = computed(() => [...backups.value].sort((a, b) => new Date(b.save_time) - new Date(a.save_time))[0]);
+const activeTasks = computed(() => tasks.value.filter((task) => task.enabled));
+const resourceRows = computed(() => [
+  { key: "cpu", icon: Cpu, label: "CPU", value: Number(hostMetrics.value?.cpu?.usedPercent || 0), detail: `${hostMetrics.value?.cpu?.cores || 0} ${zh.value ? "核心" : "cores"}` },
+  { key: "memory", icon: DeviceDesktopAnalytics, label: zh.value ? "内存" : "Memory", value: Number(hostMetrics.value?.memory?.usedPercent || 0), detail: `${formatBytes(hostMetrics.value?.memory?.used)} / ${formatBytes(hostMetrics.value?.memory?.total)}` },
+  { key: "disk", icon: Database, label: zh.value ? "磁盘" : "Disk", value: Number(hostMetrics.value?.disk?.usedPercent || 0), detail: hostMetrics.value?.disk ? `${formatBytes(hostMetrics.value.disk.used)} / ${formatBytes(hostMetrics.value.disk.total)}` : "-" },
 ]);
-
-const loadTone = (value) => {
-  if (value >= 90) return "is-danger";
-  if (value >= 75) return "is-warning";
-  return "is-success";
-};
 
 const formatBytes = (bytes) => {
   const value = Number(bytes || 0);
-  if (!value) return "—";
+  if (!value) return "-";
   const units = ["B", "KB", "MB", "GB", "TB"];
-  const index = Math.min(
-    units.length - 1,
-    Math.floor(Math.log(value) / Math.log(1024)),
-  );
+  const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
   return `${(value / 1024 ** index).toFixed(index >= 3 ? 1 : 0)} ${units[index]}`;
 };
-
-const formatHostUptime = (seconds) => {
+const formatUptime = (seconds) => {
   const total = Math.max(0, Number(seconds || 0));
   const days = Math.floor(total / 86400);
   const hours = Math.floor((total % 86400) / 3600);
-  return days > 0
-    ? t("overview.uptimeDays", { days, hours })
-    : t("overview.uptimeHours", { hours });
+  const minutes = Math.floor((total % 3600) / 60);
+  return days ? `${days}${zh.value ? "天" : "d"} ${hours}${zh.value ? "小时" : "h"}` : `${hours}${zh.value ? "小时" : "h"} ${minutes}${zh.value ? "分" : "m"}`;
 };
+const formatDate = (value) => value ? dayjs(value).format("YYYY-MM-DD HH:mm") : copy.value.never;
+const initials = (name) => String(name || "?").trim().slice(0, 2).toUpperCase();
+const metricTone = (value) => value >= 90 ? "is-danger" : value >= 75 ? "is-warning" : "is-normal";
 
-const loadHostMetrics = async () => {
-  const response = await api.getHostMetrics();
-  hostMetrics.value = response.data.value?.metrics || {};
-};
-
-const loadOverview = async () => {
+const refresh = async () => {
   loading.value = true;
   try {
-    const [onlineResponse, backupResponse, taskResponse, metricsResponse] =
-      await Promise.all([
-        api.getOnlinePlayerList(),
-        api.getBackupList({}),
-        api.getRconTasks(),
-        api.getHostMetrics(),
-      ]);
-    onlinePlayers.value = asArray(onlineResponse.data.value);
-    backups.value = asArray(backupResponse.data.value);
-    tasks.value = asArray(taskResponse.data.value);
-    hostMetrics.value = metricsResponse.data.value?.metrics || {};
-  } finally {
-    loading.value = false;
-  }
+    const [online, backup, rconTasks, host] = await Promise.all([
+      api.getOnlinePlayerList(),
+      api.getBackupList({}),
+      api.getRconTasks(),
+      api.getHostMetrics(),
+    ]);
+    onlinePlayers.value = asArray(online.data.value);
+    backups.value = asArray(backup.data.value);
+    tasks.value = asArray(rconTasks.data.value);
+    hostMetrics.value = host.data.value?.metrics || {};
+  } finally { loading.value = false; }
 };
 
-const formatTime = (value) =>
-  value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "—";
-
 onMounted(() => {
-  loadOverview();
-  hostRefreshTimer = setInterval(
-    () => loadHostMetrics().catch(() => {}),
-    30000,
-  );
+  refresh();
+  refreshTimer = setInterval(() => refresh().catch(() => {}), 30000);
 });
-
-onBeforeUnmount(() => clearInterval(hostRefreshTimer));
+onBeforeUnmount(() => clearInterval(refreshTimer));
 </script>
 
 <template>
-  <n-scrollbar class="overview-scroll">
-    <div class="overview-page">
-      <header class="overview-header">
-        <div>
-          <h2>{{ $t("overview.title") }}</h2>
-          <p>{{ $t("overview.subtitle") }}</p>
-        </div>
-        <n-button secondary :loading="loading" @click="loadOverview">
-          <template #icon>
-            <n-icon><Refresh /></n-icon>
-          </template>
-          {{ $t("overview.refresh") }}
-        </n-button>
-      </header>
-
-      <div class="overview-dashboard-grid">
-        <section class="overview-pulse" :aria-label="$t('overview.pulse')">
-          <div class="overview-signal-rail" aria-hidden="true">
-            <span
-              v-for="segment in signalSegments"
-              :key="segment.key"
-              :class="segment.tone"
-              :title="segment.label"
-            ></span>
-          </div>
-          <div class="overview-pulse-identity">
-            <div class="overview-pulse-heading">
-              <span class="overview-pulse-label">{{
-                $t("overview.pulse")
-              }}</span>
-              <n-tag :type="healthType" size="small" :bordered="false">
-                {{
-                  serverOnline
-                    ? $t("status.online")
-                    : $t("status.serverUnavailable")
-                }}
-              </n-tag>
-            </div>
-            <strong>{{
-              serverInfo?.name || $t("status.serverUnavailable")
-            }}</strong>
-            <span>{{ serverInfo?.version || "Unknown" }}</span>
-            <dl class="overview-pulse-meta">
-              <div>
-                <dt>{{ $t("item.serverUptime") }}</dt>
-                <dd>{{ uptime }}</dd>
-              </div>
-              <div>
-                <dt>{{ $t("item.serverDays") }}</dt>
-                <dd>{{ serverMetrics?.days ?? "—" }}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div class="overview-pulse-readings">
-            <div class="overview-reading" :class="fpsTone">
-              <div class="overview-reading-head">
-                <span>{{ $t("item.serverFps") }}</span>
-                <strong>{{ serverMetrics?.server_fps ?? "—" }}</strong>
-              </div>
-              <div class="overview-meter" aria-hidden="true">
-                <span :style="{ width: `${fpsPercent}%` }"></span>
-              </div>
-              <small>{{
-                $t("overview.fpsTarget", { percent: fpsPercent })
-              }}</small>
-            </div>
-
-            <div class="overview-reading is-info">
-              <div class="overview-reading-head">
-                <span>{{ $t("overview.onlinePlayers") }}</span>
-                <strong>
-                  {{ currentPlayers }}
-                  <small>/ {{ maxPlayers || "—" }}</small>
-                </strong>
-              </div>
-              <div class="overview-meter" aria-hidden="true">
-                <span :style="{ width: `${playerPercent}%` }"></span>
-              </div>
-              <small>{{
-                $t("overview.capacityUsed", { percent: playerPercent })
-              }}</small>
-            </div>
-
-            <div class="overview-reading is-backup">
-              <div class="overview-reading-head">
-                <span>{{ $t("overview.backupStatus") }}</span>
-                <strong>{{ backups.length }}</strong>
-              </div>
-              <div class="overview-backup-time">{{ latestBackupAge }}</div>
-              <small>{{
-                latestBackup
-                  ? formatTime(latestBackup.save_time)
-                  : $t("overview.noBackupShort")
-              }}</small>
-            </div>
-          </div>
-        </section>
-
-        <section class="overview-host" :aria-label="$t('overview.hostLoad')">
-          <header class="overview-host-header">
-            <div class="overview-host-heading">
-              <span class="overview-host-mark" aria-hidden="true">
-                <n-icon><Server /></n-icon>
-              </span>
-              <div>
-                <h3>{{ $t("overview.hostLoad") }}</h3>
-                <p>{{ $t("overview.hostLoadHint") }}</p>
-              </div>
-            </div>
-            <div class="overview-host-summary">
-              <n-tag
-                v-if="!hostMetrics.unavailable"
-                :type="hostHealthType"
-                size="small"
-                :bordered="false"
-              >
-                {{ hostHealthLabel }}
-              </n-tag>
-              <div class="overview-host-identity">
-                <strong>{{ hostMetrics.hostname || "—" }}</strong>
-                <span>
-                  {{ hostMetrics.platform || "—" }}/{{
-                    hostMetrics.arch || "—"
-                  }}
-                  · {{ $t("overview.hostUptime") }}
-                  {{ formatHostUptime(hostMetrics.uptimeSeconds) }}
-                </span>
-              </div>
-            </div>
-          </header>
-
-          <n-alert
-            v-if="hostMetrics.unavailable"
-            type="warning"
-            :bordered="false"
-            class="overview-host-alert"
-          >
-            {{ hostMetrics.error || $t("operations.metricsUnavailable") }}
-          </n-alert>
-          <div v-else class="overview-host-grid">
-            <div
-              class="host-reading"
-              :class="loadTone(cpuPercent)"
-              :style="{ '--metric-value': cpuPercent }"
-            >
-              <div class="host-reading-title">
-                <span class="host-reading-icon" aria-hidden="true">
-                  <n-icon><Cpu /></n-icon>
-                </span>
-                <span>{{ $t("operations.cpuUsage") }}</span>
-              </div>
-              <div class="host-reading-body">
-                <div class="host-dial" aria-hidden="true">
-                  <div class="host-dial-core">
-                    <strong>{{ cpuPercent.toFixed(1) }}<small>%</small></strong>
-                  </div>
-                </div>
-                <div class="host-reading-meta">
-                  <small>
-                    {{ hostMetrics.cpu?.cores || "—" }}
-                    {{ $t("operations.cpuCores") }}
-                  </small>
-                  <small>{{
-                    $t("overview.loadAverage", {
-                      value:
-                        hostMetrics.cpu?.loadAverage?.[0]?.toFixed?.(2) || "—",
-                    })
-                  }}</small>
-                </div>
-              </div>
-            </div>
-
-            <div
-              class="host-reading"
-              :class="loadTone(memoryPercent)"
-              :style="{ '--metric-value': memoryPercent }"
-            >
-              <div class="host-reading-title">
-                <span class="host-reading-icon" aria-hidden="true">
-                  <n-icon><DeviceDesktopAnalytics /></n-icon>
-                </span>
-                <span>{{ $t("operations.memoryUsage") }}</span>
-              </div>
-              <div class="host-reading-body">
-                <div class="host-dial" aria-hidden="true">
-                  <div class="host-dial-core">
-                    <strong
-                      >{{ memoryPercent.toFixed(1) }}<small>%</small></strong
-                    >
-                  </div>
-                </div>
-                <div class="host-reading-meta">
-                  <small>
-                    {{ formatBytes(hostMetrics.memory?.used) }} /
-                    {{ formatBytes(hostMetrics.memory?.total) }}
-                  </small>
-                  <small>{{
-                    $t("overview.freeMemory", {
-                      value: formatBytes(hostMetrics.memory?.free),
-                    })
-                  }}</small>
-                </div>
-              </div>
-            </div>
-
-            <div
-              class="host-reading"
-              :class="loadTone(diskPercent)"
-              :style="{ '--metric-value': hostMetrics.disk ? diskPercent : 0 }"
-            >
-              <div class="host-reading-title">
-                <span class="host-reading-icon" aria-hidden="true">
-                  <n-icon><Database /></n-icon>
-                </span>
-                <span>{{ $t("operations.diskUsage") }}</span>
-              </div>
-              <div class="host-reading-body">
-                <div class="host-dial" aria-hidden="true">
-                  <div class="host-dial-core">
-                    <strong>
-                      {{ hostMetrics.disk ? diskPercent.toFixed(1) : "—" }}
-                      <small v-if="hostMetrics.disk">%</small>
-                    </strong>
-                  </div>
-                </div>
-                <div class="host-reading-meta">
-                  <small>{{
-                    hostMetrics.disk
-                      ? `${formatBytes(hostMetrics.disk.used)} / ${formatBytes(hostMetrics.disk.total)}`
-                      : $t("operations.metricUnavailable")
-                  }}</small>
-                  <small v-if="hostMetrics.disk">{{
-                    hostMetrics.disk.mount
-                  }}</small>
-                </div>
-              </div>
-            </div>
-
-            <div
-              class="host-reading"
-              :class="loadTone(processMemoryPercent)"
-              :style="{
-                '--metric-value': hostMetrics.process
-                  ? processMemoryPercent
-                  : 0,
-              }"
-            >
-              <div class="host-reading-title">
-                <span class="host-reading-icon" aria-hidden="true">
-                  <n-icon><Activity /></n-icon>
-                </span>
-                <span>{{ $t("overview.palworldProcess") }}</span>
-              </div>
-              <div class="host-reading-body">
-                <div class="host-dial" aria-hidden="true">
-                  <div class="host-dial-core">
-                    <strong>
-                      {{
-                        hostMetrics.process
-                          ? processMemoryPercent.toFixed(1)
-                          : "—"
-                      }}
-                      <small v-if="hostMetrics.process">%</small>
-                    </strong>
-                  </div>
-                </div>
-                <div class="host-reading-meta">
-                  <small v-if="hostMetrics.process">
-                    CPU
-                    {{
-                      Number(hostMetrics.process.cpuPercent || 0).toFixed(1)
-                    }}% ·
-                    {{ formatBytes(hostMetrics.process.memoryBytes) }}
-                  </small>
-                  <small v-else>{{
-                    $t("operations.processUnavailable")
-                  }}</small>
-                  <small v-if="hostMetrics.process">
-                    {{ $t("operations.processUptime") }}
-                    {{ formatHostUptime(hostMetrics.process.uptimeSeconds) }}
-                  </small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div class="overview-detail-grid">
-          <section class="overview-panel overview-panel--players">
-            <header class="overview-panel-header">
-              <div>
-                <h3>{{ $t("overview.onlineNow") }}</h3>
-                <p>
-                  {{ $t("overview.totalPlayers", { count: players.length }) }}
-                </p>
-              </div>
-              <span class="overview-count overview-count--players">
-                {{ onlinePlayers.length }}
-              </span>
-            </header>
-            <n-empty
-              v-if="onlinePlayers.length === 0"
-              size="small"
-              :description="$t('overview.noOnlinePlayers')"
-            />
-            <ul v-else class="overview-player-list">
-              <li
-                v-for="player in onlinePlayers.slice(0, 8)"
-                :key="player.player_uid"
-              >
-                <span>{{ player.nickname }}</span>
-                <n-tag size="small" type="success">Lv.{{ player.level }}</n-tag>
-              </li>
-            </ul>
-          </section>
-
-          <section class="overview-panel overview-panel--automation">
-            <header class="overview-panel-header">
-              <div>
-                <h3>{{ $t("overview.automation") }}</h3>
-                <p>{{ $t("overview.automationHint") }}</p>
-              </div>
-              <span class="overview-count overview-count--tasks">
-                {{ activeTasks.length }}
-              </span>
-            </header>
-            <dl class="overview-definition-list">
-              <div>
-                <dt>{{ $t("overview.activeTasks") }}</dt>
-                <dd>{{ activeTasks.length }}</dd>
-              </div>
-              <div>
-                <dt>{{ $t("overview.nextTask") }}</dt>
-                <dd>{{ nextTask?.name || "—" }}</dd>
-              </div>
-              <div>
-                <dt>{{ $t("overview.nextRun") }}</dt>
-                <dd>{{ formatTime(nextTask?.next_run_at) }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="overview-panel overview-panel--backup">
-            <header class="overview-panel-header">
-              <div>
-                <h3>{{ $t("overview.backupStatus") }}</h3>
-                <p>{{ $t("overview.backupHint") }}</p>
-              </div>
-              <span class="overview-count overview-count--backup">
-                {{ backups.length }}
-              </span>
-            </header>
-            <n-empty
-              v-if="!latestBackup"
-              size="small"
-              :description="$t('overview.noBackup')"
-            />
-            <dl v-else class="overview-definition-list">
-              <div>
-                <dt>{{ $t("overview.latestBackup") }}</dt>
-                <dd>{{ formatTime(latestBackup.save_time) }}</dd>
-              </div>
-              <div>
-                <dt>{{ $t("overview.backupCount") }}</dt>
-                <dd>{{ backups.length }}</dd>
-              </div>
-            </dl>
-          </section>
-        </div>
+  <div class="bento-overview">
+    <header class="bento-overview__header">
+      <div>
+        <div class="bento-overview__eyebrow"><span class="bento-overview__dot" :class="{ 'is-online': serverOnline }"></span>{{ serverOnline ? copy.online : copy.offline }}</div>
+        <h2>{{ serverInfo?.name || copy.controlRoom }}</h2>
+        <p>{{ serverInfo?.version || copy.controlRoom }}</p>
       </div>
+      <n-button secondary size="small" :loading="loading" @click="refresh"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
+    </header>
+
+    <div class="bento-overview__metrics">
+      <section class="bento-card bento-stat bento-stat--players">
+        <span>{{ copy.onlinePlayers }}</span>
+        <strong>{{ currentPlayers }}<small v-if="maxPlayers">/{{ maxPlayers }}</small></strong>
+        <div class="bento-player-faces" aria-hidden="true"><i v-for="player in onlinePlayers.slice(0, 4)" :key="player.player_uid">{{ initials(player.nickname) }}</i></div>
+      </section>
+      <section class="bento-card bento-stat">
+        <span>{{ copy.serverFps }}</span>
+        <strong>{{ fps.toFixed(1) }}</strong>
+        <div class="bento-stat__line"><i :style="{ width: `${fpsPercent}%` }"></i></div>
+        <small>{{ copy.target }}</small>
+      </section>
+      <section class="bento-card bento-stat">
+        <span>{{ copy.uptime }}</span>
+        <strong>{{ formatUptime(serverMetrics?.uptime) }}</strong>
+        <small>{{ serverOnline ? copy.online : copy.offline }}</small>
+      </section>
     </div>
-  </n-scrollbar>
+
+    <div class="bento-overview__body">
+      <section class="bento-card bento-players">
+        <header class="bento-card__header"><div><h3>{{ copy.playerActivity }}</h3><p>{{ copy.playerActivityHint }}</p></div><span>{{ currentPlayers }}</span></header>
+        <div v-if="onlinePlayers.length" class="bento-player-table">
+          <div class="bento-player-table__head"><span>{{ zh ? "玩家" : "Player" }}</span><span>{{ zh ? "等级" : "Level" }}</span><span>ID</span></div>
+          <button v-for="player in onlinePlayers.slice(0, 7)" :key="player.player_uid" type="button" class="bento-player-row" @click="emit('navigate', 'players')"><span><i>{{ initials(player.nickname) }}</i>{{ player.nickname || player.player_uid }}</span><b>Lv.{{ player.level ?? "-" }}</b><small>{{ player.player_uid }}</small></button>
+        </div>
+        <div v-else class="bento-empty"><n-icon><Users /></n-icon><span>{{ copy.noPlayers }}</span></div>
+      </section>
+
+      <section class="bento-card bento-host">
+        <header class="bento-card__header"><div><h3>{{ copy.host }}</h3><p>{{ hostMetrics.hostname || copy.hostHint }}</p></div><n-icon><Server /></n-icon></header>
+        <div v-if="!hostMetrics.unavailable" class="bento-resource-list">
+          <div v-for="resource in resourceRows" :key="resource.key" class="bento-resource" :class="metricTone(resource.value)"><div class="bento-resource__label"><span><n-icon><component :is="resource.icon" /></n-icon>{{ resource.label }}</span><strong>{{ resource.value.toFixed(1) }}%</strong></div><div class="bento-resource__bar"><i :style="{ width: `${Math.min(100, resource.value)}%` }"></i></div><small>{{ resource.detail }}</small></div>
+        </div>
+        <div v-else class="bento-empty"><n-icon><Activity /></n-icon><span>{{ copy.unavailable }}</span></div>
+      </section>
+
+      <section class="bento-card bento-automation">
+        <header class="bento-card__header"><div><h3>{{ copy.automation }}</h3><p>{{ copy.automationHint }}</p></div><n-icon><Archive /></n-icon></header>
+        <dl><div><dt>{{ copy.activeTasks }}</dt><dd>{{ activeTasks.length }}</dd></div><div><dt>{{ copy.latestBackup }}</dt><dd>{{ formatDate(latestBackup?.save_time) }}</dd></div><div><dt>{{ zh ? "备份数量" : "Backup count" }}</dt><dd>{{ backups.length }}</dd></div></dl>
+      </section>
+
+      <section class="bento-card bento-actions">
+        <header class="bento-card__header"><div><h3>{{ copy.quickActions }}</h3><p>{{ zh ? "进入常用管理工作区" : "Jump to frequent workspaces" }}</p></div></header>
+        <div class="bento-action-grid"><button type="button" @click="emit('navigate', 'operations')"><n-icon><Server /></n-icon>{{ copy.operations }}</button><button type="button" @click="emit('navigate', 'rcon')"><n-icon><Terminal2 /></n-icon>{{ copy.rcon }}</button><button type="button" @click="emit('navigate', 'backup')"><n-icon><Archive /></n-icon>{{ copy.backup }}</button></div>
+      </section>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.overview-scroll {
-  height: 100%;
-}
-
-.overview-page {
-  width: min(1380px, 100%);
-  margin: 0 auto;
-  padding: 26px;
-}
-
-.overview-header,
-.overview-pulse-heading,
-.overview-reading-head,
-.overview-panel-header {
-  display: flex;
-  align-items: center;
-}
-
-.overview-header {
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 18px;
-}
-
-.overview-header h2,
-.overview-panel-header h3 {
-  color: var(--app-ink);
-  font-family: var(--app-font-display);
-  letter-spacing: 0;
-}
-
-.overview-header h2 {
-  font-size: 20px;
-}
-
-.overview-header p,
-.overview-panel-header p {
-  color: var(--app-ink-muted);
-}
-
-.overview-header p {
-  margin-top: 3px;
-  font-size: 13px;
-}
-
-.overview-dashboard-grid {
-  display: grid;
-  grid-template-areas:
-    "pulse host"
-    "details host";
-  grid-template-columns: minmax(0, 1.45fr) minmax(420px, 0.75fr);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.overview-pulse {
-  grid-area: pulse;
-  display: grid;
-  grid-template-columns: minmax(250px, 0.8fr) minmax(0, 2.2fr);
-  overflow: hidden;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-}
-
-.overview-signal-rail {
-  display: grid;
-  height: 6px;
-  grid-column: 1 / -1;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 2px;
-  padding: 0 2px;
-  background: var(--app-border);
-}
-
-.overview-signal-rail span {
-  background: var(--app-info);
-  transform-origin: left;
-  animation: signal-rail-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.overview-signal-rail span:nth-child(2) {
-  animation-delay: 35ms;
-}
-
-.overview-signal-rail span:nth-child(3) {
-  animation-delay: 70ms;
-}
-
-.overview-signal-rail span:nth-child(4) {
-  animation-delay: 105ms;
-}
-
-.overview-signal-rail span:nth-child(5) {
-  animation-delay: 140ms;
-}
-
-.overview-signal-rail .is-success {
-  background: var(--app-success);
-}
-
-.overview-signal-rail .is-warning {
-  background: var(--app-warning);
-}
-
-.overview-signal-rail .is-danger {
-  background: var(--app-danger);
-}
-
-@keyframes signal-rail-in {
-  from {
-    opacity: 0.4;
-    transform: scaleX(0.15);
-  }
-
-  to {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-}
-
-.overview-pulse-identity {
-  min-width: 0;
-  padding: 22px;
-  background: var(--app-accent-soft);
-  border-right: 1px solid var(--app-border);
-}
-
-.overview-pulse-heading {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.overview-pulse-label {
-  color: var(--app-accent);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.overview-pulse-identity > strong,
-.overview-pulse-identity > span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overview-pulse-identity > strong {
-  margin-top: 22px;
-  color: var(--app-ink);
-  font-family: var(--app-font-display);
-  font-size: 21px;
-}
-
-.overview-pulse-identity > span {
-  margin-top: 4px;
-  color: var(--app-ink-secondary);
-  font-size: 12px;
-}
-
-.overview-pulse-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 24px;
-}
-
-.overview-pulse-meta dt {
-  color: var(--app-ink-muted);
-  font-size: 11px;
-}
-
-.overview-pulse-meta dd {
-  margin-top: 3px;
-  color: var(--app-ink);
-  font-family: var(--app-font-data);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.overview-pulse-readings {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.overview-reading {
-  min-width: 0;
-  padding: 24px 20px;
-}
-
-.overview-reading + .overview-reading {
-  border-left: 1px solid var(--app-border);
-}
-
-.overview-reading-head {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.overview-reading-head > span,
-.overview-reading > small {
-  color: var(--app-ink-muted);
-  font-size: 12px;
-}
-
-.overview-reading-head strong {
-  color: var(--app-ink);
-  font-family: var(--app-font-data);
-  font-size: 25px;
-}
-
-.overview-reading-head strong small {
-  color: var(--app-ink-muted);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.overview-meter {
-  height: 7px;
-  margin: 28px 0 12px;
-  overflow: hidden;
-  background: var(--app-surface-muted);
-  border-radius: 4px;
-}
-
-.overview-meter span {
-  display: block;
-  height: 100%;
-  background: var(--app-success);
-  border-radius: inherit;
-}
-
-.overview-reading.is-warning .overview-meter span {
-  background: var(--app-warning);
-}
-
-.overview-reading.is-info .overview-meter span {
-  background: var(--app-info);
-}
-
-.overview-backup-time {
-  margin: 20px 0 7px;
-  color: var(--app-success);
-  font-family: var(--app-font-display);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.overview-host {
-  display: flex;
-  min-height: 0;
-  grid-area: host;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-}
-
-.overview-host-header {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 14px;
-  padding: 20px;
-  background: var(--app-surface-raised);
-}
-
-.overview-host-heading,
-.overview-host-summary,
-.host-reading-title,
-.host-reading-body {
-  display: flex;
-  align-items: center;
-}
-
-.overview-host-heading {
-  min-width: 0;
-  gap: 12px;
-}
-
-.overview-host-mark {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  place-items: center;
-  color: var(--app-accent);
-  background: var(--app-accent-soft);
-  border-radius: 7px;
-  font-size: 20px;
-}
-
-.overview-host-header h3 {
-  color: var(--app-ink);
-  font-family: var(--app-font-display);
-  font-size: 14px;
-}
-
-.overview-host-header p,
-.overview-host-identity span,
-.host-reading-title > span:last-child,
-.host-reading small {
-  color: var(--app-ink-muted);
-  font-size: 11px;
-}
-
-.overview-host-header p {
-  margin-top: 2px;
-}
-
-.overview-host-summary {
-  width: 100%;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.overview-host-identity {
-  display: grid;
-  min-width: 0;
-  justify-items: start;
-  text-align: left;
-}
-
-.overview-host-identity strong {
-  color: var(--app-ink);
-  font-family: var(--app-font-display);
-  font-size: 13px;
-}
-
-.overview-host-grid {
-  display: grid;
-  min-height: 0;
-  flex: 1;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid var(--app-border);
-}
-
-.host-reading {
-  --metric-color: var(--app-success);
-
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 20px;
-  background: var(--app-surface);
-}
-
-.host-reading:nth-child(even) {
-  border-left: 1px solid var(--app-border);
-}
-
-.host-reading:nth-child(n + 3) {
-  border-top: 1px solid var(--app-border);
-}
-
-.host-reading-title {
-  min-width: 0;
-  gap: 9px;
-}
-
-.host-reading-title > span:last-child {
-  overflow: hidden;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.host-reading-icon {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  place-items: center;
-  color: var(--app-success);
-  background: var(--app-success-soft);
-  border-radius: 6px;
-  font-size: 17px;
-}
-
-.host-reading.is-warning .host-reading-icon {
-  --metric-color: var(--app-warning);
-  color: var(--app-warning);
-  background: var(--app-warning-soft);
-}
-
-.host-reading.is-danger .host-reading-icon {
-  --metric-color: var(--app-danger);
-  color: var(--app-danger);
-  background: var(--app-danger-soft);
-}
-
-.host-reading.is-warning {
-  --metric-color: var(--app-warning);
-}
-
-.host-reading.is-danger {
-  --metric-color: var(--app-danger);
-}
-
-.host-reading-body {
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.host-dial {
-  display: grid;
-  width: 92px;
-  height: 92px;
-  flex: 0 0 92px;
-  place-items: center;
-  background: conic-gradient(
-    var(--metric-color) calc(var(--metric-value) * 1%),
-    var(--app-surface-muted) 0
-  );
-  border-radius: 50%;
-  transform: rotate(-90deg);
-}
-
-.host-dial-core {
-  display: grid;
-  width: 70px;
-  height: 70px;
-  place-items: center;
-  background: var(--app-surface);
-  border-radius: 50%;
-  transform: rotate(90deg);
-}
-
-.host-dial strong {
-  color: var(--app-ink);
-  font-family: var(--app-font-data);
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-}
-
-.host-dial strong small {
-  margin-left: 1px;
-  color: var(--app-ink-muted);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.host-reading small {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.host-reading-meta {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-  gap: 7px;
-}
-
-.host-reading-meta small:last-child {
-  color: var(--app-ink-secondary);
-}
-
-.overview-host-alert {
-  margin: 0 18px 18px;
-}
-
-.overview-detail-grid {
-  display: grid;
-  grid-area: details;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 0;
-  overflow: hidden;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-}
-
-.overview-panel {
-  min-width: 0;
-  min-height: 245px;
-  padding: 18px;
-  background: transparent;
-}
-
-.overview-panel + .overview-panel {
-  border-left: 1px solid var(--app-border);
-}
-
-.overview-panel-header {
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 14px;
-  padding-bottom: 13px;
-  border-bottom: 1px solid var(--app-border);
-}
-
-.overview-panel-header h3 {
-  font-size: 14px;
-}
-
-.overview-panel-header p {
-  margin-top: 2px;
-  font-size: 11px;
-}
-
-.overview-count {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  place-items: center;
-  color: var(--app-info);
-  background: var(--app-info-soft);
-  border-radius: 6px;
-  font-family: var(--app-font-data);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.overview-count--tasks {
-  color: var(--app-warning);
-  background: var(--app-warning-soft);
-}
-
-.overview-count--backup {
-  color: var(--app-success);
-  background: var(--app-success-soft);
-}
-
-.overview-definition-list {
-  display: grid;
-}
-
-.overview-definition-list > div,
-.overview-player-list li {
-  display: flex;
-  min-height: 47px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid var(--app-border);
-}
-
-.overview-definition-list > div:last-child,
-.overview-player-list li:last-child {
-  border-bottom: 0;
-}
-
-.overview-definition-list dt {
-  color: var(--app-ink-muted);
-  font-size: 12px;
-}
-
-.overview-definition-list dd {
-  overflow: hidden;
-  color: var(--app-ink);
-  font-family: var(--app-font-data);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overview-player-list {
-  list-style: none;
-}
-
-.overview-player-list li > span {
-  overflow: hidden;
-  color: var(--app-ink);
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (min-width: 1600px) and (min-height: 900px) {
-  .overview-page {
-    width: min(1680px, 100%);
-    padding: 32px 36px 38px;
-  }
-
-  .overview-header {
-    margin-bottom: 22px;
-  }
-
-  .overview-header h2 {
-    font-size: 22px;
-  }
-
-  .overview-pulse {
-    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 2.4fr);
-  }
-
-  .overview-pulse-identity {
-    padding: 28px;
-  }
-
-  .overview-pulse-identity > strong {
-    margin-top: 26px;
-    font-size: 23px;
-  }
-
-  .overview-pulse-meta {
-    margin-top: 30px;
-  }
-
-  .overview-reading {
-    padding: 30px 26px;
-  }
-
-  .overview-reading-head strong {
-    font-size: 28px;
-  }
-
-  .overview-meter {
-    margin-top: 32px;
-  }
-
-  .overview-detail-grid {
-    gap: 0;
-  }
-
-  .overview-host-header,
-  .host-reading {
-    padding: 21px 22px;
-  }
-
-  .overview-host-mark {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
-    font-size: 22px;
-  }
-
-  .host-reading-icon {
-    width: 34px;
-    height: 34px;
-    flex-basis: 34px;
-    font-size: 19px;
-  }
-
-  .host-dial {
-    width: 104px;
-    height: 104px;
-    flex-basis: 104px;
-  }
-
-  .host-dial-core {
-    width: 78px;
-    height: 78px;
-  }
-
-  .host-dial strong {
-    font-size: 22px;
-  }
-
-  .overview-panel {
-    min-height: 280px;
-    padding: 22px;
-  }
-
-  .overview-panel-header {
-    margin-bottom: 16px;
-    padding-bottom: 15px;
-  }
-
-  .overview-panel-header h3 {
-    font-size: 15px;
-  }
-
-  .overview-definition-list > div,
-  .overview-player-list li {
-    min-height: 52px;
-  }
-}
-
-@media (min-width: 2400px) and (min-height: 1100px) {
-  .overview-page {
-    width: min(2400px, 100%);
-    padding: 40px 48px 48px;
-  }
-
-  .overview-header h2 {
-    font-size: 24px;
-  }
-
-  .overview-pulse {
-    grid-template-columns: minmax(380px, 0.85fr) minmax(0, 2.6fr);
-  }
-
-  .overview-pulse-identity,
-  .overview-reading {
-    padding: 34px 30px;
-  }
-
-  .overview-detail-grid {
-    gap: 0;
-  }
-
-  .overview-panel {
-    min-height: 320px;
-    padding: 26px;
-  }
-}
-
-@media (max-width: 1879px) {
-  .overview-dashboard-grid {
-    grid-template-areas:
-      "pulse"
-      "host"
-      "details";
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .overview-host-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .overview-host-header {
-    align-items: center;
-    flex-direction: row;
-    justify-content: space-between;
-  }
-
-  .overview-host-summary {
-    width: auto;
-    flex: 0 0 auto;
-    justify-content: flex-end;
-  }
-
-  .overview-host-identity {
-    justify-items: end;
-    text-align: right;
-  }
-
-  .host-reading:nth-child(n) {
-    border-top: 0;
-    border-left: 0;
-  }
-
-  .host-reading + .host-reading {
-    border-left: 1px solid var(--app-border);
-  }
-}
-
-@media (max-width: 1080px) {
-  .overview-pulse {
-    grid-template-columns: 1fr;
-  }
-
-  .overview-pulse-identity {
-    border-right: 0;
-    border-bottom: 1px solid var(--app-border);
-  }
-
-  .overview-detail-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .overview-host-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .host-reading:nth-child(n) {
-    border-top: 0;
-    border-left: 0;
-  }
-
-  .host-reading:nth-child(even) {
-    border-left: 1px solid var(--app-border);
-  }
-
-  .host-reading:nth-child(3),
-  .host-reading:nth-child(4) {
-    border-top: 1px solid var(--app-border);
-  }
-
-  .host-reading:nth-child(3) {
-    border-left: 0;
-  }
-
-  .overview-panel--players {
-    grid-column: 1 / -1;
-  }
-
-  .overview-panel--automation {
-    border-top: 1px solid var(--app-border);
-    border-left: 0;
-  }
-
-  .overview-panel--backup {
-    border-top: 1px solid var(--app-border);
-  }
-}
-
-@media (max-width: 640px) {
-  .overview-page {
-    padding: 16px 14px 22px;
-  }
-
-  .overview-header {
-    align-items: flex-start;
-  }
-
-  .overview-header p {
-    max-width: 30ch;
-  }
-
-  .overview-host-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .overview-host-summary {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .overview-host-identity {
-    justify-items: start;
-    text-align: left;
-  }
-
-  .overview-host-identity {
-    text-align: left;
-    justify-items: start;
-  }
-
-  .overview-pulse-readings,
-  .overview-detail-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .overview-reading + .overview-reading {
-    border-top: 1px solid var(--app-border);
-    border-left: 0;
-  }
-
-  .overview-reading {
-    padding: 18px;
-  }
-
-  .overview-meter {
-    margin-top: 18px;
-  }
-
-  .overview-panel,
-  .overview-panel--players {
-    min-height: 0;
-    grid-column: auto;
-  }
-
-  .overview-panel + .overview-panel {
-    border-top: 1px solid var(--app-border);
-    border-left: 0;
-  }
-
-  .host-reading {
-    padding: 15px;
-  }
-
-  .host-reading-body {
-    align-items: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .overview-host-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .host-reading:nth-child(n) {
-    border-left: 0;
-  }
-
-  .host-reading + .host-reading {
-    border-top: 1px solid var(--app-border);
-  }
-}
+.bento-overview { width: min(1540px, 100%); margin: 0 auto; padding: 30px; }
+.bento-overview__header, .bento-card__header, .bento-resource__label { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.bento-overview__header { margin-bottom: 20px; }
+.bento-overview__eyebrow { display: flex; align-items: center; gap: 7px; color: var(--app-ink-muted); font-size: 12px; font-weight: 650; }
+.bento-overview__dot { width: 8px; height: 8px; background: var(--app-warning); border-radius: 50%; }
+.bento-overview__dot.is-online { background: var(--app-success); }
+.bento-overview h2 { margin-top: 5px; color: var(--app-ink); font-family: var(--app-font-display); font-size: 24px; line-height: 1.2; }
+.bento-overview__header p, .bento-card__header p { margin-top: 4px; color: var(--app-ink-muted); font-size: 12px; }
+.bento-overview__metrics { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.bento-overview__body { display: grid; grid-template-columns: minmax(0, 8fr) minmax(290px, 4fr); gap: 14px; }
+.bento-card { min-width: 0; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 8px; }
+.bento-stat { position: relative; min-height: 148px; padding: 20px; overflow: hidden; }
+.bento-stat > span { display: block; color: var(--app-ink-secondary); font-size: 13px; font-weight: 650; }
+.bento-stat > strong { display: block; margin-top: 8px; color: var(--app-ink); font-family: var(--app-font-data); font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; }
+.bento-stat > strong small { margin-left: 3px; color: var(--app-ink-muted); font-size: 18px; }
+.bento-stat > small { display: block; margin-top: 15px; color: var(--app-ink-muted); font-size: 11px; }
+.bento-stat--players { background: var(--app-surface-raised); }
+.bento-player-faces { position: absolute; top: 20px; right: 20px; display: flex; }
+.bento-player-faces i, .bento-player-row i { display: grid; place-items: center; color: var(--app-accent); background: var(--app-accent-soft); border: 2px solid var(--app-surface); border-radius: 50%; font-size: 9px; font-style: normal; font-weight: 800; }
+.bento-player-faces i { width: 26px; height: 26px; margin-left: -7px; }
+.bento-stat__line, .bento-resource__bar { height: 7px; overflow: hidden; background: var(--app-surface-muted); border-radius: 5px; }
+.bento-stat__line { margin-top: 20px; }
+.bento-stat__line i, .bento-resource__bar i { display: block; height: 100%; background: var(--app-accent); border-radius: inherit; transition: width 220ms cubic-bezier(.22,1,.36,1); }
+.bento-players { grid-row: span 2; min-height: 390px; padding: 20px; }
+.bento-card__header { padding-bottom: 16px; border-bottom: 1px solid var(--app-border); }
+.bento-card__header h3 { color: var(--app-ink); font-size: 15px; }
+.bento-card__header > span, .bento-card__header > .n-icon { color: var(--app-accent); font-size: 20px; }
+.bento-card__header > span { display: grid; min-width: 30px; height: 30px; place-items: center; background: var(--app-accent-soft); border-radius: 6px; font-family: var(--app-font-data); font-size: 13px; }
+.bento-player-table__head, .bento-player-row { display: grid; grid-template-columns: minmax(140px, 1fr) 80px minmax(120px, .9fr); gap: 12px; align-items: center; }
+.bento-player-table__head { padding: 14px 8px 8px; color: var(--app-ink-muted); font-size: 11px; }
+.bento-player-row { width: 100%; min-height: 50px; padding: 8px; color: var(--app-ink); background: transparent; border: 0; border-top: 1px solid var(--app-border); cursor: pointer; text-align: left; }
+.bento-player-row:hover { background: var(--app-surface-muted); }
+.bento-player-row > span { display: flex; min-width: 0; align-items: center; gap: 9px; overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.bento-player-row i { width: 26px; height: 26px; flex: 0 0 26px; border-width: 0; }
+.bento-player-row b { color: var(--app-success); font-family: var(--app-font-data); font-size: 12px; }
+.bento-player-row small { overflow: hidden; color: var(--app-ink-muted); font-family: var(--app-font-data); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.bento-host, .bento-automation, .bento-actions { padding: 20px; }
+.bento-resource-list { display: grid; gap: 17px; padding-top: 18px; }
+.bento-resource__label span { display: flex; align-items: center; gap: 7px; color: var(--app-ink-secondary); font-size: 12px; font-weight: 650; }
+.bento-resource__label .n-icon { color: var(--app-accent); font-size: 16px; }
+.bento-resource__label strong { color: var(--app-ink); font-family: var(--app-font-data); font-size: 12px; }
+.bento-resource__bar { margin-top: 8px; }
+.bento-resource small { display: block; margin-top: 5px; color: var(--app-ink-muted); font-size: 10px; }
+.bento-resource.is-warning .bento-resource__bar i { background: var(--app-warning); }.bento-resource.is-danger .bento-resource__bar i { background: var(--app-danger); }
+.bento-automation dl { display: grid; }.bento-automation dl div { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--app-border); }.bento-automation dl div:last-child { border-bottom: 0; }
+.bento-automation dt { color: var(--app-ink-muted); font-size: 12px; }.bento-automation dd { overflow: hidden; color: var(--app-ink); font-family: var(--app-font-data); font-size: 12px; font-weight: 700; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.bento-actions { align-self: start; }.bento-action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 16px; }.bento-action-grid button { display: grid; min-height: 76px; place-items: center; gap: 6px; padding: 8px; color: var(--app-ink-secondary); background: var(--app-surface-muted); border: 1px solid transparent; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 650; }.bento-action-grid button:hover { color: var(--app-accent); background: var(--app-accent-soft); border-color: color-mix(in srgb, var(--app-accent) 30%, var(--app-border)); }.bento-action-grid .n-icon { font-size: 19px; }
+.bento-empty { display: grid; min-height: 220px; place-items: center; gap: 9px; color: var(--app-ink-muted); font-size: 12px; text-align: center; }.bento-empty .n-icon { color: var(--app-border-strong); font-size: 34px; }
+@media (max-width: 1180px) { .bento-overview__body { grid-template-columns: 1fr 360px; }.bento-players { grid-row: span 3; }.bento-actions { grid-column: 2; } }
+@media (max-width: 960px) { .bento-overview__metrics, .bento-overview__body { grid-template-columns: 1fr; }.bento-players { grid-row: auto; }.bento-actions { grid-column: auto; }.bento-stat { min-height: 126px; } }
+@media (max-width: 620px) { .bento-overview { padding: 16px 14px 24px; }.bento-overview__header { align-items: flex-start; }.bento-overview__metrics { grid-template-columns: 1fr 1fr; }.bento-overview__metrics > :last-child { grid-column: 1 / -1; }.bento-player-table__head, .bento-player-row { grid-template-columns: minmax(0, 1fr) 56px; }.bento-player-table__head > :last-child, .bento-player-row small { display: none; }.bento-stat > strong { font-size: 30px; }.bento-action-grid { grid-template-columns: 1fr; }.bento-action-grid button { display: flex; min-height: 44px; justify-content: flex-start; padding-inline: 12px; } }
 </style>

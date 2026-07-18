@@ -1,5 +1,9 @@
 <script setup>
-import { AdminPanelSettingsOutlined } from "@vicons/material";
+import {
+  AdminPanelSettingsOutlined,
+  RestartAltRound,
+  StopRound,
+} from "@vicons/material";
 import {
   GameController,
   LanguageSharp,
@@ -46,6 +50,7 @@ const theme = themeStore();
 
 const loading = ref(false);
 const sidebarNav = ref(null);
+const actionBusy = ref("");
 const serverInfo = ref({});
 const serverMetrics = ref({});
 const currentDisplay = ref("players");
@@ -299,6 +304,16 @@ const handleSidebarNavigation = (key) => {
   selectWorkspace(key);
 };
 
+const runGlobalAction = async (action) => {
+  const actionName = action === "stop" ? (locale.value === "zh" ? "停止服务器" : "stop the server") : (locale.value === "zh" ? "重启服务器" : "restart the server");
+  if (!window.confirm(locale.value === "zh" ? `确认${actionName}吗？` : `Are you sure you want to ${actionName}?`)) return;
+  actionBusy.value = action;
+  const { data, statusCode } = await new ApiService().runServerAction(action);
+  actionBusy.value = "";
+  if (statusCode.value === 200 && data.value?.ok !== false) message.success(locale.value === "zh" ? "操作已提交" : "Action submitted");
+  else message.error(data.value?.error || (locale.value === "zh" ? "操作失败" : "Action failed"));
+};
+
 const playerToGuildStatus = computed(() =>
   playerToGuildStore().getUpdateStatus(),
 );
@@ -510,13 +525,23 @@ onMounted(async () => {
     <main class="ops-main">
       <header class="ops-workspace-header" :class="{ 'is-tool-view': currentDisplay !== 'overview' }">
         <div class="ops-workspace-heading">
-          <h1 v-if="currentDisplay === 'overview'" class="ops-workspace-title">{{ currentViewLabel }}</h1>
+          <h1 class="ops-workspace-title">{{ $t("title") }}</h1>
           <div class="ops-workspace-context">
             <span>{{
               serverInfo?.name || $t("status.serverUnavailable")
             }}</span>
             <span>{{ serverInfo?.version || "Unknown" }}</span>
           </div>
+        </div>
+        <div v-if="canOperate" class="ops-header-actions">
+          <n-button size="small" secondary :disabled="!serverInfo?.name" :loading="actionBusy === 'restart'" @click="runGlobalAction('restart')">
+            <template #icon><n-icon><RestartAltRound /></n-icon></template>
+            {{ locale === "zh" ? "全服重启" : "Restart" }}
+          </n-button>
+          <n-button size="small" type="error" secondary :disabled="!serverInfo?.name" :loading="actionBusy === 'stop'" @click="runGlobalAction('stop')">
+            <template #icon><n-icon><StopRound /></n-icon></template>
+            {{ locale === "zh" ? "停止服务器" : "Stop" }}
+          </n-button>
         </div>
         <div class="ops-header-telemetry" :aria-label="$t('overview.pulse')">
           <div class="ops-telemetry-item ops-telemetry-item--state">
@@ -552,6 +577,7 @@ onMounted(async () => {
             :server-info="serverInfo"
             :server-metrics="serverMetrics"
             :players="playerList"
+            @navigate="handleSidebarNavigation"
           />
           <player-list
             v-if="currentDisplay === 'players'"
