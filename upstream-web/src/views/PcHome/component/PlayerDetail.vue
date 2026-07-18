@@ -509,10 +509,9 @@ const createPlayerItemsColumns = () => {
 
 <template>
   <div class="player-detail" :class="{ 'is-dark': isDarkMode }">
-    <n-card
-      content-style="padding: 24px 28px 36px;"
+    <div
+      class="player-detail-content"
       id="player-info"
-      :bordered="false"
       v-if="playerInfo?.nickname"
     >
       <section class="player-overview" aria-labelledby="player-detail-title">
@@ -745,7 +744,7 @@ const createPlayerItemsColumns = () => {
           </n-tab-pane>
         </n-tabs>
       </div>
-    </n-card>
+    </div>
     <!-- 加入白名单，封禁，踢出 -->
     <n-flex
       justify="end"
@@ -922,26 +921,19 @@ const createPlayerItemsColumns = () => {
   min-height: 100%;
 }
 
+.player-detail-content {
+  padding: 28px 30px 36px;
+}
+
 .player-overview {
-  padding: 22px;
-  border: 1px solid rgba(64, 152, 252, 0.22);
+  padding: 24px;
+  border: 0;
   border-radius: 16px;
-  background: linear-gradient(
-    135deg,
-    rgba(64, 152, 252, 0.1),
-    rgba(64, 152, 252, 0.025) 58%,
-    transparent
-  );
+  background: #f8fafc;
 }
 
 .is-dark .player-overview {
-  border-color: rgba(64, 152, 252, 0.28);
-  background: linear-gradient(
-    135deg,
-    rgba(64, 152, 252, 0.16),
-    rgba(64, 152, 252, 0.045) 58%,
-    transparent
-  );
+  background: var(--app-surface-muted);
 }
 
 .overview-heading {
@@ -983,7 +975,7 @@ const createPlayerItemsColumns = () => {
 }
 
 .last-online-text {
-  color: rgba(24, 24, 28, 0.52);
+  color: var(--app-ink-muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
@@ -1009,7 +1001,7 @@ const createPlayerItemsColumns = () => {
 .copy-value {
   min-width: 0;
   overflow: hidden;
-  color: rgba(24, 24, 28, 0.58);
+  color: var(--app-ink-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   text-overflow: ellipsis;
@@ -1026,10 +1018,10 @@ const createPlayerItemsColumns = () => {
 }
 
 .runtime-meta span {
-  padding: 4px 9px;
+  padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(24, 24, 28, 0.06);
-  color: rgba(24, 24, 28, 0.62);
+  background: var(--app-info-soft);
+  color: #0369a1;
   font-size: 12px;
 }
 
@@ -1047,10 +1039,11 @@ const createPlayerItemsColumns = () => {
 
 .status-card {
   min-width: 0;
-  padding: 13px 14px;
-  border: 1px solid rgba(24, 24, 28, 0.06);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.7);
+  padding: 15px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .is-dark .status-card {
@@ -1062,7 +1055,7 @@ const createPlayerItemsColumns = () => {
   display: -webkit-box;
   min-height: 32px;
   overflow: hidden;
-  color: rgba(24, 24, 28, 0.52);
+  color: var(--app-ink-muted);
   font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -1077,24 +1070,26 @@ const createPlayerItemsColumns = () => {
 .status-value {
   display: block;
   margin-top: 6px;
-  font-size: 22px;
-  font-weight: 650;
+  color: var(--app-ink);
+  font-size: 24px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
 .detail-tabs {
-  margin-top: 20px;
+  margin-top: 22px;
 }
 
 .player-actions {
   position: sticky;
   bottom: 0;
   z-index: 5;
-  padding: 12px 20px;
-  border-top: 1px solid rgba(24, 24, 28, 0.08);
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(12px);
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 0;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 -10px 28px rgb(30 41 59 / 6%);
 }
 
 .is-dark .player-actions {
@@ -1114,6 +1109,27 @@ const createPlayerItemsColumns = () => {
 
   .overview-heading > .n-button {
     align-self: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .player-detail-content {
+    padding: 18px 16px 24px;
+  }
+
+  .player-overview {
+    padding: 18px;
+  }
+
+  .status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .player-actions {
+    justify-content: flex-start !important;
+    padding: 12px 16px;
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
   }
 }
 </style>

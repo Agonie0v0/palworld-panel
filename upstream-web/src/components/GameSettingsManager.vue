@@ -297,7 +297,7 @@ watch(importText, parseImport);
       </n-scrollbar>
     </n-spin>
     <div class="settings-footer">
-      <n-flex justify="space-between" align="center" class="settings-footer">
+      <n-flex justify="space-between" align="center" class="settings-footer-actions">
         <n-button secondary @click="openImport">
           <template #icon><n-icon><DocumentImport /></n-icon></template>
           {{ $t("gameSettings.importConfig") }}
@@ -310,13 +310,13 @@ watch(importText, parseImport);
     </div>
   </tool-surface>
 
-  <n-drawer
+  <n-modal
     v-model:show="importVisible"
-    placement="right"
-    width="min(620px, 100vw)"
+    preset="card"
+    class="settings-import-modal"
+    :title="$t('gameSettings.importTitle')"
     :mask-closable="false"
   >
-    <n-drawer-content :title="$t('gameSettings.importTitle')" closable>
       <n-space vertical :size="16">
         <n-alert type="info" :bordered="false">
           {{ $t("gameSettings.importMergeHint") }}
@@ -384,8 +384,7 @@ watch(importText, parseImport);
           </n-button>
         </n-flex>
       </template>
-    </n-drawer-content>
-  </n-drawer>
+  </n-modal>
 </template>
 
 <style scoped>
@@ -409,6 +408,14 @@ watch(importText, parseImport);
 
 .settings-footer {
   width: 100%;
+}
+
+.settings-footer-actions {
+  width: 100%;
+}
+
+:global(.settings-import-modal) {
+  width: min(720px, 92vw);
 }
 
 .import-input :deep(textarea) {

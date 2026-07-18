@@ -224,7 +224,8 @@ const maintenance = (operation) => {
       <div class="operations-modal-body">
       <n-tabs type="line" animated>
         <n-tab-pane name="service" :tab="$t('operations.service')">
-          <n-descriptions label-placement="top" :column="4" bordered class="mb-5">
+          <section class="ops-bento-section service-overview">
+          <n-descriptions label-placement="top" :column="4" :bordered="false" class="service-facts">
             <n-descriptions-item :label="$t('operations.state')">
               <n-tag :type="running ? 'success' : 'warning'">{{ running ? $t('operations.running') : $t('operations.stopped') }}</n-tag>
             </n-descriptions-item>
@@ -233,7 +234,7 @@ const maintenance = (operation) => {
             <n-descriptions-item :label="$t('operations.runner')">{{ host.profile?.runner || '-' }}</n-descriptions-item>
           </n-descriptions>
 
-          <n-flex class="mb-6" wrap>
+          <n-flex class="service-actions" wrap>
             <n-button type="success" secondary :loading="busy === 'start'" @click="runAction('start')">
               <template #icon><n-icon><PlayArrowRound /></n-icon></template>{{ $t('operations.start') }}
             </n-button>
@@ -250,8 +251,18 @@ const maintenance = (operation) => {
               <template #icon><n-icon><SaveOutlined /></n-icon></template>{{ $t('button.backup') }}
             </n-button>
           </n-flex>
+          </section>
 
-          <n-divider title-placement="left">{{ $t('operations.deployTitle') }}</n-divider>
+          <section class="ops-bento-section deploy-section">
+          <div class="section-heading">
+            <div>
+              <h3>{{ $t('operations.deployTitle') }}</h3>
+              <p>{{ host.arch || '-' }} · {{ host.profile?.runner || '-' }}</p>
+            </div>
+            <n-tag :bordered="false" :type="plan.profile && !plan.profile.supported ? 'warning' : 'success'">
+              {{ plan.profile && !plan.profile.supported ? $t('operations.hostDeployUnavailable') : $t('operations.architecture') }}
+            </n-tag>
+          </div>
           <n-alert v-if="plan.profile && !plan.profile.supported" type="warning" :bordered="false" class="mb-4">
             {{ $t('operations.hostDeployUnavailable') }}
           </n-alert>
@@ -270,6 +281,7 @@ const maintenance = (operation) => {
             </n-grid>
           </n-form>
           <n-flex justify="end"><n-button type="primary" :disabled="plan.profile && !plan.profile.supported" :loading="busy === 'deploy'" @click="submitDeploy"><template #icon><n-icon><CloudDownloadOutlined /></n-icon></template>{{ $t('operations.deploy') }}</n-button></n-flex>
+          </section>
         </n-tab-pane>
 
         <n-tab-pane name="monitor" :tab="$t('operations.monitor')">
@@ -318,6 +330,7 @@ const maintenance = (operation) => {
             <n-descriptions-item :label="$t('operations.processUptime')">{{ hostMetrics.process ? formatUptime(hostMetrics.process.uptimeSeconds) : '-' }}</n-descriptions-item>
           </n-descriptions>
 
+          <section class="ops-bento-section watchdog-section">
           <div class="watchdog-heading">
             <div>
               <h3>{{ $t('operations.watchdogTitle') }}</h3>
@@ -376,9 +389,11 @@ const maintenance = (operation) => {
             <span>{{ $t('operations.lastWatchdogAction') }}: {{ watchdogState.lastAction || '-' }}</span>
             <n-button type="primary" :loading="busy === 'watchdog-save'" @click="saveWatchdog">{{ $t('button.save') }}</n-button>
           </div>
+          </section>
         </n-tab-pane>
 
         <n-tab-pane name="agent" :tab="$t('operations.agent')">
+          <section class="ops-bento-section agent-section">
           <n-form label-placement="top" :model="agent">
             <n-form-item :label="$t('operations.agentEnabled')"><n-switch v-model:value="agent.enabled" /></n-form-item>
             <n-form-item :label="$t('operations.agentMode')">
@@ -394,11 +409,12 @@ const maintenance = (operation) => {
             <n-button :loading="busy === 'agent-test'" @click="testAgent">{{ $t('operations.test') }}</n-button>
             <n-button type="primary" :loading="busy === 'agent-save'" @click="saveAgent">{{ $t('button.save') }}</n-button>
           </n-flex>
+          </section>
         </n-tab-pane>
 
         <n-tab-pane name="maintenance" :tab="$t('operations.maintenance')">
           <n-alert type="error" :bordered="false" class="mb-5">{{ $t('operations.dangerWarning') }}</n-alert>
-          <n-list bordered>
+          <n-list :bordered="false" class="maintenance-list">
             <n-list-item>
               <n-thing :title="$t('operations.resetWorld')" :description="$t('operations.resetDescription')" />
               <template #suffix><n-button type="warning" secondary :loading="busy === 'reset'" @click="maintenance('reset')"><template #icon><n-icon><RestartAltRound /></n-icon></template>{{ $t('operations.resetWorld') }}</n-button></template>
@@ -417,7 +433,29 @@ const maintenance = (operation) => {
 
 <style scoped>
 .w-full { width: 100%; }
-.operations-modal-body { padding-right: 8px; }
+.operations-modal-body { padding: 2px 8px 8px 0; }
+.ops-bento-section {
+  margin-bottom: 18px;
+  padding: 24px;
+  background: var(--app-surface);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
+}
+.service-overview {
+  display: grid;
+  gap: 20px;
+}
+.service-facts { box-shadow: none !important; }
+.service-actions { gap: 10px; }
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.section-heading h3 { margin: 0; color: var(--app-ink); font-size: 18px; }
+.section-heading p { margin: 5px 0 0; color: var(--app-ink-muted); font-size: 12px; }
 .monitor-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -452,6 +490,8 @@ const maintenance = (operation) => {
 .watchdog-heading h3 { margin: 0; font-size: 17px; }
 .watchdog-heading p { margin: 4px 0 0; }
 .watchdog-footer { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--app-border); }
+.maintenance-list { box-shadow: var(--app-shadow-sm); }
+:deep(.maintenance-list .n-list-item) { min-height: 92px; padding: 20px 22px; }
 @media (max-width: 640px) {
   .operations-modal-body { padding-right: 4px; }
   :deep(.n-descriptions-table-content) { min-width: 560px; }
@@ -460,5 +500,7 @@ const maintenance = (operation) => {
   .monitor-details { overflow-x: auto; }
   .watchdog-heading,
   .watchdog-footer { align-items: stretch; flex-direction: column; }
+  .ops-bento-section { padding: 18px; }
+  .section-heading { align-items: stretch; flex-direction: column; }
 }
 </style>

@@ -395,7 +395,7 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
 <template>
   <tool-surface :show="visible" :embedded="embedded" :title="$t('modal.rcon')" width="min(94vw, 1080px)" @update:show="visible = $event">
       <n-spin :show="loading">
-        <n-card size="small" :title="$t('rconManager.materialTitle')" class="mb-4">
+        <n-card size="small" :title="$t('rconManager.materialTitle')" class="rcon-resource-card">
           <n-grid cols="1 700:3" :x-gap="12" :y-gap="12">
             <n-gi>
               <n-select
@@ -441,15 +441,15 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
 
         <n-tabs v-model:value="activeTab" type="segment" animated>
           <n-tab-pane name="commands" :tab="$t('rconManager.commandTab')">
-            <n-flex justify="space-between" align="center" class="mb-3">
+            <n-flex justify="space-between" align="center" class="rcon-tab-toolbar">
               <n-text depth="3">{{ $t("rconManager.commandDesc") }}</n-text>
               <n-button type="primary" @click="openCommandModal()">
                 {{ $t("button.addRcon") }}
               </n-button>
             </n-flex>
             <n-empty v-if="commands.length === 0" :description="$t('rconManager.noCommands')" />
-            <n-space v-else vertical size="medium">
-              <n-card v-for="command in commands" :key="command.uuid" size="small">
+            <div v-else class="rcon-list">
+              <n-card v-for="command in commands" :key="command.uuid" size="small" class="rcon-item-card">
                 <template #header>
                   <n-flex align="center">
                     <n-text strong>{{ command.remark || command.command }}</n-text>
@@ -485,19 +485,19 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
                   </n-button>
                 </n-flex>
               </n-card>
-            </n-space>
+            </div>
           </n-tab-pane>
 
           <n-tab-pane name="tasks" :tab="$t('rconManager.taskTab')">
-            <n-flex justify="space-between" align="center" class="mb-3">
+            <n-flex justify="space-between" align="center" class="rcon-tab-toolbar">
               <n-text depth="3">{{ $t("rconManager.taskDesc") }}</n-text>
               <n-button type="primary" :disabled="commands.length === 0" @click="openTaskModal()">
                 {{ $t("rconManager.addTask") }}
               </n-button>
             </n-flex>
             <n-empty v-if="tasks.length === 0" :description="$t('rconManager.noTasks')" />
-            <n-space v-else vertical size="medium">
-              <n-card v-for="task in tasks" :key="task.uuid" size="small">
+            <div v-else class="rcon-list">
+              <n-card v-for="task in tasks" :key="task.uuid" size="small" class="rcon-item-card">
                 <template #header>
                   <n-flex align="center">
                     <n-text strong>{{ task.name }}</n-text>
@@ -546,7 +546,7 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
                   </n-button>
                 </n-flex>
               </n-card>
-            </n-space>
+            </div>
           </n-tab-pane>
         </n-tabs>
       </n-spin>
@@ -652,3 +652,50 @@ const formatTime = (value) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss"
     </n-flex>
   </n-modal>
 </template>
+
+<style scoped>
+.rcon-resource-card {
+  margin-bottom: 18px;
+}
+
+.rcon-tab-toolbar {
+  min-height: 66px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  background: var(--app-surface);
+  border-radius: 16px;
+  box-shadow: var(--app-shadow-sm);
+}
+
+.rcon-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.rcon-item-card {
+  min-width: 0;
+  transition: transform 220ms ease-in-out, box-shadow 220ms ease-in-out;
+}
+
+.rcon-item-card:hover {
+  box-shadow: var(--app-shadow-hover);
+  transform: translateY(-4px);
+}
+
+:deep(.rcon-item-card .n-descriptions) {
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .rcon-list {
+    grid-template-columns: 1fr;
+  }
+
+  .rcon-tab-toolbar {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+}
+</style>

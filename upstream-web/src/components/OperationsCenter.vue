@@ -478,9 +478,11 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
   width: min(560px, 92vw);
 }
 .advanced-intro {
-  margin-bottom: 16px;
+  max-width: 72ch;
+  margin: 0 0 18px;
   color: var(--app-ink-muted);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.65;
 }
 .history-metric-grid {
   display: grid;
@@ -549,17 +551,18 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 }
 .advanced-list {
   display: grid;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
+  gap: 14px;
+  border: 0;
+  border-radius: 0;
 }
 .advanced-list-row {
   display: grid;
-  min-height: 72px;
+  min-height: 82px;
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--app-border);
+  padding: 16px 18px;
+  border-bottom: 0;
 }
 .advanced-list-row:last-child {
   border-bottom: 0;

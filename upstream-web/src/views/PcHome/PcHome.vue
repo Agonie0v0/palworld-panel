@@ -590,7 +590,7 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
           </div>
         </div>
       </header>
-      <section class="ops-workspace-content">
+      <section class="ops-workspace-content" :class="{ 'is-overview': currentDisplay === 'overview' }">
         <div v-if="loading" class="ops-loading">
           <div class="ops-loading-panel">
             <n-skeleton text :repeat="4" />

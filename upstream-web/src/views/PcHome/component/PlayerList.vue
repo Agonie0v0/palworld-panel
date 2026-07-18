@@ -1,10 +1,10 @@
 <script setup>
 import ApiService from "@/service/api";
-import pageStore from "@/stores/model/page.js";
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, nextTick, watch } from "vue";
 import dayjs from "dayjs";
 import { useI18n } from "vue-i18n";
 import { ChevronForward } from "@vicons/ionicons5";
+import { Search } from "@vicons/tabler";
 import PlayerDetail from "./PlayerDetail.vue";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import whitelistStore from "@/stores/model/whitelist";
@@ -21,9 +21,6 @@ const isDarkMode = ref(
   window.matchMedia("(prefers-color-scheme: dark)").matches,
 );
 
-const pageWidth = computed(() => pageStore().getScreenWidth());
-const smallScreen = computed(() => pageWidth.value < 1024);
-
 const loadingPlayer = ref(false);
 const loadingPlayerDetail = ref(false);
 const playerList = ref([]);
@@ -34,15 +31,6 @@ const statusFilter = ref("all");
 const platformFilter = ref("all");
 const whitelistFilter = ref("all");
 const sortBy = ref("last_online");
-// 平台标记颜色
-const platformColors = {
-  steam: { color: "#223D58", textColor: "#fff" }, // 青底白字
-  xbox: { color: "#2B8B2B", textColor: "#fff" }, // 绿底白字
-  ps5: { color: "#00439C", textColor: "#fff" }, // 蓝底白字
-  mac: { color: "#999999", textColor: "#fff" }, // 灰底白字
-  default: { color: "#d9c36c", textColor: "#fff" }, // 其他平台
-};
-
 // 获取玩家列表
 const getPlayerList = async () => {
   if (props.players.length > 0) {
@@ -133,18 +121,6 @@ onMounted(async () => {
 const isPlayerOnline = (last_online) => {
   return dayjs() - dayjs(last_online) < 80000;
 };
-const getPlatformColor = (userId) => {
-  if (!userId) return platformColors.default;
-  const platform = userId.split("_")[0];
-  return platformColors[platform] || platformColors.default;
-};
-const displayLastOnline = (last_online) => {
-  if (dayjs(last_online).year() < 1970) {
-    return "Unknown";
-  }
-  return dayjs(last_online).format("YYYY-MM-DD HH:mm:ss");
-};
-
 const platformOptions = computed(() => {
   const platforms = new Set(
     playerList.value
@@ -208,23 +184,29 @@ const filteredPlayers = computed(() => {
 </script>
 <template>
   <div class="paler-list h-full" :class="{ 'is-dark': isDarkMode }">
-    <n-layout has-sider class="h-full">
-      <n-layout-sider
-        :width="smallScreen ? 360 : 400"
-        content-style="padding: 0 16px 16px;"
-        :native-scrollbar="false"
-        bordered
-        class="player-list-sidebar relative"
-      >
+    <div class="player-workspace">
+      <section class="player-directory relative" aria-label="Player directory">
         <div class="filter-panel">
+          <div class="directory-heading">
+            <div>
+              <strong>{{ $t("map.player") }}</strong>
+              <span>{{ $t("filter.resultCount", { count: filteredPlayers.length }) }}</span>
+            </div>
+            <n-tag :bordered="false" type="success" round>
+              {{ playerList.filter((player) => isPlayerOnline(player.last_online)).length }}
+              {{ $t("status.online") }}
+            </n-tag>
+          </div>
           <n-input
             v-model:value="searchValue"
             clearable
             size="large"
             :placeholder="$t('filter.searchPlayers')"
             :aria-label="$t('filter.searchPlayers')"
-          />
-          <n-grid cols="2" :x-gap="8" :y-gap="8" class="mt-2">
+          >
+            <template #prefix><n-icon><Search /></n-icon></template>
+          </n-input>
+          <n-grid cols="2" :x-gap="10" :y-gap="10" class="filter-grid">
             <n-gi
               ><n-select v-model:value="statusFilter" :options="statusOptions"
             /></n-gi>
@@ -242,9 +224,12 @@ const filteredPlayers = computed(() => {
               ><n-select v-model:value="sortBy" :options="sortOptions"
             /></n-gi>
           </n-grid>
-          <n-text depth="3" class="result-count">
-            {{ $t("filter.resultCount", { count: filteredPlayers.length }) }}
-          </n-text>
+        </div>
+        <div class="player-table-head" aria-hidden="true">
+          <span>{{ $t("input.nickname") }} / ID</span>
+          <span>Lv.</span>
+          <span>IP</span>
+          <span>{{ $t("operations.state") }}</span>
         </div>
         <n-list class="player-list" :show-divider="false">
           <n-list-item
@@ -267,61 +252,28 @@ const filteredPlayers = computed(() => {
                 'is-selected': playerInfo?.player_uid === player.player_uid,
               }"
             >
-              <div class="player-row-main">
-                <div class="player-name-line">
-                  <span class="player-name" :title="player.nickname">
-                    {{ player.nickname || "--" }}
-                  </span>
-                  <n-tag
-                    v-if="player.user_id"
-                    :bordered="false"
-                    round
-                    size="small"
-                    :color="getPlatformColor(player.user_id)"
-                  >
-                    {{ player.user_id.split("_")[0] }}
-                  </n-tag>
-                </div>
-                <div class="player-meta-line">
-                  <span class="player-status">
-                    <span
-                      class="status-dot"
-                      :class="
-                        isPlayerOnline(player.last_online)
-                          ? 'is-online'
-                          : 'is-offline'
-                      "
-                    ></span>
-                    {{
-                      isPlayerOnline(player.last_online)
-                        ? $t("status.online")
-                        : $t("status.offline")
-                    }}
-                  </span>
-                  <n-tag :bordered="false" type="primary" size="small" round>
-                    Lv.{{ player.level }}
-                  </n-tag>
-                  <n-tag
-                    v-if="isWhite(player)"
-                    :bordered="false"
-                    round
-                    size="small"
-                    :color="{
-                      color: isDarkMode ? '#fff' : '#d9c36c',
-                      textColor: isDarkMode ? '#d9c36c' : '#fff',
-                    }"
-                  >
-                    {{ $t("status.whitelist") }}
-                  </n-tag>
-                </div>
-                <div class="last-online">
-                  {{ $t("status.last_online") }}
-                  <span>{{ displayLastOnline(player.last_online) }}</span>
+              <div class="player-identity-cell">
+                <span class="player-avatar">{{ (player.nickname || "P").slice(0, 1).toUpperCase() }}</span>
+                <div class="player-row-main">
+                  <div class="player-name-line">
+                    <span class="player-name" :title="player.nickname">{{ player.nickname || "--" }}</span>
+                    <n-tag v-if="isWhite(player)" :bordered="false" type="warning" size="tiny" round>
+                      {{ $t("status.whitelist") }}
+                    </n-tag>
+                  </div>
+                  <span class="player-id" :title="player.player_uid">{{ player.player_uid || "--" }}</span>
                 </div>
               </div>
-              <n-icon class="row-chevron" size="18">
-                <ChevronForward />
-              </n-icon>
+              <strong class="player-level">{{ player.level ?? "-" }}</strong>
+              <span class="player-ip">{{ player.ip || "-" }}</span>
+              <span
+                class="player-status"
+                :class="isPlayerOnline(player.last_online) ? 'is-online' : 'is-offline'"
+              >
+                <span class="status-dot"></span>
+                {{ isPlayerOnline(player.last_online) ? $t("status.online") : $t("status.offline") }}
+              </span>
+              <n-icon class="row-chevron" size="18"><ChevronForward /></n-icon>
             </div>
           </n-list-item>
         </n-list>
@@ -334,10 +286,10 @@ const filteredPlayers = computed(() => {
           v-if="loadingPlayer"
           class="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-#ffffff40"
         >
-          <template #description> 加载中... </template>
+          <template #description>加载中...</template>
         </n-spin>
-      </n-layout-sider>
-      <n-layout :native-scrollbar="false" class="relative">
+      </section>
+      <section class="player-detail-panel relative">
         <player-detail
           v-if="playerInfo?.player_uid"
           :playerInfo="playerInfo"
@@ -349,10 +301,10 @@ const filteredPlayers = computed(() => {
           v-if="loadingPlayerDetail"
           class="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-#ffffff40"
         >
-          <template #description> 加载中... </template>
+          <template #description>加载中...</template>
         </n-spin>
-      </n-layout>
-    </n-layout>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -522,5 +474,244 @@ const filteredPlayers = computed(() => {
   display: grid;
   place-items: center;
   background: var(--app-bg);
+}
+
+.paler-list {
+  min-height: 100%;
+}
+
+.player-workspace {
+  display: grid;
+  min-height: calc(100vh - 182px);
+  grid-template-columns: minmax(360px, 0.82fr) minmax(0, 1.9fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.player-directory,
+.player-detail-panel {
+  min-width: 0;
+  background: var(--app-surface);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-md);
+}
+
+.player-directory {
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 122px);
+  overflow: auto;
+}
+
+.player-detail-panel {
+  min-height: calc(100vh - 182px);
+  overflow: hidden;
+}
+
+.filter-panel {
+  z-index: 4;
+  padding: 22px 22px 16px;
+}
+
+.directory-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.directory-heading > div {
+  min-width: 0;
+}
+
+.directory-heading strong,
+.directory-heading span {
+  display: block;
+}
+
+.directory-heading strong {
+  color: var(--app-ink);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.directory-heading span {
+  margin-top: 2px;
+  color: var(--app-ink-muted);
+  font-size: 13px;
+}
+
+.filter-grid {
+  margin-top: 10px;
+}
+
+.player-table-head,
+.player-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.6fr) 44px minmax(74px, 0.75fr) 82px 20px;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-table-head {
+  position: sticky;
+  top: 181px;
+  z-index: 3;
+  padding: 10px 22px;
+  background: #f8fafc;
+  color: var(--app-ink-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.player-list {
+  padding: 8px 10px 14px;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.player-row-item {
+  padding: 0 0 3px !important;
+}
+
+.player-row {
+  min-height: 68px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 12px;
+  transition: background-color 220ms ease-in-out, box-shadow 220ms ease-in-out, transform 220ms ease-in-out;
+}
+
+.player-row:hover {
+  background: #f8fafc;
+  transform: translateX(3px);
+}
+
+.player-row.is-selected {
+  border: 0;
+  background: var(--app-accent-soft);
+  box-shadow: inset 0 0 0 1px rgb(16 185 129 / 16%);
+}
+
+.player-identity-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.player-avatar {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  color: #047857;
+  background: var(--app-accent-soft);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.player-name {
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.player-id,
+.player-ip {
+  display: block;
+  overflow: hidden;
+  color: var(--app-ink-muted);
+  font-family: var(--app-font-data);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-status {
+  justify-self: start;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.player-status.is-online {
+  color: #047857;
+  background: var(--app-success-soft);
+}
+
+.player-status.is-offline {
+  color: #b91c1c;
+  background: var(--app-danger-soft);
+}
+
+.player-status.is-online .status-dot {
+  background: var(--app-success);
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 14%);
+}
+
+.player-status.is-offline .status-dot {
+  background: var(--app-danger);
+}
+
+.player-level {
+  color: var(--app-info);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1380px) {
+  .player-workspace {
+    grid-template-columns: minmax(340px, 0.72fr) minmax(0, 1.5fr);
+  }
+
+  .player-table-head,
+  .player-row {
+    grid-template-columns: minmax(155px, 1fr) 40px 72px 20px;
+  }
+
+  .player-table-head > :nth-child(3),
+  .player-ip {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .player-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .player-directory {
+    position: relative;
+    top: auto;
+    max-height: none;
+  }
+
+  .player-detail-panel {
+    min-height: 680px;
+  }
+}
+
+@media (max-width: 640px) {
+  .player-workspace {
+    gap: 14px;
+  }
+
+  .filter-panel {
+    padding: 18px 16px 14px;
+  }
+
+  .player-table-head {
+    top: 173px;
+    padding-inline: 16px;
+  }
+
+  .player-table-head,
+  .player-row {
+    grid-template-columns: minmax(150px, 1fr) 36px 76px 18px;
+  }
 }
 </style>

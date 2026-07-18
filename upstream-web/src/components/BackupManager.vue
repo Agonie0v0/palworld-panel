@@ -460,15 +460,16 @@ watch(
 }
 .backup-list {
   display: grid;
+  gap: 14px;
 }
 .backup-row {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto;
   gap: 16px;
   align-items: center;
-  min-height: 78px;
-  padding: 12px 2px;
-  border-bottom: 1px solid var(--app-border);
+  min-height: 88px;
+  padding: 18px 20px;
+  border-bottom: 0;
 }
 .backup-copy {
   min-width: 0;
@@ -493,8 +494,9 @@ watch(
   gap: 6px;
 }
 .webdav-form {
-  max-width: 720px;
-  padding-top: 12px;
+  width: 100%;
+  max-width: none;
+  padding: 24px;
 }
 .webdav-hint {
   margin: 0 0 16px;
