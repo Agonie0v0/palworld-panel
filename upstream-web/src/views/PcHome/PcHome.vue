@@ -6,12 +6,14 @@ import {
 } from "@vicons/material";
 import {
   GameController,
+  ContractOutline,
+  ExpandOutline,
   LanguageSharp,
   MoonOutline,
   PencilOutline,
   SunnyOutline,
 } from "@vicons/ionicons5";
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
@@ -51,6 +53,7 @@ const theme = themeStore();
 const loading = ref(false);
 const sidebarNav = ref(null);
 const actionBusy = ref("");
+const isFullscreen = ref(false);
 const serverInfo = ref({});
 const serverMetrics = ref({});
 const currentDisplay = ref("players");
@@ -314,6 +317,15 @@ const runGlobalAction = async (action) => {
   else message.error(data.value?.error || (locale.value === "zh" ? "操作失败" : "Action failed"));
 };
 
+const toggleFullscreen = async () => {
+  if (document.fullscreenElement) await document.exitFullscreen();
+  else await document.documentElement.requestFullscreen();
+};
+
+const syncFullscreenState = () => {
+  isFullscreen.value = Boolean(document.fullscreenElement);
+};
+
 const playerToGuildStatus = computed(() =>
   playerToGuildStore().getUpdateStatus(),
 );
@@ -362,6 +374,7 @@ const isTokenExpired = (token) => {
 };
 
 onMounted(async () => {
+  document.addEventListener("fullscreenchange", syncFullscreenState);
   locale.value = localStorage.getItem("locale");
   languageOptions.value = [
     {
@@ -394,6 +407,8 @@ onMounted(async () => {
   // currentDisplay.value = "map";
   // playerToGuildStore().setUpdateStatus("map");
 });
+
+onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFullscreenState));
 </script>
 
 <template>
@@ -459,6 +474,16 @@ onMounted(async () => {
       />
       <div class="ops-sidebar-footer">
         <div class="ops-sidebar-preferences">
+          <n-button
+            quaternary
+            circle
+            class="ops-preference-button"
+            :aria-label="locale === 'zh' ? (isFullscreen ? '退出全屏' : '进入全屏') : (isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen')"
+            :title="locale === 'zh' ? (isFullscreen ? '退出全屏' : '进入全屏') : (isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen')"
+            @click="toggleFullscreen"
+          >
+            <template #icon><n-icon><ContractOutline v-if="isFullscreen" /><ExpandOutline v-else /></n-icon></template>
+          </n-button>
           <n-button
             v-if="isAdmin"
             quaternary

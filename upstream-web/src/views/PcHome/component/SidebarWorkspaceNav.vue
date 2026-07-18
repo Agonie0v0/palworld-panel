@@ -13,6 +13,8 @@ import {
 } from "@vicons/material";
 import {
   AddOutline,
+  ChevronDownOutline,
+  ChevronForwardOutline,
   GameController,
   ReorderFourOutline,
   Settings,
@@ -39,19 +41,17 @@ const makeItems = (items) => items.map((id) => ({ id, name: "" }));
 const defaultGroups = () => [
   { id: "status", name: "", items: makeItems(["overview", "players", "guilds", "map"]) },
   { id: "daily", name: "", items: makeItems(["operations", "game-settings", "rcon", "broadcast", "whitelist", "breeding", "mods"]) },
-  { id: "saves", name: "", items: makeItems(["backup", "save-sources", "world-data"]) },
-  { id: "maintenance", name: "", items: makeItems(["advanced", "workshop"]) },
+  { id: "saves", name: "", items: makeItems(["backup", "save-sources", "world-data", "advanced", "workshop"]) },
   { id: "panel", name: "", items: makeItems(["settings", "access", "shutdown"]) },
 ];
 
 const defaultGroupNames = computed(() => {
   const zh = locale.value === "zh";
   return {
-    status: zh ? "\u72b6\u6001\u4e0e\u73a9\u5bb6" : "Status & players",
-    daily: zh ? "\u65e5\u5e38\u670d\u52a1\u5668" : "Daily server",
-    saves: zh ? "\u5b58\u6863\u4e0e\u5907\u4efd" : "Saves & backups",
-    maintenance: zh ? "\u7ef4\u62a4\u4e0e\u6269\u5c55" : "Maintenance & extensions",
-    panel: zh ? "\u9762\u677f\u4e0e\u6743\u9650" : "Panel & access",
+    status: zh ? "\u63a7\u5236\u53f0" : "Console",
+    daily: zh ? "\u6e38\u620f\u7ba1\u7406" : "Game management",
+    saves: zh ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center",
+    panel: zh ? "\u8d26\u6237\u4e0e\u9762\u677f" : "Account & panel",
   };
 });
 
@@ -82,10 +82,17 @@ const savedGroups = ref(defaultGroups());
 const editing = ref(false);
 const saving = ref(false);
 const dragState = ref(null);
+const collapsedGroups = ref(new Set());
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const isAvailable = (item) => item.gate === "admin" ? props.isAdmin : item.gate === "operate" ? props.canOperate : item.gate === "login" ? props.isLogin : true;
 const groupName = (group) => group.name || defaultGroupNames.value[group.id] || (locale.value === "zh" ? "\u65b0\u5206\u7ec4" : "New group");
 const itemName = (item) => item.name || catalog.value[item.id]?.label || item.id;
+const isCollapsed = (groupId) => collapsedGroups.value.has(groupId);
+const toggleGroup = (groupId) => {
+  const next = new Set(collapsedGroups.value);
+  next.has(groupId) ? next.delete(groupId) : next.add(groupId);
+  collapsedGroups.value = next;
+};
 
 const normalizeLayout = (layout) => {
   if (!Array.isArray(layout)) return null;
@@ -208,10 +215,13 @@ defineExpose({ toggleEditing, editing });
       <div class="workspace-nav__heading">
         <n-icon v-if="editing" class="workspace-nav__handle"><ReorderFourOutline /></n-icon>
         <n-input v-if="editing" :value="groupName(group)" size="small" @update:value="group.name = $event" />
-        <span v-else>{{ groupName(group) }}</span>
+        <button v-else type="button" class="workspace-nav__collapse" :aria-expanded="!isCollapsed(group.id)" @click="toggleGroup(group.id)">
+          <span>{{ groupName(group) }}</span>
+          <n-icon><ChevronDownOutline v-if="!isCollapsed(group.id)" /><ChevronForwardOutline v-else /></n-icon>
+        </button>
         <n-button v-if="editing && groups.length > 1" quaternary circle size="tiny" type="error" :aria-label="locale === 'zh' ? '删除分组' : 'Remove group'" @click.stop="removeGroup(group.id)"><template #icon><n-icon><TrashOutline /></n-icon></template></n-button>
       </div>
-      <nav class="workspace-nav__list" :aria-label="groupName(group)" @dragover.prevent @drop="editing && dropItem($event, group.id, group.items.length)">
+      <nav v-show="editing || !isCollapsed(group.id)" class="workspace-nav__list" :aria-label="groupName(group)" @dragover.prevent @drop="editing && dropItem($event, group.id, group.items.length)">
         <button v-for="(item, itemIndex) in group.items" :key="item.id" type="button" class="ops-menu-button workspace-nav__item" :class="{ 'is-active': activeKey === item.id, 'is-danger': catalog[item.id].danger, 'is-dragging': dragState?.type === 'item' && dragState.itemId === item.id }" :draggable="editing" @click="selectItem(item)" @dragstart.stop="editing && beginItemDrag($event, group.id, item.id)" @dragover.prevent @drop.stop="editing && dropItem($event, group.id, itemIndex)">
           <n-icon v-if="editing" class="workspace-nav__handle"><ReorderFourOutline /></n-icon>
           <n-icon><component :is="catalog[item.id].icon" /></n-icon>
@@ -230,6 +240,8 @@ defineExpose({ toggleEditing, editing });
 .workspace-nav__group + .workspace-nav__group { margin-top: 10px; }
 .workspace-nav__heading { display: flex; min-height: 22px; align-items: center; gap: 4px; padding: 0 8px 3px; color: var(--app-sidebar-muted); font-size: 11px; font-weight: 600; }
 .workspace-nav__heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-nav__collapse { display: flex; width: 100%; min-width: 0; align-items: center; justify-content: space-between; gap: 6px; padding: 0; color: inherit; background: transparent; border: 0; cursor: pointer; font-weight: inherit; text-align: left; }
+.workspace-nav__collapse .n-icon { flex: 0 0 auto; font-size: 13px; }
 .workspace-nav__heading :deep(.n-input), .workspace-nav__item :deep(.n-input) { flex: 1; min-width: 0; }
 .workspace-nav__list { display: grid; gap: 2px; }
 .workspace-nav__item { position: relative; }
