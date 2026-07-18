@@ -33,7 +33,7 @@ let refreshTimer;
 
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() => zh.value ? {
-  controlRoom: "服务器控制台",
+  controlRoom: "服务器概览",
   refresh: "刷新数据",
   online: "服务器在线",
   offline: "服务器离线",
@@ -54,7 +54,7 @@ const copy = computed(() => zh.value ? {
   playersTotal: "玩家总数",
   unavailable: "暂无主机数据",
 } : {
-  controlRoom: "Server control room",
+  controlRoom: "Server overview",
   refresh: "Refresh",
   online: "Server online",
   offline: "Server offline",
@@ -149,7 +149,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
     <header class="bento-overview__header">
       <div>
         <div class="bento-overview__eyebrow"><span class="bento-overview__dot" :class="{ 'is-online': serverOnline }"></span>{{ serverOnline ? copy.online : copy.offline }}</div>
-        <h2>{{ serverInfo?.name || copy.controlRoom }}</h2>
+        <h2>{{ copy.controlRoom }}</h2>
         <p>{{ serverInfo?.version || copy.controlRoom }}</p>
       </div>
       <n-button secondary size="small" :loading="loading" @click="refresh"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
@@ -211,8 +211,8 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 .bento-overview h2 { margin-top: 5px; color: var(--app-ink); font-family: var(--app-font-display); font-size: 24px; line-height: 1.2; }
 .bento-overview__header p, .bento-card__header p { margin-top: 4px; color: var(--app-ink-muted); font-size: 12px; }
 .bento-overview__metrics { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-.bento-overview__body { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(290px, 1fr); gap: 20px; }
-.bento-card { min-width: 0; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 8px; transition: transform 180ms cubic-bezier(.22,1,.36,1), box-shadow 180ms cubic-bezier(.22,1,.36,1); }
+.bento-overview__body { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(290px, 1fr); gap: 20px; }
+.bento-card { min-width: 0; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 12px; box-shadow: var(--app-shadow-sm); transition: transform 180ms cubic-bezier(.22,1,.36,1), box-shadow 180ms cubic-bezier(.22,1,.36,1); }
 .bento-card:hover { box-shadow: 0 6px 8px rgb(30 41 59 / 10%); transform: translateY(-5px); }
 .bento-stat { position: relative; min-height: 154px; padding: 24px; overflow: hidden; }
 .bento-stat > span { display: block; color: var(--app-ink-secondary); font-size: 13px; font-weight: 650; }
@@ -226,7 +226,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 .bento-fps-chart { position: absolute; right: 0; bottom: 0; left: 0; width: 100%; height: 66px; opacity: .8; }
 .bento-fps-chart__area { fill: color-mix(in srgb, var(--app-accent) 20%, transparent); }.bento-fps-chart__line { fill: none; stroke: var(--app-accent); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
 .bento-resource__bar { height: 6px; overflow: hidden; background: var(--app-surface-muted); border-radius: 5px; }.bento-resource__bar i { display: block; height: 100%; background: var(--app-accent); border-radius: inherit; transition: width 300ms ease-in-out; }
-.bento-players { grid-row: span 2; min-height: 390px; padding: 24px; }
+.bento-players { grid-column: 1 / 3; grid-row: 1 / span 2; min-height: 390px; padding: 24px; }
 .bento-card__header { padding-bottom: 16px; border-bottom: 1px solid var(--app-border); }
 .bento-card__header h3 { color: var(--app-ink); font-size: 15px; }
 .bento-card__header > span, .bento-card__header > .n-icon { color: var(--app-accent); font-size: 20px; }
@@ -240,7 +240,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 .bento-player-row b { color: var(--app-success); font-family: var(--app-font-data); font-size: 12px; }
 .bento-player-row em { color: var(--app-success); font-size: 11px; font-style: normal; font-weight: 650; }
 .bento-player-row small { overflow: hidden; color: var(--app-ink-muted); font-family: var(--app-font-data); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.bento-host, .bento-automation { padding: 24px; }
+.bento-host, .bento-automation { grid-column: 3; padding: 24px; }
 .bento-resource-list { display: grid; gap: 17px; padding-top: 18px; }
 .bento-resource__label span { display: flex; align-items: center; gap: 7px; color: var(--app-ink-secondary); font-size: 12px; font-weight: 650; }
 .bento-resource__label .n-icon { color: var(--app-accent); font-size: 16px; }
@@ -249,7 +249,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 .bento-automation dl { display: grid; }.bento-automation dl div { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--app-border); }.bento-automation dl div:last-child { border-bottom: 0; }
 .bento-automation dt { color: var(--app-ink-muted); font-size: 12px; }.bento-automation dd { overflow: hidden; color: var(--app-ink); font-family: var(--app-font-data); font-size: 12px; font-weight: 700; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .bento-empty { display: grid; min-height: 220px; place-items: center; gap: 9px; color: var(--app-ink-muted); font-size: 12px; text-align: center; }.bento-empty img { width: 94px; height: 94px; object-fit: contain; opacity: .16; filter: grayscale(1); }
-@media (max-width: 1180px) { .bento-overview__body { grid-template-columns: 1fr 360px; } }
-@media (max-width: 960px) { .bento-overview__metrics, .bento-overview__body { grid-template-columns: 1fr; }.bento-players { grid-row: auto; }.bento-stat { min-height: 126px; } }
+@media (max-width: 1180px) { .bento-overview__body { grid-template-columns: minmax(0, 1fr) 360px; }.bento-players { grid-column: 1; }.bento-host, .bento-automation { grid-column: 2; } }
+@media (max-width: 960px) { .bento-overview__metrics, .bento-overview__body { grid-template-columns: 1fr; }.bento-players, .bento-host, .bento-automation { grid-column: 1; grid-row: auto; }.bento-stat { min-height: 126px; } }
 @media (max-width: 620px) { .bento-overview { padding: 20px 14px 24px; }.bento-overview__header { align-items: flex-start; }.bento-overview__metrics { grid-template-columns: 1fr 1fr; gap: 14px; }.bento-overview__metrics > :last-child { grid-column: 1 / -1; }.bento-player-table__head, .bento-player-row { grid-template-columns: minmax(0, 1fr) 56px; }.bento-player-table__head > :nth-child(n+3), .bento-player-row em, .bento-player-row small { display: none; }.bento-stat > strong { font-size: 30px; } }
 </style>

@@ -62,15 +62,6 @@ const onlineCount = computed(
     onlinePlayerList.value?.length ??
     0,
 );
-const sidebarFpsPercent = computed(() =>
-  Math.min(
-    100,
-    Math.max(
-      0,
-      Math.round((Number(serverMetrics.value?.server_fps || 0) / 60) * 100),
-    ),
-  ),
-);
 const currentViewLabel = computed(() => {
   const customLabel = navigationLabels.value[currentDisplay.value];
   if (customLabel) return customLabel;
@@ -419,39 +410,6 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
         </div>
       </div>
 
-      <div class="ops-server-block">
-        <div class="ops-server-line">
-          <span
-            class="ops-status-dot"
-            :class="{ 'is-online': serverInfo?.name }"
-          ></span>
-          <span class="ops-server-name">
-            {{ serverInfo?.name || $t("status.serverUnavailable") }}
-          </span>
-        </div>
-        <div class="ops-server-meta">
-          {{ serverInfo?.version || "Unknown" }} · {{ $t("item.serverFps") }}
-          {{ serverMetrics?.server_fps ?? 0 }}
-        </div>
-        <div
-          class="ops-server-pulse"
-          :class="{ 'is-warning': sidebarFpsPercent < 50 }"
-          aria-hidden="true"
-        >
-          <span :style="{ width: `${sidebarFpsPercent}%` }"></span>
-        </div>
-        <div class="ops-server-stats">
-          <span>
-            <strong>{{ onlineCount }}</strong>
-            {{ $t("status.online") }}
-          </span>
-          <span>
-            <strong>{{ playerList.length }}</strong>
-            {{ $t("button.players") }}
-          </span>
-        </div>
-      </div>
-
       <sidebar-workspace-nav
         ref="sidebarNav"
         :active-key="currentDisplay"
@@ -560,7 +518,7 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
             <span>{{ $t("item.serverFps") }}</span>
             <strong>{{ serverMetrics?.server_fps ?? 0 }}</strong>
           </div>
-          <div class="ops-telemetry-item">
+          <div class="ops-telemetry-item ops-telemetry-item--players">
             <span>{{ $t("button.players") }}</span>
             <strong>{{ onlineCount }}/{{ playerList.length }}</strong>
           </div>

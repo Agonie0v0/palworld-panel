@@ -62,8 +62,12 @@ const close = () => emit("update:show", false);
   width: 100%;
   min-width: 0;
   min-height: 0;
+  padding: 24px;
   color: var(--app-ink);
-  background: transparent;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .tool-surface__header {
@@ -122,6 +126,8 @@ const close = () => emit("update:show", false);
 }
 
 @media (max-width: 700px) {
+  .tool-surface { padding: 16px; }
+
   .tool-surface__header,
   .tool-surface__body {
     padding-inline: 0;

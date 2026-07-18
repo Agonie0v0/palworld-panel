@@ -1240,7 +1240,7 @@ a {
   --app-ink: #1e293b;
   --app-ink-secondary: #475569;
   --app-ink-muted: #64748b;
-  --app-border: #e2e8f0;
+  --app-border: #d7e0e8;
   --app-border-strong: #cbd5e1;
   --app-accent: #10b981;
   --app-accent-hover: #059669;
@@ -1255,7 +1255,7 @@ a {
   --app-success-soft: #d1fae5;
   --app-card-radius: 18px;
   --app-control-radius: 12px;
-  --app-shadow-sm: 0 6px 18px rgb(30 41 59 / 4%);
+  --app-shadow-sm: 0 2px 8px rgb(30 41 59 / 6%);
   --app-shadow-md: 0 10px 30px rgb(30 41 59 / 6%);
   --app-shadow-hover: 0 18px 36px rgb(30 41 59 / 10%);
   --space-xs: 4px;
@@ -1433,13 +1433,19 @@ a {
   overflow-x: hidden;
   background: var(--app-sidebar);
   border: 0;
-  box-shadow: 8px 0 28px rgb(30 41 59 / 4%);
+  border-right: 1px solid var(--app-border);
+  box-shadow: 8px 0 28px rgb(30 41 59 / 3%);
 }
 
 .ops-brand {
   min-height: 58px;
   gap: 12px;
-  padding: 0 8px 18px;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .ops-brand-mark {
@@ -1489,7 +1495,7 @@ a {
   width: 28px;
   height: 28px;
   flex-basis: 28px;
-  background: rgb(255 255 255 / 70%);
+  background: var(--app-surface-raised);
   border-radius: 9px;
   font-size: 16px;
 }
@@ -1514,9 +1520,10 @@ a {
 .ops-workspace-header {
   min-height: 82px;
   padding: 0 32px;
-  background: rgb(255 255 255 / 96%);
+  background: var(--app-surface);
   border: 0;
-  box-shadow: 0 8px 24px rgb(30 41 59 / 4%);
+  border-bottom: 1px solid var(--app-border);
+  box-shadow: 0 8px 24px rgb(30 41 59 / 3%);
 }
 
 .ops-workspace-header.is-tool-view {
@@ -1529,7 +1536,8 @@ a {
 }
 
 .ops-header-telemetry {
-  grid-auto-columns: minmax(112px, auto);
+  min-width: 390px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-left: auto;
   overflow: visible;
@@ -1542,9 +1550,9 @@ a {
 .ops-telemetry-item {
   min-height: 56px;
   padding: 8px 16px;
-  background: #f8fafc;
+  background: var(--app-surface-muted);
   border-radius: 14px;
-  box-shadow: inset 0 0 0 1px #eef2f6;
+  box-shadow: inset 0 0 0 1px var(--app-border);
 }
 
 .ops-telemetry-item + .ops-telemetry-item {
@@ -1565,7 +1573,6 @@ a {
 }
 
 .ops-telemetry-item--state {
-  min-width: 126px;
   background: var(--app-success-soft);
   box-shadow: inset 0 0 0 1px rgb(16 185 129 / 14%);
 }
@@ -1576,7 +1583,7 @@ a {
 }
 
 .ops-telemetry-item--state strong {
-  color: #047857;
+  color: color-mix(in srgb, var(--app-success) 78%, var(--app-ink));
   font-size: 15px;
   font-weight: 800;
 }
@@ -1587,7 +1594,12 @@ a {
 }
 
 .ops-telemetry-item:nth-child(2) strong {
-  color: #0369a1;
+  color: color-mix(in srgb, var(--app-info) 78%, var(--app-ink));
+}
+
+.ops-telemetry-item--players {
+  background: var(--app-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--app-border);
 }
 
 .ops-header-actions .n-button {
@@ -1670,6 +1682,122 @@ pre {
   color: #dbeafe !important;
 }
 
+/* Coherent dark workspace surfaces */
+.app-theme.is-dark {
+  --app-bg: #111615;
+  --app-surface: #1b2220;
+  --app-surface-muted: #232c29;
+  --app-surface-raised: #202825;
+  --app-sidebar: #151a19;
+  --app-sidebar-hover: #242d2a;
+  --app-sidebar-active: #193f35;
+  --app-sidebar-ink: #f1f5f4;
+  --app-sidebar-muted: #96a49f;
+  --app-ink: #f1f5f4;
+  --app-ink-secondary: #c1cbc8;
+  --app-ink-muted: #96a49f;
+  --app-border: #34413d;
+  --app-border-strong: #485852;
+  --app-accent: #34d399;
+  --app-accent-hover: #6ee7b7;
+  --app-accent-soft: #183f35;
+  --app-success: #34d399;
+  --app-success-soft: #173b2d;
+  --app-info: #38bdf8;
+  --app-info-soft: #172f3f;
+  --app-warning: #fb923c;
+  --app-warning-soft: #432b1c;
+  --app-danger: #f87171;
+  --app-danger-soft: #442126;
+  --app-shadow-sm: 0 2px 8px rgb(0 0 0 / 22%);
+  --app-shadow-md: 0 10px 28px rgb(0 0 0 / 24%);
+  --app-shadow-hover: 0 16px 32px rgb(0 0 0 / 30%);
+}
+
+.app-theme.is-dark .ops-workspace-header {
+  background: #181f1d;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.app-theme.is-dark .ops-sidebar {
+  box-shadow: 8px 0 24px rgb(0 0 0 / 14%);
+}
+
+.app-theme.is-dark .ops-brand,
+.app-theme.is-dark .tool-surface,
+.app-theme.is-dark .bento-card {
+  background: var(--app-surface);
+  border-color: var(--app-border);
+}
+
+.app-theme.is-dark .ops-menu-button .n-icon {
+  color: var(--app-ink-secondary);
+  background: var(--app-surface-muted);
+}
+
+.app-theme.is-dark .ops-menu-button.is-active {
+  color: #a7f3d0;
+  background: var(--app-sidebar-active);
+  box-shadow: inset 0 0 0 1px rgb(52 211 153 / 22%);
+}
+
+.app-theme.is-dark .ops-menu-button.is-active .n-icon {
+  color: #a7f3d0;
+  background: #205444;
+}
+
+.app-theme.is-dark .ops-telemetry-item--state {
+  background: var(--app-success-soft);
+  box-shadow: inset 0 0 0 1px rgb(52 211 153 / 24%);
+}
+
+.app-theme.is-dark .ops-telemetry-item--state strong {
+  color: #6ee7b7;
+}
+
+.app-theme.is-dark .ops-telemetry-item:nth-child(2) {
+  background: var(--app-info-soft);
+  box-shadow: inset 0 0 0 1px rgb(56 189 248 / 22%);
+}
+
+.app-theme.is-dark .ops-telemetry-item:nth-child(2) strong {
+  color: #7dd3fc;
+}
+
+.app-theme.is-dark .ops-telemetry-item--players {
+  background: #252c2a;
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+.app-theme.is-dark .n-data-table-th,
+.app-theme.is-dark .n-table th,
+.app-theme.is-dark .player-table-head {
+  background: var(--app-surface-muted) !important;
+  border-bottom-color: var(--app-border) !important;
+}
+
+.app-theme.is-dark .n-data-table-td,
+.app-theme.is-dark .n-table td,
+.app-theme.is-dark .n-list-item {
+  border-bottom-color: var(--app-border) !important;
+}
+
+.app-theme.is-dark .n-data-table-tr:hover .n-data-table-td,
+.app-theme.is-dark .player-row:hover {
+  background: var(--app-surface-muted) !important;
+}
+
+.app-theme.is-dark .settings-footer,
+.app-theme.is-dark .watchdog-footer,
+.app-theme.is-dark .backup-toolbar,
+.app-theme.is-dark .advanced-tab-toolbar,
+.app-theme.is-dark .log-toolbar,
+.app-theme.is-dark .webdav-form,
+.app-theme.is-dark .config-actions,
+.app-theme.is-dark .player-actions {
+  background: rgb(27 34 32 / 96%);
+}
+
 @media (min-width: 1600px) {
   :root { --app-sidebar-width: 292px; }
   .ops-workspace-content { padding: 32px 40px 48px; }
@@ -1679,9 +1807,8 @@ pre {
   :root { --app-sidebar-width: 236px; }
   .ops-workspace-content { padding: 22px 20px 28px; }
   .ops-workspace-header { padding-inline: 20px; }
-  .ops-header-telemetry { grid-auto-columns: minmax(82px, auto); gap: 6px; }
+  .ops-header-telemetry { min-width: 294px; gap: 6px; }
   .ops-telemetry-item { min-height: 50px; padding: 6px 10px; }
-  .ops-telemetry-item--state { min-width: 100px; }
   .ops-telemetry-item strong { font-size: 16px; }
   .ops-workspace-context span:last-child { display: none; }
 }
