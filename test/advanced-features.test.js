@@ -70,6 +70,27 @@ test("WebDAV permits private HTTP endpoints but requires HTTPS for public hosts"
   );
 });
 
+test("Workshop settings validate Steam App IDs and Web API keys", () => {
+  const { normalizeWorkshopConfig } = helpers();
+  const key = "0123456789ABCDEF0123456789ABCDEF";
+  assert.deepEqual(
+    normalizeWorkshopConfig({ appId: "1623730", steamApiKey: key }),
+    {
+      appId: "1623730",
+      steamApiKey: key,
+      translationUrl: "",
+      translationModel: "gpt-4.1-mini",
+      translationKey: "",
+    },
+  );
+  assert.equal(
+    normalizeWorkshopConfig({ appId: "1623730", steamApiKey: "" }, { steamApiKey: key }).steamApiKey,
+    key,
+  );
+  assert.throws(() => normalizeWorkshopConfig({ appId: "Palworld" }), /numeric/i);
+  assert.throws(() => normalizeWorkshopConfig({ steamApiKey: "short" }), /32 hexadecimal/i);
+});
+
 test("schedule timing handles intervals, daily rollover, and invalid daily values", () => {
   const { nextScheduleRun } = helpers();
   const from = new Date(2026, 6, 17, 3, 30, 0, 0).getTime();

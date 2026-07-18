@@ -50,14 +50,20 @@ function playerUidFromId(playerId) {
   return Number.isFinite(parsed) ? String(parsed) : "";
 }
 
+function steamIdFromUserId(userId) {
+  const match = String(userId || "").match(/^steam_(\d{16,20})$/i);
+  return match ? match[1] : "";
+}
+
 function normalizeOnlinePlayer(player = {}) {
+  const userId = stringFrom(player, ["user_id", "userid", "userId", "UserId"]);
   return {
     player_uid: stringFrom(player, ["player_uid", "playeruid", "playerUid", "PlayerUid"], playerUidFromId(player.playerId)),
-    user_id: stringFrom(player, ["user_id", "userid", "userId", "UserId"]),
-    steam_id: stringFrom(player, ["steam_id", "steamid", "steamId", "SteamId"]),
+    user_id: userId,
+    steam_id: stringFrom(player, ["steam_id", "steamid", "steamId", "SteamId"], steamIdFromUserId(userId)),
     nickname: stringFrom(player, ["nickname", "name", "Nickname"]),
     account_name: stringFrom(player, ["account_name", "accountname", "accountName"]),
-    ip: stringFrom(player, ["ip", "ip_address", "ipaddress"]),
+    ip: stringFrom(player, ["ip", "iP", "ip_address", "ipaddress"]),
     ping: numberFrom(player, ["ping"]),
     location_x: numberFrom(player, ["location_x", "locationx", "x"]),
     location_y: numberFrom(player, ["location_y", "locationy", "y"]),
@@ -94,6 +100,7 @@ function sameStablePlayer(player = {}, candidate = {}) {
 function normalizePlayer(player = {}, online = []) {
   const match = online.find((candidate) => sameStablePlayer(player, candidate));
   const onlineFields = match || {};
+  const userId = onlineFields.user_id || stringFrom(player, ["user_id", "userId"]);
   return {
     ...player,
     online: Boolean(match),
@@ -111,8 +118,8 @@ function normalizePlayer(player = {}, online = []) {
     save_last_online: stringFrom(player, ["save_last_online", "saveLastOnline", "last_online"]),
     pals: asArray(player.pals),
     items: player.items || {},
-    user_id: onlineFields.user_id || stringFrom(player, ["user_id", "userId"]),
-    steam_id: onlineFields.steam_id || stringFrom(player, ["steam_id", "steamId"]),
+    user_id: userId,
+    steam_id: onlineFields.steam_id || stringFrom(player, ["steam_id", "steamId"], steamIdFromUserId(userId)),
     account_name: onlineFields.account_name || stringFrom(player, ["account_name", "accountName"]),
     ip: onlineFields.ip || stringFrom(player, ["ip"]),
     ping: onlineFields.ping || numberFrom(player, ["ping"]),
@@ -967,5 +974,6 @@ module.exports = {
   createUpstreamCompatibility,
   DEFAULT_COMMANDS,
   normalizePlayer,
-  sameStablePlayer
+  sameStablePlayer,
+  steamIdFromUserId
 };

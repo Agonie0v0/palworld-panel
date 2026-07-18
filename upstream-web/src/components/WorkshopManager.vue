@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import {
   BrandSteam,
   Download,
+  ExternalLink,
   Language,
   Refresh,
   Search,
@@ -64,6 +65,10 @@ const copy = computed(() =>
         appId: "Workshop App ID",
         steamKey: "Steam Web API Key",
         steamKeyHint: "留空则保持现有 Key；搜索功能需要此 Key。",
+        steamKeyRequired: "请先在设置中填写 Steam Web API Key。",
+        steamKeyConfigured: "已配置",
+        steamKeyMissing: "未配置",
+        getSteamKey: "申请 Steam Web API Key",
         translationUrl: "OpenAI 兼容 Base URL",
         translationModel: "翻译模型",
         translationKey: "翻译 API Key",
@@ -95,6 +100,10 @@ const copy = computed(() =>
         steamKey: "Steam Web API key",
         steamKeyHint:
           "Leave blank to keep the current key. Search requires this key.",
+        steamKeyRequired: "Configure a Steam Web API key in Settings first.",
+        steamKeyConfigured: "Configured",
+        steamKeyMissing: "Not configured",
+        getSteamKey: "Get a Steam Web API key",
         translationUrl: "OpenAI-compatible base URL",
         translationModel: "Translation model",
         translationKey: "Translation API key",
@@ -133,6 +142,11 @@ const load = async () => {
 };
 
 const search = async () => {
+  if (!config.value.steamApiKeySet && !config.value.steamApiKey) {
+    activeTab.value = "settings";
+    message.warning(copy.value.steamKeyRequired);
+    return;
+  }
   busy.value = "search";
   try {
     const response = await api.searchWorkshop(query.value, 1);
@@ -344,8 +358,28 @@ watch(
               v-model:value="config.steamApiKey"
               type="password"
               show-password-on="click"
+              :maxlength="32"
               :placeholder="config.steamApiKeySet ? copy.steamKeyHint : ''"
           /></n-form-item>
+          <div class="steam-key-meta">
+            <n-tag
+              size="small"
+              :bordered="false"
+              :type="config.steamApiKeySet ? 'success' : 'warning'"
+            >
+              {{ config.steamApiKeySet ? copy.steamKeyConfigured : copy.steamKeyMissing }}
+            </n-tag>
+            <n-button
+              text
+              tag="a"
+              href="https://steamcommunity.com/dev/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <template #icon><n-icon><ExternalLink /></n-icon></template>
+              {{ copy.getSteamKey }}
+            </n-button>
+          </div>
           <n-divider />
           <n-form-item :label="copy.translationUrl"
             ><n-input
@@ -464,6 +498,14 @@ watch(
 .workshop-settings {
   max-width: 720px;
   padding-top: 10px;
+}
+.steam-key-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 720px;
+  margin: -8px 0 8px;
 }
 .settings-actions {
   display: flex;

@@ -1174,6 +1174,12 @@ function createAdvancedFeatures(deps) {
   }
 
   function normalizeWorkshopConfig(input = {}, current = {}) {
+    const appId = String(input.appId ?? current.appId ?? "1623730").trim();
+    if (!/^\d{5,10}$/.test(appId)) throw new Error("Workshop App ID must be numeric.");
+    const submittedSteamApiKey = String(input.steamApiKey || "").trim();
+    if (submittedSteamApiKey && !/^[A-F0-9]{32}$/i.test(submittedSteamApiKey)) {
+      throw new Error("Steam Web API key must contain 32 hexadecimal characters.");
+    }
     const translationUrl = String(input.translationUrl ?? current.translationUrl ?? "").replace(/\/$/, "");
     if (translationUrl) {
       const parsed = new URL(translationUrl);
@@ -1183,8 +1189,8 @@ function createAdvancedFeatures(deps) {
       if (parsed.username || parsed.password) throw new Error("Translation API URL cannot contain credentials.");
     }
     return {
-      appId: String(input.appId ?? current.appId ?? "1623730"),
-      steamApiKey: input.steamApiKey ? String(input.steamApiKey) : String(current.steamApiKey || ""),
+      appId,
+      steamApiKey: submittedSteamApiKey || String(current.steamApiKey || ""),
       translationUrl,
       translationModel: String(input.translationModel ?? current.translationModel ?? "gpt-4.1-mini"),
       translationKey: input.translationKey ? String(input.translationKey) : String(current.translationKey || ""),
@@ -2064,6 +2070,7 @@ function createAdvancedFeatures(deps) {
       normalizeBreedingInput,
       breedingSourceHash,
       normalizeCustomBreedingPal,
+      normalizeWorkshopConfig,
     },
   };
 }

@@ -5,7 +5,13 @@ const {
   createUpstreamCompatibility,
   normalizePlayer,
   sameStablePlayer,
+  steamIdFromUserId,
 } = require("../src/upstream-compat");
+
+test("Steam64 is derived from Palworld 1.0 REST userId values", () => {
+  assert.equal(steamIdFromUserId("steam_76561198841027010"), "76561198841027010");
+  assert.equal(steamIdFromUserId("xbox_123"), "");
+});
 
 test("players with the same nickname do not share online state without a stable ID match", () => {
   const saved = { player_uid: "100", nickname: "SameName", ip: "10.0.0.1" };
@@ -20,11 +26,17 @@ test("players with the same nickname do not share online state without a stable 
 
 test("stable REST identity marks the saved player explicitly online", () => {
   const saved = { player_uid: "100", nickname: "SavedName" };
-  const online = { player_uid: "100", nickname: "LiveName", ip: "10.0.0.2" };
+  const online = {
+    player_uid: "100",
+    user_id: "steam_76561198841027010",
+    nickname: "LiveName",
+    ip: "10.0.0.2",
+  };
   const normalized = normalizePlayer(saved, [online]);
 
   assert.equal(normalized.online, true);
   assert.equal(normalized.ip, "10.0.0.2");
+  assert.equal(normalized.steam_id, "76561198841027010");
 });
 
 test("clearing save data invalidates stale cached players immediately", async () => {
