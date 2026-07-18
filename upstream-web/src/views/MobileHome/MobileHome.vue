@@ -238,6 +238,14 @@ const getOnlineList = async () => {
   const { data } = await new ApiService().getOnlinePlayerList();
   onlinePlayerList.value = asArray(data.value);
 };
+const refreshManagedServerData = async () => {
+  const selectedPlayerUid =
+    currentDisplay.value === "players" && isShowDetail.value
+      ? playerInfo.value?.player_uid
+      : "";
+  await Promise.all([getServerInfo(), getServerMetrics(), getPlayerList()]);
+  if (selectedPlayerUid) await getPlayerInfo(selectedPlayerUid);
+};
 
 // login
 const showLoginModal = ref(false);
@@ -685,7 +693,6 @@ onBeforeUnmount(() => {
     @after-leave="handleToolsClosed"
   >
     <n-drawer-content :title="$t('button.tools')" closable>
-      <p class="mobile-tools-intro">{{ $t("overview.toolsHint") }}</p>
       <div class="mobile-tool-grid">
         <button
           type="button"
@@ -876,7 +883,10 @@ onBeforeUnmount(() => {
   <broadcast-composer v-model:show="showBroadcastModal" />
   <shutdown-dialog v-model:show="showShutdownDialog" />
   <backup-manager v-model:show="showBackupManager" />
-  <server-operations v-model:show="showServerOperations" />
+  <server-operations
+    v-model:show="showServerOperations"
+    @server-changed="refreshManagedServerData"
+  />
   <game-settings-manager v-model:show="showGameSettings" />
   <operations-center v-model:show="showOperationsCenter" />
   <save-source-manager v-model:show="showSaveSources" />

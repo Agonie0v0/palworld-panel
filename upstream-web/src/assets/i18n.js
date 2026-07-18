@@ -555,8 +555,6 @@ const messages = {
       noBackup: "No backup found. Check whether automatic backup is enabled.",
       latestBackup: "Latest backup",
       backupCount: "Backups in range",
-      toolsHint:
-        "All server operations are available here without nested menus.",
     },
     broadcast: {
       templates: "Quick templates",
@@ -1193,7 +1191,6 @@ const messages = {
       noBackup: "暂未发现备份，请检查是否开启自动备份。",
       latestBackup: "最近备份",
       backupCount: "当前范围备份数",
-      toolsHint: "所有服务器操作都在这里直接提供，不再经过多层菜单。",
     },
     broadcast: {
       templates: "常用模板",

@@ -7,6 +7,7 @@ import { onMounted, computed } from "vue";
 import { NTag, NButton, NAvatar, useMessage, useDialog } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import palMap from "@/assets/pal.json";
+import palItems from "@/assets/items.json";
 import skillMap from "@/assets/skill.json";
 import PalDetail from "./PalDetail.vue";
 import userStore from "@/stores/model/user";
@@ -118,8 +119,9 @@ const showPalDetail = (pal) => {
   showPalDetailModal.value = true;
 };
 
-const isPlayerOnline = (last_online) => {
-  return dayjs() - dayjs(last_online) < 80000;
+const isPlayerOnline = (player) => {
+  if (typeof player?.online === "boolean") return player.online;
+  return dayjs() - dayjs(player?.last_online) < 80000;
 };
 
 const copyText = async (text) => {
@@ -179,6 +181,44 @@ const displayLastOnline = (lastOnline) => {
   if (dayjs(lastOnline).year() < 1970) return "Unknown";
   return dayjs(lastOnline).format("YYYY-MM-DD HH:mm:ss");
 };
+const itemCatalog = computed(() =>
+  new Map(
+    (palItems[locale.value] || []).map((item) => [
+      String(item.id || "").toLowerCase(),
+      item,
+    ]),
+  ),
+);
+const itemContainerLabel = (containerId) =>
+  ({
+    CommonContainerId: t("item.commonContainer"),
+    EssentialContainerId: t("item.essentialContainer"),
+    WeaponLoadOutContainerId: t("item.weaponContainer"),
+    PlayerEquipArmorContainerId: t("item.armorContainer"),
+    FoodEquipContainerId: locale.value === "zh" ? "食物栏" : "Food slot",
+    DropSlotContainerId: locale.value === "zh" ? "掉落栏" : "Drop slot",
+  })[containerId] || containerId;
+const itemGroups = computed(() =>
+  Object.entries(playerInfo.value?.items || {})
+    .map(([containerId, rows]) => ({
+      id: containerId,
+      label: itemContainerLabel(containerId),
+      items: (Array.isArray(rows) ? rows : []).map((row) => {
+        const id = String(row.ItemId || row.item_id || "");
+        const catalog = itemCatalog.value.get(id.toLowerCase());
+        return {
+          ...row,
+          id,
+          name: catalog?.name || id,
+          description: catalog?.description || "",
+          count: Number(row.StackCount || row.stack_count || 0),
+        };
+      }),
+    }))
+    .filter((group) => group.items.length > 0),
+);
+const getItemIcon = (id) =>
+  new URL(`../../../assets/items/${String(id).toLowerCase()}.webp`, import.meta.url).href;
 
 onMounted(async () => {
   locale.value = localStorage.getItem("locale");
@@ -219,13 +259,13 @@ onMounted(async () => {
             <n-tag
               :bordered="false"
               :type="
-                isPlayerOnline(playerInfo.last_online) ? 'success' : 'error'
+                isPlayerOnline(playerInfo) ? 'success' : 'error'
               "
               round
               size="small"
             >
               {{
-                isPlayerOnline(playerInfo.last_online)
+                isPlayerOnline(playerInfo)
                   ? $t("status.online")
                   : $t("status.offline")
               }}
@@ -272,6 +312,23 @@ onMounted(async () => {
                 <n-icon><ContentCopyFilled /></n-icon>
               </template>
             </n-button>
+          </div>
+
+          <div class="mobile-live-meta">
+            <n-tag v-if="playerInfo.ip" size="small" :bordered="false">
+              IP {{ playerInfo.ip }}
+            </n-tag>
+            <n-tag v-if="playerInfo.ping" size="small" :bordered="false" type="info">
+              Ping {{ Number(playerInfo.ping).toFixed(1) }}
+            </n-tag>
+            <n-tag
+              v-if="playerInfo.location_x || playerInfo.location_y"
+              size="small"
+              :bordered="false"
+              type="success"
+            >
+              X {{ Number(playerInfo.location_x || 0).toFixed(0) }} · Y {{ Number(playerInfo.location_y || 0).toFixed(0) }}
+            </n-tag>
           </div>
 
           <div class="mobile-status-grid">
@@ -349,64 +406,100 @@ onMounted(async () => {
             }}</n-progress
           >
         </n-space> -->
-        <div class="pal-search">
-          <n-input
-            v-model:value="searchValue"
-            :placeholder="$t('input.searchPlaceholder')"
-            @update:value="clickSearch"
-          >
-            <template #suffix>
-              <n-icon>
-                <Search />
-              </n-icon>
-            </template>
-          </n-input>
-        </div>
-        <n-list>
-          <n-list-item
-            v-for="(pal, index) in currentPlayerPalsList"
-            :key="pal"
-            class="py-2"
-            @click="showPalDetail(pal)"
-          >
-            <div class="flex justify-between items-center">
-              <n-avatar
-                class="bg-#c5c5c5 rounded-md"
-                :size="32"
-                :src="getPalAvatar(pal.type)"
-                :fallback-src="getUnknowPalAvatar(pal.is_boss)"
-              ></n-avatar>
-              <div class="flex-1 flex items-center justify-between ml-3">
-                <n-tag
-                  size="small"
-                  :type="pal.gender == 'Male' ? 'primary' : 'warning'"
-                  >{{ pal.gender == "Male" ? "♂" : "♀" }}</n-tag
-                >
-                <span class="px-3 flex-1 line-clamp-1">{{
-                  getPalName(pal.type)
-                }}</span>
-                <span>{{ "Lv." + pal.level }}</span>
-              </div>
-            </div>
-            <div class="ml-11 mt-1 flex flex-wrap">
-              <n-tag
-                v-for="skill in pal.skills"
-                class="rounded-sm mr-2"
-                size="small"
-                :key="skill"
-                :color="{
-                  color: isDarkMode ? 'rgba(238, 155, 47, 0.15)' : '#fcf0e0',
-                  textColor: '#ee9b2f',
-                  borderColor: 'transparent',
-                }"
-                >{{ localizedSkillName(skill, locale, skillMap) }}</n-tag
+        <n-tabs type="segment" animated class="mobile-detail-tabs">
+          <n-tab-pane name="pals" :tab="$t('item.palList')">
+            <div class="pal-search">
+              <n-input
+                v-model:value="searchValue"
+                :placeholder="$t('input.searchPlaceholder')"
+                @update:value="clickSearch"
               >
+                <template #suffix>
+                  <n-icon><Search /></n-icon>
+                </template>
+              </n-input>
             </div>
-          </n-list-item>
-        </n-list>
-        <div v-if="finished" class="text-center pt-4 color-#999">
-          没有更多了
-        </div>
+            <n-list v-if="currentPlayerPalsList.length">
+              <n-list-item
+                v-for="pal in currentPlayerPalsList"
+                :key="pal.instance_id || `${pal.type}-${pal.nickname}-${pal.level}`"
+                class="py-2"
+                @click="showPalDetail(pal)"
+              >
+                <div class="flex justify-between items-center">
+                  <n-avatar
+                    class="bg-#c5c5c5 rounded-md"
+                    :size="32"
+                    :src="getPalAvatar(pal.type)"
+                    :fallback-src="getUnknowPalAvatar(pal.is_boss)"
+                  ></n-avatar>
+                  <div class="flex-1 flex items-center justify-between ml-3">
+                    <n-tag
+                      size="small"
+                      :type="pal.gender == 'Male' ? 'primary' : 'warning'"
+                      >{{ pal.gender == "Male" ? "♂" : "♀" }}</n-tag
+                    >
+                    <span class="px-3 flex-1 line-clamp-1">{{
+                      getPalName(pal.type)
+                    }}</span>
+                    <span>{{ "Lv." + pal.level }}</span>
+                  </div>
+                </div>
+                <div class="ml-11 mt-1 flex flex-wrap">
+                  <n-tag
+                    v-for="skill in pal.skills"
+                    class="rounded-sm mr-2"
+                    size="small"
+                    :key="skill"
+                    :color="{
+                      color: isDarkMode ? 'rgba(238, 155, 47, 0.15)' : '#fcf0e0',
+                      textColor: '#ee9b2f',
+                      borderColor: 'transparent',
+                    }"
+                    >{{ localizedSkillName(skill, locale, skillMap) }}</n-tag
+                  >
+                </div>
+              </n-list-item>
+            </n-list>
+            <n-empty
+              v-else
+              :description="$t('item.palList')"
+              class="mobile-detail-empty"
+            />
+            <div v-if="finished && currentPlayerPalsList.length" class="text-center pt-4 color-#999">
+              {{ locale === "zh" ? "没有更多了" : "No more results" }}
+            </div>
+          </n-tab-pane>
+          <n-tab-pane name="items" :tab="$t('item.itemList')">
+            <div v-if="itemGroups.length" class="mobile-item-groups">
+              <section
+                v-for="group in itemGroups"
+                :key="group.id"
+                class="mobile-item-group"
+              >
+                <header>
+                  <h3>{{ group.label }}</h3>
+                  <n-tag size="small" :bordered="false">{{ group.items.length }}</n-tag>
+                </header>
+                <div class="mobile-item-list">
+                  <article v-for="item in group.items" :key="`${group.id}-${item.SlotIndex}-${item.id}`">
+                    <img :src="getItemIcon(item.id)" :alt="item.name" loading="lazy" />
+                    <div>
+                      <strong>{{ item.name }}</strong>
+                      <span v-if="item.description">{{ item.description }}</span>
+                    </div>
+                    <b>×{{ item.count }}</b>
+                  </article>
+                </div>
+              </section>
+            </div>
+            <n-empty
+              v-else
+              :description="$t('item.itemList')"
+              class="mobile-detail-empty"
+            />
+          </n-tab-pane>
+        </n-tabs>
         <div class="h-10"></div>
       </n-card>
     </n-layout>
@@ -510,6 +603,13 @@ onMounted(async () => {
   margin-top: 14px;
 }
 
+.mobile-live-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
 .mobile-copy-button {
   min-width: 0;
 }
@@ -591,5 +691,88 @@ onMounted(async () => {
 .pal-search {
   width: 100%;
   margin-top: 18px;
+}
+
+.mobile-detail-tabs {
+  margin-top: 18px;
+}
+
+.mobile-detail-empty {
+  min-height: 180px;
+  padding: 24px 0;
+}
+
+.mobile-item-groups {
+  display: grid;
+  gap: 20px;
+  padding-top: 8px;
+}
+
+.mobile-item-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.mobile-item-group h3 {
+  margin: 0;
+  color: var(--app-ink);
+  font-size: 14px;
+}
+
+.mobile-item-list article {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.mobile-item-list article:last-child {
+  border-bottom: 0;
+}
+
+.mobile-item-list img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  background: var(--app-surface-muted);
+  border-radius: 9px;
+}
+
+.mobile-item-list article > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.mobile-item-list strong {
+  overflow: hidden;
+  color: var(--app-ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-item-list span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--app-ink-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mobile-item-list b {
+  color: var(--app-accent);
+  font-family: var(--app-font-data);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 </style>

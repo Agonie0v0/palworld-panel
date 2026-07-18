@@ -33,8 +33,9 @@ const onGetInfo = (uid) => {
   emits("onGetInfo", uid);
 };
 
-const isPlayerOnline = (last_online) => {
-  return dayjs() - dayjs(last_online) < 80000;
+const isPlayerOnline = (player) => {
+  if (typeof player?.online === "boolean") return player.online;
+  return dayjs() - dayjs(player?.last_online) < 80000;
 };
 const displayLastOnline = (last_online) => {
   if (dayjs(last_online).year() < 1970) {
@@ -71,7 +72,7 @@ const filteredPlayers = computed(() => {
         .join(" ")
         .toLowerCase();
       if (keyword && !searchable.includes(keyword)) return false;
-      const online = isPlayerOnline(player.last_online);
+      const online = isPlayerOnline(player);
       if (statusFilter.value === "online" && !online) return false;
       if (statusFilter.value === "offline" && online) return false;
       return true;
@@ -141,13 +142,13 @@ const filteredPlayers = computed(() => {
                 <span
                   class="status-dot"
                   :class="
-                    isPlayerOnline(player.last_online)
+                    isPlayerOnline(player)
                       ? 'is-online'
                       : 'is-offline'
                   "
                 ></span>
                 {{
-                  isPlayerOnline(player.last_online)
+                  isPlayerOnline(player)
                     ? $t("status.online")
                     : $t("status.offline")
                 }}
