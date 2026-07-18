@@ -1,9 +1,5 @@
 <script setup>
-import {
-  AdminPanelSettingsOutlined,
-  RestartAltRound,
-  StopRound,
-} from "@vicons/material";
+import { AdminPanelSettingsOutlined } from "@vicons/material";
 import {
   GameController,
   ContractOutline,
@@ -13,7 +9,7 @@ import {
   PencilOutline,
   SunnyOutline,
 } from "@vicons/ionicons5";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
@@ -39,7 +35,6 @@ import ConfigManager from "@/components/ConfigManager.vue";
 import SidebarWorkspaceNav from "./component/SidebarWorkspaceNav.vue";
 import whitelistStore from "@/stores/model/whitelist";
 import playerToGuildStore from "@/stores/model/playerToGuild";
-import { watch } from "vue";
 import userStore from "@/stores/model/user";
 import themeStore from "@/stores/model/theme.js";
 
@@ -51,7 +46,6 @@ const theme = themeStore();
 
 const loading = ref(false);
 const sidebarNav = ref(null);
-const actionBusy = ref("");
 const isFullscreen = ref(false);
 const serverInfo = ref({});
 const serverMetrics = ref({});
@@ -60,6 +54,7 @@ const playerList = ref([]);
 const onlinePlayerList = ref([]);
 const guildList = ref([]);
 const languageOptions = ref([]);
+const navigationLabels = ref({});
 const asArray = (value) => (Array.isArray(value) ? value : []);
 const onlineCount = computed(
   () =>
@@ -77,6 +72,8 @@ const sidebarFpsPercent = computed(() =>
   ),
 );
 const currentViewLabel = computed(() => {
+  const customLabel = navigationLabels.value[currentDisplay.value];
+  if (customLabel) return customLabel;
   const labels = {
     overview: () => t("button.overview"),
     players: () => t("button.players"),
@@ -104,6 +101,7 @@ const currentViewLabel = computed(() => {
   };
   return (labels[currentDisplay.value] || labels.players)();
 });
+provide("workspace-title", currentViewLabel);
 
 const isLogin = ref(false);
 const currentRole = ref("viewer");
@@ -307,16 +305,6 @@ const handleSidebarNavigation = (key) => {
   selectWorkspace(key);
 };
 
-const runGlobalAction = async (action) => {
-  const actionName = action === "stop" ? (locale.value === "zh" ? "停止服务器" : "stop the server") : (locale.value === "zh" ? "重启服务器" : "restart the server");
-  if (!window.confirm(locale.value === "zh" ? `确认${actionName}吗？` : `Are you sure you want to ${actionName}?`)) return;
-  actionBusy.value = action;
-  const { data, statusCode } = await new ApiService().runServerAction(action);
-  actionBusy.value = "";
-  if (statusCode.value === 200 && data.value?.ok !== false) message.success(locale.value === "zh" ? "操作已提交" : "Action submitted");
-  else message.error(data.value?.error || (locale.value === "zh" ? "操作失败" : "Action failed"));
-};
-
 const toggleFullscreen = async () => {
   if (document.fullscreenElement) await document.exitFullscreen();
   else await document.documentElement.requestFullscreen();
@@ -471,6 +459,7 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
         :is-admin="isAdmin"
         :is-login="isLogin"
         @select="handleSidebarNavigation"
+        @labels-change="navigationLabels = $event"
       />
       <div class="ops-sidebar-footer">
         <div class="ops-sidebar-preferences">
@@ -550,23 +539,11 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
     <main class="ops-main">
       <header class="ops-workspace-header" :class="{ 'is-tool-view': currentDisplay !== 'overview' }">
         <div class="ops-workspace-heading">
-          <h1 class="ops-workspace-title">{{ $t("title") }}</h1>
+          <h1 class="ops-workspace-title">{{ serverInfo?.name || $t("status.serverUnavailable") }}</h1>
           <div class="ops-workspace-context">
-            <span>{{
-              serverInfo?.name || $t("status.serverUnavailable")
-            }}</span>
             <span>{{ serverInfo?.version || "Unknown" }}</span>
+            <span>Palworld Dedicated Server</span>
           </div>
-        </div>
-        <div v-if="canOperate" class="ops-header-actions">
-          <n-button size="small" secondary :disabled="!serverInfo?.name" :loading="actionBusy === 'restart'" @click="runGlobalAction('restart')">
-            <template #icon><n-icon><RestartAltRound /></n-icon></template>
-            {{ locale === "zh" ? "全服重启" : "Restart" }}
-          </n-button>
-          <n-button size="small" type="error" secondary :disabled="!serverInfo?.name" :loading="actionBusy === 'stop'" @click="runGlobalAction('stop')">
-            <template #icon><n-icon><StopRound /></n-icon></template>
-            {{ locale === "zh" ? "停止服务器" : "Stop" }}
-          </n-button>
         </div>
         <div class="ops-header-telemetry" :aria-label="$t('overview.pulse')">
           <div class="ops-telemetry-item ops-telemetry-item--state">
@@ -574,11 +551,10 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
               class="ops-status-dot"
               :class="{ 'is-online': serverInfo?.name }"
             ></span>
-            <strong>{{
-              serverInfo?.name
-                ? $t("status.online")
-                : $t("status.serverUnavailable")
-            }}</strong>
+            <div>
+              <span>{{ $t("operations.state") }}</span>
+              <strong>{{ serverInfo?.name ? $t("status.online") : $t("status.serverUnavailable") }}</strong>
+            </div>
           </div>
           <div class="ops-telemetry-item">
             <span>{{ $t("item.serverFps") }}</span>

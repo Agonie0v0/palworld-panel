@@ -1,4 +1,6 @@
 <script setup>
+import { computed, inject } from "vue";
+
 const props = defineProps({
   show: { type: Boolean, default: false },
   embedded: { type: Boolean, default: false },
@@ -7,6 +9,10 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:show"]);
+const workspaceTitle = inject("workspace-title", null);
+const resolvedTitle = computed(() =>
+  props.embedded && workspaceTitle?.value ? workspaceTitle.value : props.title,
+);
 
 const close = () => emit("update:show", false);
 </script>
@@ -16,11 +22,11 @@ const close = () => emit("update:show", false);
     v-if="embedded"
     class="tool-surface"
     :style="{ width: '100%', maxWidth: 'none' }"
-    :aria-label="title"
+    :aria-label="resolvedTitle"
   >
     <header class="tool-surface__header">
       <div class="tool-surface__heading">
-        <h2>{{ title }}</h2>
+        <h2>{{ resolvedTitle }}</h2>
         <div v-if="$slots.description" class="tool-surface__description">
           <slot name="description" />
         </div>
@@ -38,7 +44,7 @@ const close = () => emit("update:show", false);
     v-else
     :show="props.show"
     preset="card"
-    :title="title"
+    :title="resolvedTitle"
     :style="{ width }"
     :mask-closable="false"
     closable

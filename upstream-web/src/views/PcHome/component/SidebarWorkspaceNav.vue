@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
@@ -32,7 +32,7 @@ const props = defineProps({
   isLogin: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["select", "editing-change"]);
+const emit = defineEmits(["select", "editing-change", "labels-change"]);
 const { t, locale } = useI18n();
 const message = useMessage();
 const STORAGE_KEY = "palworld_sidebar_layout_v2";
@@ -116,6 +116,14 @@ const normalizeLayout = (layout) => {
 const visibleGroups = computed(() => groups.value
   .map((group) => ({ ...group, items: group.items.filter((item) => catalog.value[item.id] && (editing.value || isAvailable(catalog.value[item.id]))) }))
   .filter((group) => editing.value || group.items.length));
+const resolvedLabels = computed(() => Object.fromEntries(
+  groups.value.flatMap((group) => group.items.map((item) => [item.id, itemName(item)])),
+));
+
+watch(resolvedLabels, (labels) => emit("labels-change", labels), {
+  immediate: true,
+  deep: true,
+});
 
 const persistLocal = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(groups.value));
 const beginEditing = () => {
@@ -199,6 +207,7 @@ onMounted(async () => {
   } catch { groups.value = defaultGroups(); }
   savedGroups.value = clone(groups.value);
   persistLocal();
+  emit("labels-change", resolvedLabels.value);
 });
 
 defineExpose({ toggleEditing, editing });
