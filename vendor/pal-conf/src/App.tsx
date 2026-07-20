@@ -74,7 +74,7 @@ function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tabRef = useRef<HTMLInputElement>(null);
-  const settingsTextRef = useRef("");
+  const iniSettingsTextRef = useRef("");
 
   useEffect(() => {
     if (tabRef.current && tabRef.current.getBoundingClientRect().top < 0) {
@@ -503,12 +503,12 @@ function App() {
 
   const advancedSettings = AdvancedSettings.map((k) => genInput(k, !isEntryValid(k)));
 
-  const settingsText =
-    fileMode === FileMode.INI
-      ? `[/Script/Pal.PalGameWorldSettings]\nOptionSettings=(${serializeEntriesToIni()})`
-      : LosslessJSON.stringify(serializeEntriesToWorldOptionJson(), null, 4) ?? "";
+  const iniSettingsText = `[/Script/Pal.PalGameWorldSettings]\nOptionSettings=(${serializeEntriesToIni()})`;
+  const settingsText = fileMode === FileMode.INI
+    ? iniSettingsText
+    : LosslessJSON.stringify(serializeEntriesToWorldOptionJson(), null, 4) ?? "";
 
-  settingsTextRef.current = settingsText;
+  iniSettingsTextRef.current = iniSettingsText;
 
   useEffect(() => {
     const parentOrigin = window.location.origin;
@@ -521,7 +521,7 @@ function App() {
       }
       if (message?.type === "PALWORLD_PANEL_REQUEST_INI") {
         window.parent.postMessage(
-          { type: "PAL_CONF_INI", ini: settingsTextRef.current },
+          { type: "PAL_CONF_INI", ini: iniSettingsTextRef.current },
           parentOrigin,
         );
       }
@@ -530,7 +530,7 @@ function App() {
     window.addEventListener("message", handlePanelMessage);
     window.parent.postMessage({ type: "PAL_CONF_READY" }, parentOrigin);
     return () => window.removeEventListener("message", handlePanelMessage);
-    // The panel bridge binds once; current generated output is kept in settingsTextRef.
+    // The panel bridge binds once; current INI output is kept in iniSettingsTextRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
