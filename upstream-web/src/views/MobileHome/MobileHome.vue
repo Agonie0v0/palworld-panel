@@ -81,6 +81,11 @@ const guildInfo = ref({});
 const languageOptions = ref([]);
 const showMobileTools = ref(false);
 const pendingAdminAction = ref("");
+const serverAvailable = computed(() =>
+  typeof serverInfo.value?.available === "boolean"
+    ? serverInfo.value.available
+    : Boolean(serverInfo.value?.name),
+);
 const onlineCount = computed(
   () =>
     serverMetrics.value?.current_player_num ??
@@ -565,7 +570,7 @@ onBeforeUnmount(() => {
         <div class="mobile-server-identity">
           <span
             class="ops-status-dot"
-            :class="{ 'is-online': serverInfo?.name }"
+            :class="{ 'is-online': serverAvailable }"
           ></span>
           <span class="mobile-server-name">
             {{ serverInfo?.name || $t("status.serverUnavailable") }}

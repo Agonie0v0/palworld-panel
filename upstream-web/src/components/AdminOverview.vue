@@ -74,10 +74,19 @@ const copy = computed(() => zh.value ? {
   target: "60 FPS target",
   playersTotal: "Total players",
   unavailable: "Host metrics unavailable",
+  liveUnavailable: "Live data is unavailable. Check the REST API connection in PST Configuration; RCON fallback may only provide player identity and online state.",
+  openSettings: "Open PST Configuration",
 });
 
 const asArray = (value) => Array.isArray(value) ? value : [];
-const serverOnline = computed(() => Boolean(props.serverInfo?.name));
+const serverOnline = computed(() =>
+  typeof props.serverInfo?.available === "boolean"
+    ? props.serverInfo.available
+    : Boolean(props.serverInfo?.name),
+);
+const liveDataIncomplete = computed(() =>
+  props.serverInfo?.available === false || props.serverMetrics?.available === false,
+);
 const currentPlayers = computed(() => Number(props.serverMetrics?.current_player_num ?? onlinePlayers.value.length ?? 0));
 const maxPlayers = computed(() => Number(props.serverMetrics?.max_player_num || 0));
 const fps = computed(() => Number(props.serverMetrics?.server_fps || 0));
@@ -155,6 +164,15 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
       <n-button secondary size="small" :loading="loading" @click="refresh"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
     </header>
 
+    <n-alert v-if="liveDataIncomplete" type="warning" class="bento-live-warning">
+      {{ zh ? "\u5b9e\u65f6\u6570\u636e\u8fde\u63a5\u5931\u8d25\u3002\u8bf7\u5728 PST \u914d\u7f6e\u4e2d\u68c0\u67e5 REST API\uff1bRCON \u56de\u9000\u53ea\u80fd\u63d0\u4f9b\u90e8\u5206\u73a9\u5bb6\u8eab\u4efd\u548c\u5728\u7ebf\u72b6\u6001\u3002" : copy.liveUnavailable }}
+      <template #action>
+        <n-button text type="warning" @click="emit('navigate', 'settings')">
+          {{ zh ? "\u6253\u5f00 PST \u914d\u7f6e" : copy.openSettings }}
+        </n-button>
+      </template>
+    </n-alert>
+
     <div class="bento-overview__metrics">
       <section class="bento-card bento-stat bento-stat--players">
         <span>{{ copy.onlinePlayers }}</span>
@@ -205,6 +223,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 .bento-overview { width: min(1540px, 100%); margin: 0 auto; padding: 32px; }
 .bento-overview__header, .bento-card__header, .bento-resource__label { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .bento-overview__header { margin-bottom: 20px; }
+.bento-live-warning { margin-bottom: 20px; }
 .bento-overview__eyebrow { display: flex; align-items: center; gap: 7px; color: var(--app-ink-muted); font-size: 12px; font-weight: 650; }
 .bento-overview__dot { width: 8px; height: 8px; background: var(--app-warning); border-radius: 50%; }
 .bento-overview__dot.is-online { background: var(--app-success); }

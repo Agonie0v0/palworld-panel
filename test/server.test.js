@@ -16,14 +16,73 @@ const {
   normalizeLivePlayers,
   parseDfOutput,
   parsePsOutput,
+  parseRconInfo,
+  parseShowPlayers,
   playerUidFromId,
   testSaveSource,
+  testRestConnection,
   trimBackups,
   verifyAuthToken,
   permissionsForRole,
   principalCan,
   watchdogSettings
 } = require("../src/server");
+
+test("ShowPlayers fallback parses Steam64 IDs and quoted nicknames", () => {
+  const players = parseShowPlayers([
+    "name,playeruid,steamid",
+    '"Player, One",3882655113,76561198841027010',
+    "Agonie,2941574151,76561198000000001",
+  ].join("\n"));
+  assert.equal(players.length, 2);
+  assert.equal(players[0].nickname, "Player, One");
+  assert.equal(players[0].player_uid, "3882655113");
+  assert.equal(players[0].steam_id, "76561198841027010");
+  assert.equal(players[0].user_id, "steam_76561198841027010");
+});
+
+test("Info fallback extracts the Palworld version and server name", () => {
+  assert.deepEqual(
+    parseRconInfo("Welcome to Pal Server[v0.7.0.0] Green Grass", "Fallback"),
+    { version: "v0.7.0.0", name: "Green Grass" },
+  );
+});
+
+test("REST requests recover from stale dedicated REST credentials", async (t) => {
+  const expected = `Basic ${Buffer.from("admin:current-admin-password").toString("base64")}`;
+  const restServer = http.createServer((request, response) => {
+    if (request.headers.authorization !== expected) {
+      response.writeHead(401, { "content-type": "text/plain" });
+      response.end("Unauthorized");
+      return;
+    }
+    const payload = request.url.includes("players")
+      ? { players: [] }
+      : request.url.includes("metrics")
+        ? { serverfps: 60, currentplayernum: 0 }
+        : { version: "v0.7.0.0", servername: "Test server" };
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify(payload));
+  });
+  await new Promise((resolve) => restServer.listen(0, "127.0.0.1", resolve));
+  t.after(() => restServer.close());
+  const address = restServer.address();
+  const live = await testRestConnection({
+    server: {
+      restHost: "127.0.0.1",
+      restPort: address.port,
+      restProtocol: "http:",
+      restUser: "stale-user",
+      restPassword: "stale-password",
+    },
+    settings: { AdminPassword: "current-admin-password" },
+    automation: { restTimeout: 2 },
+  });
+  assert.equal(live.info.ok, true);
+  assert.equal(live.players.ok, true);
+  assert.equal(live.metrics.ok, true);
+  assert.equal(live.info.credentialSource, "admin-password");
+});
 
 function authConfig(passwordHash = "password-hash") {
   return {

@@ -56,6 +56,11 @@ const guildList = ref([]);
 const languageOptions = ref([]);
 const navigationLabels = ref({});
 const asArray = (value) => (Array.isArray(value) ? value : []);
+const serverAvailable = computed(() =>
+  typeof serverInfo.value?.available === "boolean"
+    ? serverInfo.value.available
+    : Boolean(serverInfo.value?.name),
+);
 const onlineCount = computed(
   () =>
     serverMetrics.value?.current_player_num ??
@@ -408,7 +413,7 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
             class="ops-brand-version"
             @click="toGithub"
           >
-            {{ serverToolInfo.version }}<span v-if="hasNewVersion"> · new</span>
+            {{ serverToolInfo.version }}<span v-if="serverToolInfo.build"> · {{ serverToolInfo.build }}</span><span v-if="hasNewVersion"> · new</span>
           </button>
         </div>
       </div>
@@ -519,9 +524,9 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
           <div class="ops-telemetry-item ops-telemetry-item--state">
             <span
               class="ops-status-dot"
-              :class="{ 'is-online': serverInfo?.name }"
+              :class="{ 'is-online': serverAvailable }"
             ></span>
-            <strong>{{ serverInfo?.name ? $t("status.online") : $t("status.serverUnavailable") }}</strong>
+            <strong>{{ serverAvailable ? $t("status.online") : $t("status.serverUnavailable") }}</strong>
           </div>
           <div class="ops-telemetry-item">
             <span>{{ $t("item.serverFps") }}</span>

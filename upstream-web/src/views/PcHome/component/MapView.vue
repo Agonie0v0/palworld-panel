@@ -21,11 +21,12 @@ import playerToGuildStore from "@/stores/model/playerToGuild.js";
 import points from "@/assets/map/points.json";
 import {
   buildPlayerGuildMap,
+  hasMapLocation,
   mergeMapPlayers,
   selectVisibleMapPlayers,
 } from "@/utils/mapPlayers.js";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const LAND_SCAPE = [349400, 724400, -1099400, -724400];
 
@@ -96,6 +97,12 @@ const visiblePlayerList = computed(() =>
     playerList.value,
     onlinePlayerIds.value,
     playerVisibility.value,
+  ),
+);
+const missingLivePositions = computed(() =>
+  onlinePlayerIds.value.size > 0 &&
+  !playerList.value.some(
+    (player) => onlinePlayerIds.value.has(player.player_uid) && hasMapLocation(player),
   ),
 );
 const playerVisibilityOptions = computed(() => [
@@ -244,6 +251,11 @@ onUnmounted(() => {
 
 <template>
   <div class="map-view h-full">
+    <n-alert v-if="missingLivePositions" type="warning" class="map-live-warning">
+      {{ locale === "zh"
+        ? `\u5df2\u68c0\u6d4b\u5230 ${onlinePlayerIds.size} \u540d\u5728\u7ebf\u73a9\u5bb6\uff0c\u4f46 REST API \u672a\u8fd4\u56de\u5b9e\u65f6\u5750\u6807\u3002\u8bf7\u5728 PST \u914d\u7f6e\u4e2d\u6d4b\u8bd5 REST API \u8fde\u63a5\u3002`
+        : `${onlinePlayerIds.size} online player(s) detected, but the REST API did not return live coordinates. Test the REST API connection in PST Configuration.` }}
+    </n-alert>
     <l-map
       ref="mapRef"
       style="width: 100%; height: 100%"
@@ -632,6 +644,15 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="less">
+.map-live-warning {
+  position: absolute;
+  z-index: 450;
+  top: 16px;
+  left: 50%;
+  width: min(560px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
 .map-view {
   position: relative;
   overflow: hidden;

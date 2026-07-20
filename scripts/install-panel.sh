@@ -5,6 +5,7 @@ PANEL_DIR="${PANEL_DIR:-/opt/palworld-panel}"
 PANEL_PORT="${PANEL_PORT:-19090}"
 PANEL_TOKEN="${PANEL_TOKEN:-$(openssl rand -hex 24)}"
 INSTALL_SAVE_PARSER="${INSTALL_SAVE_PARSER:-1}"
+SOURCE_COMMIT="${PANEL_BUILD_ID:-$(git rev-parse HEAD 2>/dev/null || true)}"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Please run as root: sudo bash scripts/install-panel.sh"
@@ -28,6 +29,7 @@ mkdir -p "$PANEL_DIR/data" "$PANEL_DIR/upstream-web"
 cp -R package.json package-lock.json src public config.example.json parsers scripts "$PANEL_DIR/"
 cp -R upstream-web/dist "$PANEL_DIR/upstream-web/"
 cp -R upstream-web/public "$PANEL_DIR/upstream-web/"
+printf '{"commit":"%s","installedAt":"%s"}\n' "$SOURCE_COMMIT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$PANEL_DIR/data/build.json"
 cd "$PANEL_DIR"
 npm ci --omit=dev
 chmod +x "$PANEL_DIR/scripts/"*.sh "$PANEL_DIR/parsers/sav_cli/run-save-parser"

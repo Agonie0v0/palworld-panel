@@ -23,6 +23,34 @@ const deployScriptPath = path.join(rootDir, "scripts", "deploy-palworld-server.s
 const agentRuntime = process.env.AGENT_MODE === "1";
 const authTokenTtlSeconds = 24 * 60 * 60;
 
+function buildIdentity() {
+  let recorded = {};
+  try {
+    recorded = JSON.parse(fs.readFileSync(path.join(dataDir, "build.json"), "utf8"));
+  } catch {}
+  let commit = String(process.env.PANEL_BUILD_ID || recorded.commit || "").trim();
+  if (!commit) {
+    try {
+      const head = fs.readFileSync(path.join(rootDir, ".git", "HEAD"), "utf8").trim();
+      if (head.startsWith("ref:")) {
+        commit = fs.readFileSync(path.join(rootDir, ".git", head.slice(5).trim()), "utf8").trim();
+      } else {
+        commit = head;
+      }
+    } catch {}
+  }
+  let asset = "";
+  try {
+    const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
+    asset = html.match(/assets\/index-([A-Za-z0-9_-]+)\.js/)?.[1] || "";
+  } catch {}
+  return {
+    commit: /^[0-9a-f]{7,40}$/i.test(commit) ? commit : "",
+    build: commit ? commit.slice(0, 8) : (asset || "unknown"),
+    asset
+  };
+}
+
 let previousOnlinePlayers = null;
 let schedulerRunning = false;
 const schedulerState = {
@@ -777,9 +805,63 @@ function rcon(config, command) {
   });
 }
 
+function parseCsvRow(line) {
+  const values = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < String(line || "").length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      values.push(value.trim());
+      value = "";
+    } else {
+      value += character;
+    }
+  }
+  values.push(value.trim());
+  return values;
+}
+
+function parseShowPlayers(output) {
+  const lines = String(output || "").replace(/^\uFEFF/, "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const header = parseCsvRow(lines[0]).map((field) => field.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const nameIndex = header.findIndex((field) => field === "name" || field === "nickname");
+  const uidIndex = header.findIndex((field) => field === "playeruid" || field === "playerid");
+  const steamIndex = header.findIndex((field) => field === "steamid" || field === "userid");
+  if (nameIndex < 0 || uidIndex < 0) return [];
+  return lines.slice(1).map(parseCsvRow).map((fields) => {
+    const rawUserId = steamIndex >= 0 ? String(fields[steamIndex] || "") : "";
+    const steamId = rawUserId.replace(/^steam_/i, "");
+    return {
+      player_uid: String(fields[uidIndex] || ""),
+      user_id: steamId ? `steam_${steamId}` : "",
+      steam_id: /^\d{16,20}$/.test(steamId) ? steamId : "",
+      nickname: String(fields[nameIndex] || ""),
+      last_online: new Date().toISOString()
+    };
+  }).filter((player) => player.player_uid || player.steam_id || player.nickname);
+}
+
+function parseRconInfo(output, fallbackName = "") {
+  const text = String(output || "").trim();
+  const version = text.match(/\[([^\]]+)\]/)?.[1] || text.match(/\bv?\d+\.\d+(?:\.\d+){1,3}\b/)?.[0] || "Unknown";
+  const bracketEnd = text.lastIndexOf("]");
+  const name = bracketEnd >= 0 ? text.slice(bracketEnd + 1).trim() : fallbackName;
+  return { version, name: name || fallbackName };
+}
+
 function restRequest(config, endpoint, options = {}) {
-  const password = config.server.restPassword || config.settings.AdminPassword;
-  const auth = Buffer.from(`${config.server.restUser}:${password}`).toString("base64");
+  const username = options.username ?? config.server.restUser ?? "admin";
+  const password = options.password ?? config.server.restPassword ?? config.settings.AdminPassword;
+  const auth = Buffer.from(`${username}:${password}`).toString("base64");
   const body = options.body ? JSON.stringify(options.body) : "";
   const protocol = config.server.restProtocol === "https:" ? "https:" : "http:";
   const transport = protocol === "https:" ? https : http;
@@ -822,11 +904,33 @@ function restRequest(config, endpoint, options = {}) {
 async function firstRest(config, endpoints) {
   const results = [];
   for (const endpoint of endpoints) {
-    const result = await restRequest(config, endpoint);
+    let result = await restRequest(config, endpoint);
+    if (result.status === 401) {
+      const fallbackUsername = "admin";
+      const fallbackPassword = String(config.settings.AdminPassword || "");
+      const configuredUsername = String(config.server.restUser || "admin");
+      const configuredPassword = String(config.server.restPassword || fallbackPassword);
+      if (fallbackPassword && (configuredUsername !== fallbackUsername || configuredPassword !== fallbackPassword)) {
+        const fallback = await restRequest(config, endpoint, {
+          username: fallbackUsername,
+          password: fallbackPassword
+        });
+        if (fallback.ok) result = { ...fallback, credentialSource: "admin-password" };
+      }
+    }
     results.push({ endpoint, ...result });
     if (result.ok) return { endpoint, ...result };
   }
   return { ok: false, results };
+}
+
+async function testRestConnection(config) {
+  const [info, players, metrics] = await Promise.all([
+    firstRest(config, ["/v1/api/info", "/api/info"]),
+    firstRest(config, ["/v1/api/players", "/api/players"]),
+    firstRest(config, ["/v1/api/metrics", "/api/metrics"])
+  ]);
+  return { info, players, metrics };
 }
 
 async function serviceStatus(config) {
@@ -972,12 +1076,39 @@ async function collectHostMetrics(config) {
 }
 
 async function liveServerData(config) {
-  const [info, players, metrics, settings] = await Promise.all([
+  let [info, players, metrics, settings] = await Promise.all([
     firstRest(config, ["/v1/api/info", "/api/info"]),
     firstRest(config, ["/v1/api/players", "/api/players"]),
     firstRest(config, ["/v1/api/metrics", "/api/metrics"]),
     firstRest(config, ["/v1/api/settings", "/api/settings"])
   ]);
+  let rconInfo;
+  let rconPlayers;
+  if (!info.ok || !players.ok) {
+    [rconInfo, rconPlayers] = await Promise.all([
+      info.ok ? null : rcon(config, "Info"),
+      players.ok ? null : rcon(config, "ShowPlayers")
+    ]);
+  }
+  if (!info.ok && rconInfo?.ok) {
+    info = { ok: true, status: 200, endpoint: "rcon:Info", source: "rcon", data: parseRconInfo(rconInfo.stdout, config.settings.ServerName) };
+  }
+  if (!players.ok && rconPlayers?.ok) {
+    const parsedPlayers = parseShowPlayers(rconPlayers.stdout);
+    players = { ok: true, status: 200, endpoint: "rcon:ShowPlayers", source: "rcon", data: { players: parsedPlayers } };
+  }
+  if (!metrics.ok && players.ok) {
+    const playerPayload = responseData(players);
+    const onlinePlayers = Array.isArray(playerPayload) ? playerPayload : (Array.isArray(playerPayload.players) ? playerPayload.players : []);
+    metrics = {
+      ...metrics,
+      source: "derived",
+      data: {
+        currentplayernum: onlinePlayers.length,
+        maxplayernum: Number(config.settings.ServerPlayerMaxNum || 0)
+      }
+    };
+  }
   return { info, players, metrics, settings };
 }
 
@@ -1747,6 +1878,7 @@ async function downloadCompatibleBackup(req, res, config, name) {
 
 const upstreamCompat = createUpstreamCompatibility({
   version: packageInfo.version,
+  build: buildIdentity(),
   sendJson,
   sendError,
   readBody,
@@ -1759,6 +1891,7 @@ const upstreamCompat = createUpstreamCompatibility({
   querySaveData,
   rcon,
   testSaveSource,
+  testRestConnection,
   loadWhitelist,
   saveWhitelist,
   loadSyncedSaveData,
@@ -2585,11 +2718,14 @@ module.exports = {
   isWhitelisted,
   issueAuthToken,
   normalizeLivePlayers,
+  parseRconInfo,
+  parseShowPlayers,
   permissionsForRole,
   principalCan,
   parseDfOutput,
   parsePsOutput,
   playerUidFromId,
+  testRestConnection,
   testSaveSource,
   trimBackups,
   verifyAuthToken,

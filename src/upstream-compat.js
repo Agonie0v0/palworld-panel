@@ -43,6 +43,15 @@ function responsePayload(result) {
   return result;
 }
 
+function liveFailure(result) {
+  if (!result || result.ok) return "";
+  const attempts = Array.isArray(result.results) ? result.results : [result];
+  return attempts.map((attempt) => {
+    const detail = attempt.error || (attempt.status ? `HTTP ${attempt.status}` : "unavailable");
+    return `${attempt.endpoint || "live API"}: ${detail}`;
+  }).join("; ");
+}
+
 function playerUidFromId(playerId) {
   const value = String(playerId || "");
   if (value.length < 8) return "";
@@ -452,7 +461,7 @@ function createUpstreamCompatibility(deps) {
     if (req.method !== "GET") return false;
 
     if (pathname === "/api/server/tool") {
-      deps.sendJson(res, 200, { version: deps.version, latest: deps.version });
+      deps.sendJson(res, 200, { version: deps.version, latest: deps.version, ...(deps.build || {}) });
       return true;
     }
     if (pathname === "/api/server") {
@@ -460,7 +469,10 @@ function createUpstreamCompatibility(deps) {
       const info = responsePayload(live.info);
       deps.sendJson(res, 200, {
         version: stringFrom(info, ["version"], "Unknown"),
-        name: stringFrom(info, ["name", "servername", "server_name"], config.settings.ServerName)
+        name: stringFrom(info, ["name", "servername", "server_name"], config.settings.ServerName),
+        available: Boolean(live.info?.ok),
+        source: live.info?.source || "rest",
+        error: liveFailure(live.info)
       });
       return true;
     }
@@ -473,7 +485,11 @@ function createUpstreamCompatibility(deps) {
         server_frame_time: numberFrom(metrics, ["server_frame_time", "serverframetime"]),
         max_player_num: numberFrom(metrics, ["max_player_num", "maxplayernum"]),
         uptime: numberFrom(metrics, ["uptime"]),
-        days: numberFrom(metrics, ["days"])
+        days: numberFrom(metrics, ["days"]),
+        available: Boolean(live.metrics?.ok),
+        partial: live.metrics?.source === "derived",
+        source: live.metrics?.source || "rest",
+        error: liveFailure(live.metrics)
       });
       return true;
     }
@@ -651,8 +667,48 @@ function createUpstreamCompatibility(deps) {
       deps.sendJson(res, 200, { status: result.ok ? "normal" : "error", message: result.stdout || result.stderr });
       return true;
     }
+    if (req.method === "POST" && pathname === "/api/config/test/rest") {
+      const body = await deps.readBody(req);
+      const managedConfig = await deps.managedCall("config", {}, () => config);
+      const effectiveConfig = { ...config, ...managedConfig, panel: config.panel };
+      const address = splitAddress(body.rest?.address, effectiveConfig.server.restHost, effectiveConfig.server.restPort);
+      const temporary = {
+        ...effectiveConfig,
+        server: {
+          ...effectiveConfig.server,
+          restHost: address.host,
+          restPort: address.port,
+          restProtocol: address.protocol === "https:" ? "https:" : "http:",
+          restUser: body.rest?.username || effectiveConfig.server.restUser,
+          restPassword: body.rest?.password ?? effectiveConfig.server.restPassword
+        },
+        automation: {
+          ...effectiveConfig.automation,
+          restTimeout: Number(body.rest?.timeout ?? effectiveConfig.automation.restTimeout ?? 5)
+        }
+      };
+      const live = await deps.managedCall("testRest", {
+        server: temporary.server,
+        automation: temporary.automation
+      }, () => deps.testRestConnection(temporary));
+      const checks = ["info", "players", "metrics"].map((key) => ({
+        endpoint: live[key]?.endpoint || key,
+        ok: Boolean(live[key]?.ok),
+        source: live[key]?.source || "rest",
+        message: liveFailure(live[key])
+      }));
+      const failed = checks.filter((check) => !check.ok);
+      deps.sendJson(res, 200, {
+        status: failed.length ? "error" : "normal",
+        message: failed.length
+          ? failed.map((check) => check.message || `${check.endpoint}: unavailable`).join("; ")
+          : checks.map((check) => `${check.endpoint} (${check.source})`).join(", "),
+        checks
+      });
+      return true;
+    }
     if (req.method === "GET" && pathname === "/api/server/tool") {
-      deps.sendJson(res, 200, { version: deps.version, latest: deps.version });
+      deps.sendJson(res, 200, { version: deps.version, latest: deps.version, ...(deps.build || {}) });
       return true;
     }
     if (req.method === "GET" && pathname === "/api/server") {

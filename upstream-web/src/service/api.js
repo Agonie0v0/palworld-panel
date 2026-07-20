@@ -80,6 +80,9 @@ class ApiService extends Service {
   async testRconConfig(rcon) {
     return this.fetch(`/api/config/test/rcon`).post({ rcon }).json();
   }
+  async testRestConfig(rest) {
+    return this.fetch(`/api/config/test/rest`).post({ rest }).json();
+  }
 
   async getServerToolInfo() {
     return this.fetch(`/api/server/tool`).get().json();

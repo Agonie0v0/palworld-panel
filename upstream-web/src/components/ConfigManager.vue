@@ -21,8 +21,10 @@ const newPassword = ref("");
 const passwordConfirmation = ref("");
 const saveTesting = ref(false);
 const rconTesting = ref(false);
+const restTesting = ref(false);
 const saveStatus = ref({ status: "unconfigured", message: "" });
 const rconStatus = ref({ status: "unconfigured", message: "" });
+const restStatus = ref({ status: "unconfigured", message: "" });
 const sourcePaths = ref({ directory: "", agent: "" });
 
 const statusType = (status) =>
@@ -110,6 +112,29 @@ const markRconDirty = () => {
   };
 };
 
+const testRest = async () => {
+  restTesting.value = true;
+  const { data, statusCode } = await new ApiService().testRestConfig(
+    settings.value.rest,
+  );
+  restTesting.value = false;
+  if (statusCode.value !== 200) {
+    restStatus.value = {
+      status: "error",
+      message: data.value?.error || t("configuration.connectionTestFailed"),
+    };
+    return;
+  }
+  restStatus.value = data.value;
+};
+
+const markRestDirty = () => {
+  restStatus.value = {
+    status: "unconfigured",
+    message: t("configuration.retestRequired"),
+  };
+};
+
 const changeSourceMode = async (mode) => {
   const previousMode = settings.value.save.source_mode;
   sourcePaths.value[previousMode] = settings.value.save.path;
@@ -132,7 +157,7 @@ const load = async () => {
   sourcePaths.value[settings.value.save.source_mode] = settings.value.save.path;
   newPassword.value = "";
   passwordConfirmation.value = "";
-  await Promise.all([checkSaveSource(), testRcon()]);
+  await Promise.all([checkSaveSource(), testRcon(), testRest()]);
 };
 
 const save = async () => {
@@ -354,22 +379,51 @@ watch(
           </n-collapse-item>
 
           <n-collapse-item title="REST API" name="rest">
+            <template #header-extra>
+              <n-space size="small" align="center" @click.stop>
+                <n-tooltip>
+                  <template #trigger>
+                    <n-tag
+                      size="small"
+                      round
+                      :type="statusType(restStatus.status)"
+                    >
+                      {{ statusLabel(restStatus.status) }}
+                    </n-tag>
+                  </template>
+                  {{ restStatus.message || $t("configuration.noStatusDetails") }}
+                </n-tooltip>
+                <n-button
+                  size="tiny"
+                  secondary
+                  :loading="restTesting"
+                  @click.stop="testRest"
+                >
+                  {{ $t("configuration.testConnection") }}
+                </n-button>
+              </n-space>
+            </template>
             <n-form label-placement="top">
               <div class="form-grid">
                 <n-form-item :label="$t('configuration.address')">
                   <n-input
                     v-model:value="settings.rest.address"
                     placeholder="http://127.0.0.1:8212"
+                    @update:value="markRestDirty"
                   />
                 </n-form-item>
                 <n-form-item :label="$t('configuration.username')">
-                  <n-input v-model:value="settings.rest.username" />
+                  <n-input
+                    v-model:value="settings.rest.username"
+                    @update:value="markRestDirty"
+                  />
                 </n-form-item>
                 <n-form-item :label="$t('configuration.password')">
                   <n-input
                     v-model:value="settings.rest.password"
                     type="password"
                     show-password-on="click"
+                    @update:value="markRestDirty"
                   />
                 </n-form-item>
                 <n-form-item :label="$t('configuration.timeout')">
@@ -377,6 +431,7 @@ watch(
                     v-model:value="settings.rest.timeout"
                     :min="0"
                     class="full-width"
+                    @update:value="markRestDirty"
                   />
                 </n-form-item>
               </div>
