@@ -168,3 +168,22 @@ export const formatPalworldSetting = (value) => {
   if (typeof value === "number") return String(value);
   return String(value ?? "");
 };
+
+export const serializePalworldSettings = (settings, schema = {}) => {
+  const pairs = Object.entries(settings || {})
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => {
+      const type = schema[key];
+      if (type === "array") {
+        const arrayValue = String(value).trim().replace(/^\(|\)$/g, "");
+        return `${key}=(${arrayValue})`;
+      }
+      if (type === "select") return `${key}=${String(value)}`;
+      if (typeof value === "boolean") return `${key}=${value ? "True" : "False"}`;
+      if (typeof value === "number") return `${key}=${value}`;
+      const escaped = String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `${key}="${escaped}"`;
+    })
+    .join(",");
+  return `[/Script/Pal.PalGameWorldSettings]\nOptionSettings=(${pairs})`;
+};

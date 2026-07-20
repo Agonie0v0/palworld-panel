@@ -107,7 +107,7 @@ docker compose up -d --build
 
 ### 游戏参数
 
-编辑服务器名称、说明、密码、端口、难度、死亡惩罚和常用倍率。高级参数可以直接导入或编辑 `OptionSettings`。保存参数不会自动让游戏重新读取配置，按页面提示重启服务即可生效。
+内置 [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf) 完整配置生成器，覆盖服务器、游戏内和高级参数，提供类型、范围及枚举校验，并支持 `PalWorldSettings.ini` 与 `WorldOption.sav` 的导入、生成和转换。可将面板当前配置载入生成器，确认变更后直接写回受管服务器；未知的新参数会保留。保存参数不会自动重启游戏服务，按页面提示手动重启后生效。
 
 ### 玩家、公会、地图与世界数据
 

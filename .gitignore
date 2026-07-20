@@ -1,5 +1,6 @@
 node_modules/
 upstream-web/node_modules/
+upstream-web/public/pal-conf/
 data/
 backups/
 *.log

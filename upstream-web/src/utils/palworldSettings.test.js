@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatPalworldSetting, parsePalworldSettings } from "./palworldSettings.js";
+import {
+  formatPalworldSetting,
+  parsePalworldSettings,
+  serializePalworldSettings,
+} from "./palworldSettings.js";
 
 test("parses a complete PalWorldSettings.ini document", () => {
   const parsed = parsePalworldSettings(`
@@ -40,4 +44,29 @@ test("formats preview values without INI quoting noise", () => {
   assert.equal(formatPalworldSetting(true), "True");
   assert.equal(formatPalworldSetting(2.5), "2.5");
   assert.equal(formatPalworldSetting("None"), "None");
+});
+
+test("serializePalworldSettings respects pal-conf field types", () => {
+  const output = serializePalworldSettings(
+    {
+      Difficulty: "None",
+      CrossplayPlatforms: "Steam,PS5",
+      ServerName: 'A "quoted" server',
+      RCONEnabled: true,
+      PublicPort: 8211,
+    },
+    {
+      Difficulty: "select",
+      CrossplayPlatforms: "array",
+      ServerName: "string",
+      RCONEnabled: "boolean",
+      PublicPort: "integer",
+    },
+  );
+
+  assert.match(output, /Difficulty=None/);
+  assert.match(output, /CrossplayPlatforms=\(Steam,PS5\)/);
+  assert.match(output, /ServerName="A \\"quoted\\" server"/);
+  assert.match(output, /RCONEnabled=True/);
+  assert.match(output, /PublicPort=8211/);
 });

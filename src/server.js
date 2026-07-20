@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const packageInfo = require("../package.json");
 const { createUpstreamCompatibility } = require("./upstream-compat");
 const { createAdvancedFeatures } = require("./advanced-features");
+const { renderSettings } = require("./palworld-settings");
 
 const rootDir = path.resolve(__dirname, "..");
 const configPath = process.env.PAL_PANEL_CONFIG || path.join(rootDir, "data", "config.json");
@@ -1667,20 +1668,6 @@ function upsertById(rows, row) {
   if (index >= 0) next[index] = value;
   else next.push(value);
   return next;
-}
-
-function toIniValue(value) {
-  if (typeof value === "boolean") return value ? "True" : "False";
-  if (typeof value === "number") return String(value);
-  return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
-function renderSettings(settings) {
-  const pairs = Object.entries(settings)
-    .filter(([, value]) => value !== undefined && value !== null)
-    .map(([key, value]) => `${key}=${toIniValue(value)}`)
-    .join(",");
-  return `[/Script/Pal.PalGameWorldSettings]\nOptionSettings=(${pairs})\n`;
 }
 
 async function applySettings(config, settings) {

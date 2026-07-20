@@ -6,9 +6,10 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/upstream-compat.js && node --check src/advanced-features.js",
+    "check": "node --check src/server.js && node --check src/upstream-compat.js && node --check src/advanced-features.js && node --check src/palworld-settings.js",
     "test": "node --test test/*.test.js",
-    "build:web": "pnpm --dir upstream-web build",
+    "build:pal-conf": "npm --prefix vendor/pal-conf ci && npm --prefix vendor/pal-conf run build && node scripts/sync-pal-conf-build.js",
+    "build:web": "npm run build:pal-conf && pnpm --dir upstream-web build",
     "test:web": "pnpm --dir upstream-web test"
   },
   "engines": {
