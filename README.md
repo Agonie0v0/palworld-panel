@@ -6,6 +6,18 @@
 
 > 当前功能已经可以正常使用。修改游戏参数不会自动重启 Palworld，是否重启始终由管理员决定。
 
+## 界面预览
+
+### 桌面端
+
+![Palworld Panel 桌面端服务器概览](docs/screenshots/panel-overview-desktop.png)
+
+### 移动端
+
+<p align="center">
+  <img src="docs/screenshots/panel-overview-mobile.png" width="390" alt="Palworld Panel 移动端服务器概览">
+</p>
+
 ## 功能概览
 
 | 模块 | 已实现功能 |
