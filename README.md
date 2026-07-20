@@ -1,28 +1,49 @@
 # Palworld Panel
 
-面向《幻兽帕鲁》专用服务器服主的管理面板。用于部署、启动、维护和备份 Palworld 服务器，并管理参数、玩家、存档数据、RCON 与自动化任务。
+面向《幻兽帕鲁》专用服务器服主的一体化 Web 管理面板。它把服务器部署、实时监控、玩家管理、完整参数配置、存档解析、备份恢复、RCON、模组和自动化集中到同一个界面中。
 
-支持 AMD64 与 ARM64，适用于单机部署、Docker 面板和远程 Agent 三种场景。界面提供简体中文和 English，以及亮色、深色主题。
+项目支持 AMD64 与 ARM64，可在面板与游戏同机、Docker 面板配合远程 Agent、Oracle Cloud Ampere A1 等环境中使用。桌面端和移动端均提供简体中文、English、亮色与深色主题。
 
-默认端口：面板 `19090/TCP`，游戏 `8211/UDP`，RCON `25575/TCP`，REST API `8212/TCP`。
+> 当前功能已经可以正常使用。修改游戏参数不会自动重启 Palworld，是否重启始终由管理员决定。
 
-## 这是什么
+## 功能概览
 
-Palworld Panel 是给服主使用的运维工具，不是玩家站点。它将日常管理集中到 WebUI：
+| 模块 | 已实现功能 |
+| --- | --- |
+| 服务器概览 | 在线状态、版本、FPS、在线人数、运行时长、CPU、内存、磁盘、进程状态与备份摘要 |
+| 服务器运维 | 部署、启动、停止、重启、更新、手动备份、守护策略、计划重启、内存阈值、重置世界和卸载 |
+| 完整配置生成器 | 内置 `pal-conf`，提供 119 个带类型、范围和枚举校验的参数，支持 INI 与 `WorldOption.sav` |
+| 玩家管理 | 实时在线状态、UID、Steam64、平台 ID、IP、角色和帕鲁详情、踢出、封禁、解封、白名单 |
+| 公会与地图 | 公会成员、会长、基地、在线玩家位置和存档中的世界坐标 |
+| 世界数据 | 玩家、帕鲁、物品、容器、基地与其他已解析存档数据 |
+| RCON 与广播 | 命令执行、模板、批量导入、玩家/物品/帕鲁占位符、定时任务和广播模板 |
+| 存档与备份 | 本机目录、ZIP 导入、Agent 同步、备份创建/校验/下载/恢复/删除及 WebDAV |
+| 模组与 Workshop | PAK/配置模组扫描、上传、启用状态以及 Steam Workshop 搜索和安装 |
+| 配种实验室 | PalCalc 数据、直接配种、亲本查询、路线计算、存档素材、自定义素材和任务历史 |
+| 面板管理 | 多管理员、角色权限、API Key、审计记录、主题、语言和自定义导航 |
 
-- 一键部署、启动、停止、重启、更新或卸载 Palworld 服务端
-- 修改 `PalWorldSettings.ini` 常用和高级参数
-- 查看服务器 FPS、在线人数、CPU、内存、磁盘与进程状态
-- 管理玩家、白名单、公会、地图、基地、帕鲁和存档数据
-- 执行 RCON 命令，保存模板并配置定时任务
-- 创建、下载、校验、恢复备份，并可同步至 WebDAV
-- 管理本地模组、Steam Workshop、配种规划和多管理员账号
+## 系统要求与默认端口
 
-项目参考并感谢 [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)。
+- 推荐系统：Ubuntu 或 Debian
+- Node.js：18 或更高版本，安装脚本默认安装 Node.js 20
+- 架构：AMD64 或 ARM64
+- Palworld ARM64：通过 DepotDownloader 与 box64 运行官方 x64 服务端
 
-## 快速部署
+| 端口 | 协议 | 用途 | 公网建议 |
+| --- | --- | --- | --- |
+| `19090` | TCP | Web 管理面板 | 限制服主 IP，或置于 HTTPS 反向代理后 |
+| `8211` | UDP | 玩家连接游戏 | 需要开放 |
+| `25575` | TCP | RCON | 仅本机或可信内网 |
+| `8212` | TCP | Palworld REST API | 仅本机或可信内网 |
+| `8081` | TCP | 远程 Agent | 仅允许面板主机访问 |
 
-推荐在 Ubuntu 或 Debian 主机上以 systemd 单机方式部署。面板和 Palworld 可以运行在同一台 AMD64 或 ARM64 主机上。
+端口都可以在安装或面板配置中调整。
+
+## 快速安装
+
+### Ubuntu / Debian
+
+推荐使用 systemd 安装面板。安装脚本会保留已有的 `data/config.json`，因此也可以用于后续更新。
 
 ```bash
 sudo apt-get update
@@ -38,27 +59,39 @@ sudo PANEL_PORT=19090 bash scripts/install-panel.sh
 http://服务器公网IP:19090
 ```
 
-首次打开时创建面板管理员密码。随后进入左侧的 **常用工具 -> 服务器运维**，填写服务器名称、管理员密码和端口，执行部署。
-
-安装脚本会创建 `palworld-panel.service`，并默认安装存档解析器。请在云防火墙或安全组中放行 `19090/TCP`；游戏部署完成后再放行 `8211/UDP`。
+脚本会创建并启动 `palworld-panel.service`，默认同时安装存档解析器。
 
 ### Oracle Cloud ARM64
 
-Oracle Ampere A1 可使用一条命令同时安装面板和 Palworld 服务端：
+Oracle Ampere A1 可以一次安装面板、存档解析器和 Palworld 服务端：
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
-sudo PANEL_PORT=19090 SERVER_NAME="My Palworld Server" bash scripts/install-oci-arm.sh
+sudo PANEL_PORT=19090 \
+  SERVER_NAME="My Palworld Server" \
+  bash scripts/install-oci-arm.sh
 ```
 
-ARM64 会使用 DepotDownloader 与 box64 安装并运行官方 x64 服务端。脚本会输出面板地址、面板 Token、游戏管理员密码和玩家连接端口。
+可选环境变量：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `PANEL_PORT` | `19090` | 面板端口 |
+| `PANEL_TOKEN` | 自动生成 | 备用登录和 API Token |
+| `SERVER_NAME` | `Palworld Oracle ARM` | 游戏服务器名称 |
+| `ADMIN_PASSWORD` | 自动生成 | Palworld 管理员密码 |
+| `SERVER_PASSWORD` | 空 | 玩家进入服务器的密码 |
+| `AUTO_START` | `1` | 安装完成后自动启动游戏服务 |
+| `INSTALL_SAVE_PARSER` | `1` | 安装存档解析器 |
+
+更多 ARM64 说明见 [QUICKSTART_ARM.md](QUICKSTART_ARM.md)。
 
 ### Docker 面板
 
-Docker 适合只容器化面板本身的场景。若 Palworld 运行在宿主机 systemd 中，请配合后文的 Agent，而不要期待 Docker 容器直接管理宿主机服务。
+Docker 部署适合只容器化面板的场景。如果 Palworld 运行在宿主机 systemd 中，请同时部署远程 Agent，让容器通过 Agent 管理宿主机服务和存档。
 
 ```bash
 git clone https://github.com/Agonie0v0/palworld-panel.git
@@ -67,83 +100,63 @@ export PANEL_TOKEN="replace-with-a-long-random-token"
 docker compose up -d --build
 ```
 
-面板仍通过 `http://服务器公网IP:19090` 访问。配置和备份由 Docker 卷持久化。
+配置与备份通过 Docker 卷持久化。
 
-## 首次配置
+## 首次使用
 
-面板涉及四种不同凭据，不要混用：
+首次打开面板时，建议按以下顺序配置：
+
+1. 创建面板管理员密码并进入管理模式。
+2. 在“服务器运维”中部署新服务器，或接管现有 Palworld 服务。
+3. 在“PST 配置”中确认存档路径，并分别测试 REST API 与 RCON。
+4. 打开“服务器参数”，载入当前配置，调整参数后保存到服务器。
+5. 确认没有玩家在线后，再由管理员手动重启 Palworld 使参数生效。
+6. 创建一次手动备份，并确认备份可以下载和校验。
+
+面板涉及四种不同凭据，请勿混用：
 
 | 凭据 | 用途 |
 | --- | --- |
 | 面板管理员密码 | 登录 WebUI 管理模式 |
-| `PANEL_TOKEN` | 面板备用登录和 API Token |
-| Palworld `AdminPassword` | 游戏内管理员、RCON/REST 配置 |
-| `ServerPassword` | 玩家进入游戏服务器的密码 |
+| `PANEL_TOKEN` | 备用登录和 API 调用 |
+| Palworld `AdminPassword` | 游戏管理、RCON 与 REST API |
+| Palworld `ServerPassword` | 玩家加入游戏服务器 |
 
-建议按这个顺序完成首次配置：
+## 完整服务器配置生成器
 
-1. 创建面板管理员密码并登录。
-2. 在 **服务器运维** 中部署或接管 Palworld 服务。
-3. 在 **游戏参数** 中保存服务器名称、密码、端口和倍率。
-4. 在 **PST 配置** 中测试 REST、RCON 和存档来源。
-5. 保存游戏参数后按提示重启 Palworld 服务。
+“服务器参数”内置了 [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf)，不依赖外部配置网站。
 
-## 菜单说明
+- 服务器设置、游戏内设置和高级设置完整分类
+- 文本、整数、浮点数、开关、滑块、枚举和多选参数控件
+- 一键载入面板当前管理的 `PalWorldSettings.ini`
+- 保存前显示变更数量，并保留生成器尚未识别的新参数
+- 正确处理枚举、数组、布尔值与带引号字符串
+- 导入、生成和复制 `PalWorldSettings.ini`
+- 上传、生成和下载 `WorldOption.sav`
+- 在 INI 与 SAV 模式之间转换配置
 
-桌面端所有大工具都在中央工作区打开，不会因点击空白区域关闭。移动端保留底部导航和工具抽屉。
-桌面端左侧的 **编辑导航** 支持创建和重命名分组，并通过拖动调整分组和项目顺序；布局仅保存在当前浏览器。
+面板顶部的“保存到服务器”始终写入 `PalWorldSettings.ini`，不会自动重启游戏服务。`WorldOption.sav` 由生成器下载后放入对应世界存档目录；若 INI 与 SAV 同时存在，游戏会优先使用 `WorldOption.sav`。
 
-| 分组 | 功能 |
+## 数据来源
+
+页面中的数据来自三条独立链路。某一条未配置时，只会影响依赖它的功能。
+
+| 来源 | 提供的数据与操作 |
 | --- | --- |
-| 状态与玩家 | 概览、玩家、公会、地图。用于查看实时状态和世界状态。 |
-| 日常服务器 | 服务器运维、游戏参数、配种实验室、模组管理、RCON、游戏内广播、白名单。 |
-| 存档与备份 | 备份、存档源、世界数据。 |
-| 维护与扩展 | 运维中心、Steam Workshop。 |
-| 面板与权限 | PST 配置、多管理员与 API Key、关闭服务器。 |
+| REST API | 服务器版本、FPS、实时在线玩家、UID、Steam64、平台 ID 和 IP |
+| RCON | 在线玩家回退、广播、踢人、封禁、解封、命令和定时任务 |
+| 存档解析器 | 历史玩家、公会、基地、地图坐标、帕鲁、物品和容器 |
 
-### 服务器运维
+典型判断方式：
 
-部署、启动、停止、重启、更新和手动备份。这里也提供主机监控、守护策略、计划重启、内存阈值和 Agent 模式。重置世界与卸载服务器会要求确认。
-
-### 游戏参数
-
-内置 [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf) 完整配置生成器，覆盖服务器、游戏内和高级参数，提供类型、范围及枚举校验，并支持 `PalWorldSettings.ini` 与 `WorldOption.sav` 的导入、生成和转换。可将面板当前配置载入生成器，确认变更后直接写回受管服务器；未知的新参数会保留。保存参数不会自动重启游戏服务，按页面提示手动重启后生效。
-
-### 玩家、公会、地图与世界数据
-
-玩家页提供搜索、详情、踢出、封禁、解封和白名单入口。公会页展示成员、会长和基地。地图显示玩家、基地与存档坐标。世界数据用于查看基地、箱子、帕鲁和物品。
-
-这些详情依赖存档解析器；实时在线状态则依赖 REST API。
-
-### RCON 与广播
-
-RCON 支持直接执行命令、命令模板、文本导入、玩家/物品/帕鲁占位符和定时任务。广播用于向在线玩家发送维护、重启或自定义消息。
-
-### 备份与存档源
-
-可创建、下载、校验、删除和恢复备份，也可设置 WebDAV。存档源支持本机目录、导入 ZIP、远程 Agent 和兼容的 `pst-agent /sync` 来源。
-
-恢复备份会覆盖当前世界数据，请先确认目标备份和服务器状态。
-
-### 配种、模组与 Workshop
-
-配种实验室基于 PalCalc 数据、存档素材和自定义素材库规划路线，并管理计算任务。模组管理用于本地 PAK 和配置目录；Workshop 用于搜索、订阅和启用 Steam Workshop 项目。
-
-## 数据从哪里来
-
-面板的功能来自三类连接，它们不是重复配置：
-
-| 来源 | 负责内容 |
-| --- | --- |
-| REST API | 在线玩家、服务器状态、FPS 与实时信息 |
-| RCON | 广播、踢人、封禁、命令和定时任务 |
-| 存档解析器 | 历史玩家、公会、帕鲁、物品、基地和地图标记 |
-
-若在线人数正常但玩家详情、公会或地图为空，优先检查 **存档源** 与解析器，而不是 RCON。
+- 概览没有 FPS 或实时状态：检查 REST API。
+- 玩家明明在线却显示离线，或 Steam64 为空：检查 REST API 凭据和端口，RCON 仅作为回退。
+- 玩家、公会和地图都没有历史数据：检查存档源和解析器。
+- 广播、踢人或命令失败：检查 RCON。
 
 ## 远程 Agent
 
-当面板和游戏服务器不在同一台机器，或 Docker 面板需要管理宿主机服务时，在游戏服务器上安装 Agent：
+面板与游戏服务器不在同一台主机，或 Docker 面板需要管理宿主机服务时，在游戏服务器上安装 Agent：
 
 ```bash
 sudo apt-get update
@@ -153,114 +166,160 @@ cd palworld-panel
 sudo AGENT_PORT=8081 bash scripts/install-agent.sh
 ```
 
-安装后会输出 Agent 地址与 Token。在面板的 **服务器运维 -> Agent** 中选择远程模式，填入：
+安装完成后，在面板“服务器运维 → Agent”中填写 Agent 地址和 Token：
 
 ```text
 http://游戏服务器IP:8081
 ```
 
-只允许面板主机访问 `8081/TCP`，不要把 Agent Token 暴露到公网。
+Agent Token 等同于远程管理权限。请通过安全组或主机防火墙限制 `8081/TCP`，不要直接向全网开放。
 
-## 端口与安全
+## 备份与自动化
 
-| 端口 | 协议 | 是否需要公网开放 |
-| --- | --- | --- |
-| 19090 | TCP | 是，仅服主访问面板 |
-| 8211 | UDP | 是，玩家连接游戏 |
-| 25575 | TCP | 否，RCON 建议仅本机或内网 |
-| 8212 | TCP | 否，REST API 建议仅本机或内网 |
-| 8081 | TCP | 仅 Agent 模式，限制为面板主机 |
+面板可以创建、下载、校验、恢复和删除本地备份，并将备份同步到 WebDAV。自动化功能包括：
 
-生产环境应限制 `19090/TCP` 的来源 IP，或通过反向代理与 HTTPS 暴露面板。不要将 RCON、REST API 或 Agent 端口直接开放给所有公网来源。
+- 定时备份与保留天数/数量
+- 玩家上线、离线广播
+- 非白名单玩家自动踢出
+- RCON 定时任务
+- 定时维护重启与重启前广播
+- 服务异常检测与自动恢复
+- 内存阈值守护和冷却时间
 
-## 更新与维护
+自动重启、计划重启和内存守护默认关闭。启用前请先确认备份策略；恢复备份、重置世界和卸载属于破坏性操作，面板会要求二次确认。
 
-### systemd 安装
+## 更新
+
+### systemd
+
+在最初克隆的源码目录执行：
 
 ```bash
-cd /path/to/your/palworld-panel-clone
-git pull
-sudo PANEL_DIR=/opt/palworld-panel PANEL_PORT=19090 bash scripts/install-panel.sh
+git pull --ff-only
+sudo PANEL_DIR=/opt/palworld-panel \
+  PANEL_PORT=19090 \
+  PANEL_TOKEN="原有的面板Token" \
+  bash scripts/install-panel.sh
 sudo systemctl status palworld-panel
 ```
 
-安装脚本会保留 `/opt/palworld-panel/data/config.json`，因此不会覆盖现有面板配置。
+更新时请继续使用原来的 `PANEL_TOKEN`，否则安装脚本会生成新的备用登录 Token。此流程会更新并重启面板服务，不会主动重启 Palworld 游戏服务；现有面板配置保存在 `/opt/palworld-panel/data/`。
 
-面板服务日志：
-
-```bash
-sudo journalctl -u palworld-panel -f
-```
-
-Palworld 服务常用命令：
-
-```bash
-sudo systemctl status palworld
-sudo systemctl restart palworld
-sudo journalctl -u palworld -f
-```
-
-### Docker 安装
+### Docker
 
 ```bash
 cd palworld-panel/deploy
-git pull
+git pull --ff-only
 docker compose up -d --build
 docker compose logs -f palworld-panel
 ```
 
+## 常用日志与状态命令
+
+```bash
+# 面板
+sudo systemctl status palworld-panel
+sudo journalctl -u palworld-panel -f
+
+# 游戏服务
+sudo systemctl status palworld
+sudo journalctl -u palworld -f
+```
+
+只有明确需要让新游戏参数生效时，才执行：
+
+```bash
+sudo systemctl restart palworld
+```
+
 ## 常见问题
 
-**面板能打开，但操作提示未认证**
+### 面板能打开，但操作提示未认证
 
-使用面板管理员密码登录；这不是 Palworld 的 `AdminPassword`。忘记管理员密码时，使用安装时输出的 `PANEL_TOKEN` 进行备用登录。
+使用首次访问时创建的面板管理员密码。它不是 Palworld `AdminPassword`。管理员密码不可用时，可以使用安装阶段保存的 `PANEL_TOKEN` 进行备用登录。
 
-**玩家、公会、帕鲁或地图没有数据**
+### 概览、在线玩家或 Steam64 没有数据
 
-检查 **数据与保护 -> 存档源** 是否指向正确的 `Pal/Saved` 数据；再检查解析器：
+在“PST 配置”中检查 REST 地址、端口、用户名和 Palworld `AdminPassword`，然后执行 REST 连接测试。确认游戏配置包含：
+
+```text
+RESTAPIEnabled=True
+RESTAPIPort=8212
+```
+
+修改这些参数后需要重启 Palworld。
+
+### 公会、地图、帕鲁或物品没有数据
+
+确认存档源指向包含 `Level.sav` 的 `Pal/Saved` 目录，并重新安装或检查解析器：
 
 ```bash
 sudo bash /opt/palworld-panel/scripts/install-sav-parser.sh
 sudo systemctl restart palworld-panel
 ```
 
-**广播、踢人或 RCON 命令失败**
+这只会重启面板，不会重启游戏服务。
 
-在 **PST 配置** 中检查 RCON 主机、端口和 Palworld `AdminPassword`，确认 `RCONEnabled=True` 且服务端已重启。
+### 广播、踢人或 RCON 命令失败
 
-**保存参数后游戏没有变化**
+在“PST 配置”中测试 RCON，确认主机、端口和 `AdminPassword` 正确，并确认游戏配置包含：
 
-参数已写入配置文件后，需要在 **服务器运维** 中重启 Palworld 服务。
+```text
+RCONEnabled=True
+RCONPort=25575
+```
 
-**ARM64 部署失败**
+### 保存参数后游戏没有变化
 
-确认系统是 `aarch64/arm64`，并查看以下日志：
+面板只负责写入配置，不会自行中断在线玩家。请在合适时间通过“服务器运维”手动重启游戏服务。若世界目录中存在 `WorldOption.sav`，还应注意它的优先级高于 `PalWorldSettings.ini`。
+
+### ARM64 部署失败
+
+确认系统架构为 `aarch64` 或 `arm64`，并查看：
 
 ```bash
 sudo journalctl -u palworld -n 200 --no-pager
 ```
 
-## 开发
+## 本地开发
 
 ```bash
 npm install
+pnpm --dir upstream-web install
 npm test
 npm run check
 npm run test:web
 npm run build:web
 ```
 
-前端开发：
+前端开发服务器：
 
 ```bash
 cd upstream-web
-npm install
-npm run dev
+pnpm install
+pnpm dev
+```
+
+`npm run build:web` 会先构建内置 `pal-conf`，同步字段类型和 WASM 资源，再构建主面板。
+
+## 项目结构
+
+```text
+src/                    Node.js 面板服务、API 与兼容层
+upstream-web/           Vue 管理界面及已构建静态资源
+vendor/pal-conf/        内置完整配置生成器源码
+parsers/sav_cli/        存档解析器启动与适配
+scripts/                面板、游戏服务器、Agent 和解析器安装脚本
+deploy/                 Docker 部署配置
+systemd/                systemd 服务模板
+test/                   Node.js 自动化测试
 ```
 
 ## 致谢与许可证
 
 - [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)：功能与兼容体验参考。
-- [deafdudecomputers/PalworldSaveTools](https://github.com/deafdudecomputers/PalworldSaveTools)：存档解析依赖，相关组件遵循其许可证。
+- [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf)：完整服务器配置生成器，MIT License。
+- [deafdudecomputers/PalworldSaveTools](https://github.com/deafdudecomputers/PalworldSaveTools)：存档解析能力。
+- PalCalc：配种数据与计算能力。
 
-项目主体按 MIT 使用。第三方组件与许可证见 [NOTICE](NOTICE.md) 和 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)。
+项目主体采用 MIT License。第三方组件、版权与许可证信息见 [NOTICE.md](NOTICE.md) 和 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)。
