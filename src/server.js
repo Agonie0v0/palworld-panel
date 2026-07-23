@@ -522,7 +522,11 @@ function readBody(req) {
 
 function exec(command, args, options = {}) {
   return new Promise((resolve) => {
-    execFile(command, args, { timeout: 120000, ...options }, (error, stdout, stderr) => {
+    execFile(command, args, {
+      timeout: 120000,
+      maxBuffer: 64 * 1024 * 1024,
+      ...options
+    }, (error, stdout, stderr) => {
       resolve({
         ok: !error,
         code: error && typeof error.code === "number" ? error.code : 0,
@@ -2701,6 +2705,7 @@ module.exports = {
   decodeAuthToken,
   decodeRconResponse,
   encodeRconCommand,
+  exec,
   formatPlayerMessage,
   isDue,
   isWhitelisted,

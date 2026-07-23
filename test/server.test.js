@@ -8,6 +8,7 @@ const test = require("node:test");
 const {
   decodeRconResponse,
   encodeRconCommand,
+  exec,
   formatPlayerMessage,
   isDue,
   isWhitelisted,
@@ -27,6 +28,15 @@ const {
   principalCan,
   watchdogSettings
 } = require("../src/server");
+
+test("external commands can return save parser payloads larger than Node's default buffer", async () => {
+  const bytes = 2 * 1024 * 1024;
+  const result = await exec(process.execPath, ["-e", `process.stdout.write("x".repeat(${bytes}))`]);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stdout.length, bytes);
+  assert.equal(result.stderr, "");
+});
 
 test("ShowPlayers fallback parses Steam64 IDs and quoted nicknames", () => {
   const players = parseShowPlayers([
