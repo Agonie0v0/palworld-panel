@@ -14,6 +14,7 @@ import {
   Database,
   Dna,
   Package,
+  Paw,
 } from "@vicons/tabler";
 import {
   ConstructOutline,
@@ -50,6 +51,7 @@ import SaveSourceManager from "@/components/SaveSourceManager.vue";
 import ModManager from "@/components/ModManager.vue";
 import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
+import PalStatusManager from "@/components/PalStatusManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
 import MapView from "@/views/PcHome/component/MapView.vue";
@@ -299,6 +301,7 @@ const showSaveSources = ref(false);
 const showMods = ref(false);
 const showAccessManager = ref(false);
 const showWorldData = ref(false);
+const showPalStatus = ref(false);
 const showBreedingLab = ref(false);
 const showWorkshop = ref(false);
 const handleShutdown = () => {
@@ -327,6 +330,7 @@ const executeAdminAction = (key) => {
   if (key === "mods") openAuthenticated(showMods);
   if (key === "access") openAuthenticated(showAccessManager);
   if (key === "world-data") openAuthenticated(showWorldData);
+  if (key === "pal-status") openAuthenticated(showPalStatus);
   if (key === "breeding") openAuthenticated(showBreedingLab);
   if (key === "workshop") openAuthenticated(showWorkshop);
   if (key === "settings") {
@@ -726,6 +730,14 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="mobile-tool-button"
+          @click="handleAdminAction('pal-status')"
+        >
+          <n-icon><Paw /></n-icon>
+          <span>{{ locale === "zh" ? "帕鲁状态" : "Pal status" }}</span>
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-button"
           @click="handleAdminAction('advanced')"
         >
           <n-icon><Activity /></n-icon>
@@ -898,6 +910,7 @@ onBeforeUnmount(() => {
   <mod-manager v-model:show="showMods" />
   <access-manager v-model:show="showAccessManager" />
   <world-data-manager v-model:show="showWorldData" />
+  <pal-status-manager v-model:show="showPalStatus" />
   <breeding-lab v-model:show="showBreedingLab" />
   <workshop-manager v-model:show="showWorkshop" />
   <whitelist-manager

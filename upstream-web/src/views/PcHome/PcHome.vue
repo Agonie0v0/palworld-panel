@@ -29,6 +29,7 @@ import SaveSourceManager from "@/components/SaveSourceManager.vue";
 import ModManager from "@/components/ModManager.vue";
 import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
+import PalStatusManager from "@/components/PalStatusManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
 import ConfigManager from "@/components/ConfigManager.vue";
@@ -85,6 +86,7 @@ const currentViewLabel = computed(() => {
     mods: () => (locale.value === "zh" ? "\u6a21\u7ec4\u7ba1\u7406" : "Mods"),
     "world-data": () =>
       locale.value === "zh" ? "\u4e16\u754c\u6570\u636e" : "World data",
+    "pal-status": () => (locale.value === "zh" ? "帕鲁状态" : "Pal status"),
     breeding: () =>
       locale.value === "zh" ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4" : "Breeding lab",
     workshop: () => "Workshop",
@@ -268,6 +270,7 @@ const selectWorkspace = (key) => {
     "mods",
     "access",
     "world-data",
+    "pal-status",
     "breeding",
     "workshop",
     "rcon",
@@ -664,6 +667,11 @@ onBeforeUnmount(() =>
           />
           <world-data-manager
             v-if="currentDisplay === 'world-data'"
+            :show="true"
+            embedded
+          />
+          <pal-status-manager
+            v-if="currentDisplay === 'pal-status'"
             :show="true"
             embedded
           />
