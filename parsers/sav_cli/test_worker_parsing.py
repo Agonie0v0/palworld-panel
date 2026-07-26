@@ -23,6 +23,8 @@ _install_parser_stubs()
 
 from structurer import (
     _build_player_pal_locations,
+    _container_id_from_module,
+    _parse_map_model,
     _parse_worker_container,
     _player_progress,
     _worker_sanity,
@@ -101,6 +103,31 @@ class WorkerParsingTests(unittest.TestCase):
         self.assertEqual(inventory[0]["count"], 100)
         self.assertEqual(inventory[0]["locations"][1]["slot"], 4)
         self.assertEqual(inventory[0]["locations"][1]["owner"], "据点 1")
+
+    def test_structured_map_module_container_id(self):
+        container_id = uuid.UUID("337cab0e-907a-4080-abab-c39aa0e2cf99")
+        raw = {
+            "array_type": "ByteProperty",
+            "type": "ArrayProperty",
+            "value": {"target_container_id": container_id},
+        }
+        self.assertEqual(_container_id_from_module(raw), str(container_id))
+
+    def test_structured_map_model_location(self):
+        raw = {
+            "value": {
+                "instance_id": uuid.UUID("ca45b12d-179f-46f8-9a86-a2bc9ac47098"),
+                "base_camp_id_belong_to": uuid.UUID("de7e3141-0000-0000-0000-000000000000"),
+                "group_id_belong_to": uuid.UUID("464d5f3b-0000-0000-0000-000000000000"),
+                "initital_transform_cache": {
+                    "translation": {"x": -528044.9, "y": 62530.7, "z": 0}
+                },
+            }
+        }
+        model = _parse_map_model(raw)
+        self.assertEqual(model["base_id"], str(int("de7e3141", 16)))
+        self.assertEqual(model["group_id"], str(int("464d5f3b", 16)))
+        self.assertEqual((model["x"], model["y"]), (63, -528))
 
 
 if __name__ == "__main__":
