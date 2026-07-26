@@ -138,6 +138,10 @@ class ApiService extends Service {
     return this.fetch(`/api/save-data`).get().json();
   }
 
+  async getOfflineProduction() {
+    return this.fetch(`/api/offline-production`).get().json();
+  }
+
   async getWhitelist() {
     return this.fetch(`/api/whitelist`).get().json();
   }

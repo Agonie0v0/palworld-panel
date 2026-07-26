@@ -24,9 +24,7 @@ import { GuiManagement } from "@vicons/carbon";
 import { BroadcastTower } from "@vicons/fa";
 import {
   Activity,
-  BrandSteam,
   Database,
-  Dna,
   Package,
   Paw,
   Terminal,
@@ -59,17 +57,14 @@ const defaultGroups = () => [
       "operations",
       "game-settings",
       "pal-status",
+      "player-data",
+      "pal-archive",
+      "inventory",
       "rcon",
       "broadcast",
       "whitelist",
-      "breeding",
       "mods",
     ]),
-  },
-  {
-    id: "data",
-    name: "",
-    items: makeItems(["player-data", "pal-archive", "inventory", "world-data"]),
   },
   {
     id: "saves",
@@ -77,8 +72,8 @@ const defaultGroups = () => [
     items: makeItems([
       "backup",
       "save-sources",
+      "world-data",
       "advanced",
-      "workshop",
     ]),
   },
   {
@@ -93,7 +88,6 @@ const defaultGroupNames = computed(() => {
   return {
     status: zh ? "\u63a7\u5236\u53f0" : "Console",
     daily: zh ? "\u6e38\u620f\u7ba1\u7406" : "Game management",
-    data: zh ? "\u5b58\u6863\u6570\u636e" : "Save data",
     saves: zh ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center",
     panel: zh ? "\u8d26\u6237\u4e0e\u9762\u677f" : "Account & panel",
   };
@@ -149,12 +143,6 @@ const catalog = computed(() => ({
     label: t("modal.whitelist"),
     gate: "operate",
   },
-  breeding: {
-    icon: Dna,
-    label:
-      locale.value === "zh" ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4" : "Breeding lab",
-    gate: "operate",
-  },
   mods: {
     icon: Package,
     label: locale.value === "zh" ? "\u6a21\u7ec4\u7ba1\u7406" : "Mods",
@@ -177,7 +165,6 @@ const catalog = computed(() => ({
       locale.value === "zh" ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center",
     gate: "operate",
   },
-  workshop: { icon: BrandSteam, label: "Workshop", gate: "operate" },
   settings: { icon: Settings, label: t("configuration.title"), gate: "admin" },
   access: {
     icon: AdminPanelSettingsOutlined,
@@ -258,14 +245,32 @@ const normalizeLayout = (layout) => {
       normalized.push({ id: defaultGroup.id, name: "", items: [] });
     }
   }
+  const legacyData = normalized.find((group) => group.id === "data");
+  if (legacyData) {
+    const gameManagement = normalized.find((group) => group.id === "daily");
+    const operations = normalized.find((group) => group.id === "saves");
+    const move = (id, target) => {
+      const index = legacyData.items.findIndex((item) => item.id === id);
+      if (index < 0 || !target) return;
+      const [item] = legacyData.items.splice(index, 1);
+      if (!target.items.some((row) => row.id === id)) target.items.push(item);
+    };
+    ["player-data", "pal-archive", "inventory"].forEach((id) =>
+      move(id, gameManagement),
+    );
+    move("world-data", operations);
+  }
+  const migrated = normalized.filter(
+    (group) => group.id !== "data" || group.items.length,
+  );
   const missing = Object.keys(catalog.value).filter((id) => !used.has(id));
   for (const id of missing) {
     const targetGroup =
-      normalized.find((group) => group.id === defaultGroupByItem.get(id)) ||
-      normalized[0];
+      migrated.find((group) => group.id === defaultGroupByItem.get(id)) ||
+      migrated[0];
     targetGroup?.items.push({ id, name: "" });
   }
-  return normalized.length ? normalized : null;
+  return migrated.length ? migrated : null;
 };
 
 const visibleGroups = computed(() =>

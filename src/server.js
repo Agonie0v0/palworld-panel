@@ -23,6 +23,7 @@ const publicDir = fs.existsSync(path.join(upstreamPublicDir, "index.html"))
 const deployScriptPath = path.join(rootDir, "scripts", "deploy-palworld-server.sh");
 const agentRuntime = process.env.AGENT_MODE === "1";
 const authTokenTtlSeconds = 24 * 60 * 60;
+const offlineProductionHistoryLimit = 30;
 
 function buildIdentity() {
   let recorded = {};
@@ -1520,6 +1521,122 @@ function formatPlayerMessage(template, player, onlineCount) {
     .replaceAll("{online_num}", String(onlineCount));
 }
 
+function productionInventorySnapshot(data = {}) {
+  const snapshot = {};
+  for (const item of Array.isArray(data.inventory) ? data.inventory : []) {
+    const itemId = String(item.item_id || item.ItemId || "").trim().toLowerCase();
+    if (!itemId) continue;
+    const count = (Array.isArray(item.locations) ? item.locations : [])
+      .filter((location) => ["base", "guild"].includes(location?.kind))
+      .reduce((sum, location) => sum + Math.max(0, Number(location?.count || 0)), 0);
+    if (count > 0) snapshot[itemId] = (snapshot[itemId] || 0) + count;
+  }
+  return snapshot;
+}
+
+function productionInventoryDiff(baseline = {}, latest = {}) {
+  const gains = [];
+  const losses = [];
+  const itemIds = new Set([...Object.keys(baseline || {}), ...Object.keys(latest || {})]);
+  for (const itemId of itemIds) {
+    const count = Math.max(0, Number(latest[itemId] || 0));
+    const delta = count - Math.max(0, Number(baseline[itemId] || 0));
+    if (!delta) continue;
+    const row = { item_id: itemId, delta, count };
+    if (delta > 0) gains.push(row);
+    else losses.push(row);
+  }
+  gains.sort((a, b) => b.delta - a.delta || a.item_id.localeCompare(b.item_id));
+  losses.sort((a, b) => a.delta - b.delta || a.item_id.localeCompare(b.item_id));
+  return {
+    gains,
+    losses,
+    totalGain: gains.reduce((sum, row) => sum + row.delta, 0),
+    totalLoss: losses.reduce((sum, row) => sum + Math.abs(row.delta), 0),
+  };
+}
+
+async function loadOfflineProductionState() {
+  const state = await loadJsonFile("offline-production.json", { current: null, history: [] });
+  return {
+    current: state?.current || null,
+    history: Array.isArray(state?.history) ? state.history : [],
+  };
+}
+
+async function saveOfflineProductionState(state) {
+  return saveJsonFile("offline-production.json", {
+    current: state?.current || null,
+    history: (Array.isArray(state?.history) ? state.history : []).slice(0, offlineProductionHistoryLimit),
+  });
+}
+
+function publicOfflineProductionState(state) {
+  const current = state?.current
+    ? {
+        id: state.current.id,
+        startedAt: state.current.startedAt,
+        lastSampleAt: state.current.lastSampleAt,
+        source: "base_guild_inventory",
+        ...productionInventoryDiff(state.current.baseline, state.current.latest),
+      }
+    : null;
+  return {
+    current,
+    history: (Array.isArray(state?.history) ? state.history : []).slice(0, offlineProductionHistoryLimit),
+  };
+}
+
+async function startOfflineProductionWindow(config) {
+  const state = await loadOfflineProductionState();
+  if (state.current) return state;
+  const data = await querySaveData(config);
+  if (data?.source === "parser_error") throw new Error(data.message || "Save parser failed.");
+  const now = new Date().toISOString();
+  const snapshot = productionInventorySnapshot(data);
+  state.current = {
+    id: crypto.randomUUID(),
+    startedAt: now,
+    lastSampleAt: now,
+    baseline: snapshot,
+    latest: snapshot,
+  };
+  return saveOfflineProductionState(state);
+}
+
+async function sampleOfflineProduction(data) {
+  const state = await loadOfflineProductionState();
+  if (!state.current || data?.source === "parser_error") return state;
+  state.current.latest = productionInventorySnapshot(data);
+  state.current.lastSampleAt = data?.synced_at || new Date().toISOString();
+  return saveOfflineProductionState(state);
+}
+
+async function finishOfflineProductionWindow(config) {
+  const state = await loadOfflineProductionState();
+  if (!state.current) return state;
+  const data = await querySaveData(config);
+  if (data?.source !== "parser_error") {
+    state.current.latest = productionInventorySnapshot(data);
+    state.current.lastSampleAt = new Date().toISOString();
+  }
+  const endedAt = new Date().toISOString();
+  const diff = productionInventoryDiff(state.current.baseline, state.current.latest);
+  state.history = [
+    {
+      id: state.current.id,
+      startedAt: state.current.startedAt,
+      endedAt,
+      durationSeconds: Math.max(0, Math.round((Date.parse(endedAt) - Date.parse(state.current.startedAt)) / 1000)),
+      source: "base_guild_inventory",
+      ...diff,
+    },
+    ...state.history,
+  ].slice(0, offlineProductionHistoryLimit);
+  state.current = null;
+  return saveOfflineProductionState(state);
+}
+
 function isWhitelisted(player, whitelist) {
   return whitelist.some((entry) =>
     (player.player_uid && String(entry.player_uid || entry.playerUid || "") === String(player.player_uid))
@@ -1573,6 +1690,15 @@ async function syncOnlinePlayers(config) {
     }
   }
 
+  if (players.length === 0) {
+    await startOfflineProductionWindow(config).catch((error) =>
+      console.error(`Offline production start failed: ${error.message}`),
+    );
+  } else if (players.length > 0) {
+    await finishOfflineProductionWindow(config).catch((error) =>
+      console.error(`Offline production finish failed: ${error.message}`),
+    );
+  }
   previousOnlinePlayers = players;
   return players;
 }
@@ -1582,6 +1708,7 @@ async function syncSaveData(config) {
   if (data?.source === "parser_error") throw new Error(data.message || "Save parser failed.");
   const synced = { ...data, source: data?.source || "sync", synced_at: new Date().toISOString() };
   await saveSyncedSaveData(synced);
+  await sampleOfflineProduction(synced);
   return synced;
 }
 
@@ -2336,6 +2463,13 @@ async function handleApi(req, res, config) {
     return sendJson(res, 200, { ok: true, data: await managedCall("saveData", {}, () => querySaveData(config)) });
   }
 
+  if (req.method === "GET" && req.url === "/api/offline-production") {
+    return sendJson(res, 200, {
+      ok: true,
+      data: publicOfflineProductionState(await loadOfflineProductionState()),
+    });
+  }
+
   if (req.method === "GET" && req.url.startsWith("/api/save-data/")) {
     const [, , , type, id] = req.url.split("/");
     const entityId = decodeURIComponent(id || "");
@@ -2810,6 +2944,9 @@ module.exports = {
   parseDfOutput,
   parsePsOutput,
   playerUidFromId,
+  productionInventoryDiff,
+  productionInventorySnapshot,
+  publicOfflineProductionState,
   staticCacheControl,
   testRestConnection,
   testSaveSource,

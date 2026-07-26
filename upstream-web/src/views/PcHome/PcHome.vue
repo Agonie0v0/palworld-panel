@@ -33,8 +33,6 @@ import PalStatusManager from "@/components/PalStatusManager.vue";
 import PlayerDataManager from "@/components/PlayerDataManager.vue";
 import PalArchiveManager from "@/components/PalArchiveManager.vue";
 import InventoryManager from "@/components/InventoryManager.vue";
-import BreedingLab from "@/components/BreedingLab.vue";
-import WorkshopManager from "@/components/WorkshopManager.vue";
 import ConfigManager from "@/components/ConfigManager.vue";
 import SidebarWorkspaceNav from "./component/SidebarWorkspaceNav.vue";
 import whitelistStore from "@/stores/model/whitelist";
@@ -93,9 +91,6 @@ const currentViewLabel = computed(() => {
     "player-data": () => (locale.value === "zh" ? "玩家数据" : "Player data"),
     "pal-archive": () => (locale.value === "zh" ? "帕鲁仓库" : "Pal archive"),
     inventory: () => (locale.value === "zh" ? "全服库存" : "Global inventory"),
-    breeding: () =>
-      locale.value === "zh" ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4" : "Breeding lab",
-    workshop: () => "Workshop",
     rcon: () => t("modal.rcon"),
     backup: () => t("button.backup"),
     whitelist: () => t("modal.whitelist"),
@@ -280,8 +275,6 @@ const selectWorkspace = (key) => {
     "player-data",
     "pal-archive",
     "inventory",
-    "breeding",
-    "workshop",
     "rcon",
     "backup",
     "whitelist",
@@ -696,16 +689,6 @@ onBeforeUnmount(() =>
           />
           <inventory-manager
             v-if="currentDisplay === 'inventory'"
-            :show="true"
-            embedded
-          />
-          <breeding-lab
-            v-if="currentDisplay === 'breeding'"
-            :show="true"
-            embedded
-          />
-          <workshop-manager
-            v-if="currentDisplay === 'workshop'"
             :show="true"
             embedded
           />
