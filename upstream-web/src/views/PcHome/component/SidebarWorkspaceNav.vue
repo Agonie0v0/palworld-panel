@@ -67,12 +67,16 @@ const defaultGroups = () => [
     ]),
   },
   {
+    id: "data",
+    name: "",
+    items: makeItems(["player-data", "pal-archive", "inventory", "world-data"]),
+  },
+  {
     id: "saves",
     name: "",
     items: makeItems([
       "backup",
       "save-sources",
-      "world-data",
       "advanced",
       "workshop",
     ]),
@@ -89,6 +93,7 @@ const defaultGroupNames = computed(() => {
   return {
     status: zh ? "\u63a7\u5236\u53f0" : "Console",
     daily: zh ? "\u6e38\u620f\u7ba1\u7406" : "Game management",
+    data: zh ? "\u5b58\u6863\u6570\u636e" : "Save data",
     saves: zh ? "\u8fd0\u7ef4\u4e2d\u5fc3" : "Operations center",
     panel: zh ? "\u8d26\u6237\u4e0e\u9762\u677f" : "Account & panel",
   };
@@ -116,6 +121,21 @@ const catalog = computed(() => ({
   "pal-status": {
     icon: Paw,
     label: locale.value === "zh" ? "帕鲁状态" : "Pal status",
+    gate: "operate",
+  },
+  "player-data": {
+    icon: GameController,
+    label: locale.value === "zh" ? "\u73a9\u5bb6\u6570\u636e" : "Player data",
+    gate: "operate",
+  },
+  "pal-archive": {
+    icon: Paw,
+    label: locale.value === "zh" ? "\u5e15\u9c81\u4ed3\u5e93" : "Pal archive",
+    gate: "operate",
+  },
+  inventory: {
+    icon: Package,
+    label: locale.value === "zh" ? "\u5168\u670d\u5e93\u5b58" : "Global inventory",
     gate: "operate",
   },
   rcon: { icon: Terminal, label: t("modal.rcon"), gate: "operate" },
@@ -233,6 +253,11 @@ const normalizeLayout = (layout) => {
       group.items.map((item) => [item.id, group.id]),
     ),
   );
+  for (const defaultGroup of defaultGroups()) {
+    if (!normalized.some((group) => group.id === defaultGroup.id)) {
+      normalized.push({ id: defaultGroup.id, name: "", items: [] });
+    }
+  }
   const missing = Object.keys(catalog.value).filter((id) => !used.has(id));
   for (const id of missing) {
     const targetGroup =

@@ -52,6 +52,9 @@ import ModManager from "@/components/ModManager.vue";
 import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
 import PalStatusManager from "@/components/PalStatusManager.vue";
+import PlayerDataManager from "@/components/PlayerDataManager.vue";
+import PalArchiveManager from "@/components/PalArchiveManager.vue";
+import InventoryManager from "@/components/InventoryManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
 import MapView from "@/views/PcHome/component/MapView.vue";
@@ -302,6 +305,9 @@ const showMods = ref(false);
 const showAccessManager = ref(false);
 const showWorldData = ref(false);
 const showPalStatus = ref(false);
+const showPlayerData = ref(false);
+const showPalArchive = ref(false);
+const showInventory = ref(false);
 const showBreedingLab = ref(false);
 const showWorkshop = ref(false);
 const handleShutdown = () => {
@@ -331,6 +337,9 @@ const executeAdminAction = (key) => {
   if (key === "access") openAuthenticated(showAccessManager);
   if (key === "world-data") openAuthenticated(showWorldData);
   if (key === "pal-status") openAuthenticated(showPalStatus);
+  if (key === "player-data") openAuthenticated(showPlayerData);
+  if (key === "pal-archive") openAuthenticated(showPalArchive);
+  if (key === "inventory") openAuthenticated(showInventory);
   if (key === "breeding") openAuthenticated(showBreedingLab);
   if (key === "workshop") openAuthenticated(showWorkshop);
   if (key === "settings") {
@@ -776,6 +785,18 @@ onBeforeUnmount(() => {
           <n-icon><Database /></n-icon>
           <span>{{ locale === "zh" ? "世界数据" : "World data" }}</span>
         </button>
+        <button type="button" class="mobile-tool-button" @click="handleAdminAction('player-data')">
+          <n-icon><GameController /></n-icon>
+          <span>{{ locale === "zh" ? "玩家数据" : "Player data" }}</span>
+        </button>
+        <button type="button" class="mobile-tool-button" @click="handleAdminAction('pal-archive')">
+          <n-icon><Paw /></n-icon>
+          <span>{{ locale === "zh" ? "帕鲁仓库" : "Pal archive" }}</span>
+        </button>
+        <button type="button" class="mobile-tool-button" @click="handleAdminAction('inventory')">
+          <n-icon><Package /></n-icon>
+          <span>{{ locale === "zh" ? "全服库存" : "Global inventory" }}</span>
+        </button>
         <button
           type="button"
           class="mobile-tool-button"
@@ -911,6 +932,9 @@ onBeforeUnmount(() => {
   <access-manager v-model:show="showAccessManager" />
   <world-data-manager v-model:show="showWorldData" />
   <pal-status-manager v-model:show="showPalStatus" />
+  <player-data-manager v-model:show="showPlayerData" />
+  <pal-archive-manager v-model:show="showPalArchive" />
+  <inventory-manager v-model:show="showInventory" />
   <breeding-lab v-model:show="showBreedingLab" />
   <workshop-manager v-model:show="showWorkshop" />
   <whitelist-manager

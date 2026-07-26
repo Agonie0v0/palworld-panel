@@ -181,6 +181,14 @@ class Pal:
             if data.get("PassiveSkillList")
             else []
         )
+        self.equipped_skills = [
+            str(skill).split("::")[-1]
+            for skill in _list_values(data.get("EquipWaza"))
+        ]
+        self.mastered_skills = [
+            str(skill).split("::")[-1]
+            for skill in _list_values(data.get("MasteredWaza"))
+        ]
         full_stomach = (
             float(data["FullStomach"]["value"]) if data.get("FullStomach") else 0
         )
@@ -222,6 +230,8 @@ class Pal:
             "rank_defence",
             "rank_craftspeed",
             "skills",
+            "equipped_skills",
+            "mastered_skills",
             "full_stomach",
             "sanity",
             "current_work_suitability",

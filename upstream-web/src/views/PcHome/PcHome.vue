@@ -30,6 +30,9 @@ import ModManager from "@/components/ModManager.vue";
 import AccessManager from "@/components/AccessManager.vue";
 import WorldDataManager from "@/components/WorldDataManager.vue";
 import PalStatusManager from "@/components/PalStatusManager.vue";
+import PlayerDataManager from "@/components/PlayerDataManager.vue";
+import PalArchiveManager from "@/components/PalArchiveManager.vue";
+import InventoryManager from "@/components/InventoryManager.vue";
 import BreedingLab from "@/components/BreedingLab.vue";
 import WorkshopManager from "@/components/WorkshopManager.vue";
 import ConfigManager from "@/components/ConfigManager.vue";
@@ -87,6 +90,9 @@ const currentViewLabel = computed(() => {
     "world-data": () =>
       locale.value === "zh" ? "\u4e16\u754c\u6570\u636e" : "World data",
     "pal-status": () => (locale.value === "zh" ? "帕鲁状态" : "Pal status"),
+    "player-data": () => (locale.value === "zh" ? "玩家数据" : "Player data"),
+    "pal-archive": () => (locale.value === "zh" ? "帕鲁仓库" : "Pal archive"),
+    inventory: () => (locale.value === "zh" ? "全服库存" : "Global inventory"),
     breeding: () =>
       locale.value === "zh" ? "\u914d\u79cd\u5b9e\u9a8c\u5ba4" : "Breeding lab",
     workshop: () => "Workshop",
@@ -271,6 +277,9 @@ const selectWorkspace = (key) => {
     "access",
     "world-data",
     "pal-status",
+    "player-data",
+    "pal-archive",
+    "inventory",
     "breeding",
     "workshop",
     "rcon",
@@ -672,6 +681,21 @@ onBeforeUnmount(() =>
           />
           <pal-status-manager
             v-if="currentDisplay === 'pal-status'"
+            :show="true"
+            embedded
+          />
+          <player-data-manager
+            v-if="currentDisplay === 'player-data'"
+            :show="true"
+            embedded
+          />
+          <pal-archive-manager
+            v-if="currentDisplay === 'pal-archive'"
+            :show="true"
+            embedded
+          />
+          <inventory-manager
+            v-if="currentDisplay === 'inventory'"
             :show="true"
             embedded
           />

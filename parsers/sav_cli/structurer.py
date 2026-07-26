@@ -12,6 +12,7 @@ The parser performs a full decode. A ~260KB compressed / ~4MB decompressed
 Level.sav completes in a couple of seconds on the validated fixtures.
 """
 
+import datetime
 import os
 import struct
 import uuid
@@ -84,6 +85,15 @@ WORK_SUITABILITY_LABELS = {
     "Cool": "冷却",
     "Transport": "搬运",
     "MonsterFarm": "牧场",
+}
+
+PLAYER_CONTAINER_LABELS = {
+    "CommonContainerId": "背包",
+    "DropSlotContainerId": "丢弃栏",
+    "EssentialContainerId": "重要物品",
+    "FoodEquipContainerId": "食物栏",
+    "PlayerEquipArmorContainerId": "装备栏",
+    "WeaponLoadOutContainerId": "武器栏",
 }
 
 
@@ -187,6 +197,25 @@ def _enum_token(prop):
     return str(value or "").split("::")[-1]
 
 
+def _truthy_map_count(prop):
+    return sum(
+        1
+        for row in _prop_values(prop)
+        if _prop_value(row.get("value") if isinstance(row, dict) else row)
+    )
+
+
+def _ticks_to_iso(ticks):
+    try:
+        value = int(ticks or 0)
+        if value <= 0:
+            return ""
+        epoch = datetime.datetime(1, 1, 1, tzinfo=datetime.timezone.utc)
+        return (epoch + datetime.timedelta(microseconds=value / 10)).isoformat()
+    except (OverflowError, TypeError, ValueError):
+        return ""
+
+
 def _raw_bytes(raw):
     value = _prop_value(raw, raw)
     if isinstance(value, bytes):
@@ -255,11 +284,14 @@ def structure_player(dir_path, filetime: int = -1):
         instance_id = _instance_id_from_key(c.get("key", {}))
         sp = _save_parameter(c)
         if sp.get("IsPlayer") and sp["IsPlayer"]["value"]:
-            sp["Items"], has_warning = getPlayerItems(
+            sp["Items"], progress, has_warning = getPlayerData(
                 uid, dir_path, item_containers
             )
             player_save_warnings += int(has_warning)
-            players.append(Player(uid, sp).to_dict())
+            player = {**Player(uid, sp).to_dict(), **progress}
+            player["player_id"] = str(uid).replace("-", "").upper()
+            player["name"] = player.get("nickname") or player["player_id"][:8]
+            players.append(player)
         else:
             if not sp.get("OwnerPlayerUId"):
                 continue
@@ -279,6 +311,16 @@ def structure_player(dir_path, filetime: int = -1):
                 pal.pop("owner")
                 player["pals"].append(pal)
                 break
+
+    pal_locations = _build_player_pal_locations(
+        _index_character_containers(), unique_players
+    )
+    for player in unique_players:
+        for pal in player["pals"]:
+            pal["location_kind"] = "player"
+            pal["location_key"] = player["player_uid"]
+            pal["player_location"] = pal_locations.get(pal.get("instance_id"))
+        player["pal_count"] = len(player["pals"])
 
     return (
         sorted(unique_players, key=lambda p: p["level"], reverse=True),
@@ -420,6 +462,81 @@ def _parse_work_assignment(raw):
     return {"instance_id": instance_id, "state": state, "fixed": fixed}
 
 
+def _storage_location(slot):
+    page_slot = slot % 30
+    return {
+        "kind": "storage",
+        "slot": slot,
+        "page": slot // 30 + 1,
+        "row": page_slot // 6 + 1,
+        "column": page_slot % 6 + 1,
+    }
+
+
+def _build_player_pal_locations(container_members, players):
+    player_containers = {}
+    for player in players:
+        player_uid = str(player.get("player_uid", ""))
+        storage_id = str(player.get("pal_storage_container_id", "")).lower()
+        party_id = str(player.get("party_container_id", "")).lower()
+        if storage_id and storage_id != ZERO_GUID:
+            player_containers[storage_id] = {
+                "kind": "storage",
+                "player_uid": player_uid,
+            }
+        if party_id and party_id != ZERO_GUID:
+            player_containers[party_id] = {
+                "kind": "party",
+                "player_uid": player_uid,
+            }
+
+    locations = {}
+    for container_id, container in player_containers.items():
+        for member in container_members.get(container_id, []):
+            instance_id = member.get("instance_id")
+            member_owner = member.get("player_uid")
+            slot = int(member.get("slot", 0))
+            if not instance_id:
+                continue
+            if member_owner not in (None, "", ZERO_GUID):
+                try:
+                    member_owner = hexuid_to_decimal(member_owner)
+                except (TypeError, ValueError):
+                    member_owner = str(member_owner)
+                if member_owner != container["player_uid"]:
+                    continue
+            if instance_id in locations and container["kind"] != "party":
+                continue
+            locations[instance_id] = (
+                _storage_location(slot)
+                if container["kind"] == "storage"
+                else {"kind": "party", "slot": slot, "position": slot + 1}
+            )
+    return locations
+
+
+def _parse_map_model(raw):
+    reader = _read_binary(raw)
+    instance_id = reader.guid()
+    reader.guid()
+    base_id = hexuid_to_decimal(reader.guid())
+    group_id = hexuid_to_decimal(reader.guid())
+    reader.i32()
+    reader.i32()
+    transform = reader.ftransform()
+    return {
+        "instance_id": instance_id,
+        "base_id": base_id,
+        "group_id": group_id,
+        "x": round(float(transform["translation"]["y"]) / 1000),
+        "y": round(float(transform["translation"]["x"]) / 1000),
+    }
+
+
+def _container_id_from_module(raw):
+    return _read_binary(raw).guid()
+
+
 def _index_character_parameters():
     characters = {}
     if not wsd.get("CharacterSaveParameterMap"):
@@ -557,14 +674,41 @@ def _worker_pal(instance_id, params, base, guild, assignment, real_date_time_tic
     return pal
 
 
-def getPlayerItems(player_uid, dir_path, item_containers):
+def _player_progress(player_gvas):
+    record = _prop_value(player_gvas.get("RecordData"), {}) or {}
+    transform = _prop_value(player_gvas.get("LastTransform"), {}) or {}
+    translation = _prop_value(transform.get("Translation"), {}) if isinstance(transform, dict) else {}
+    capture_rows = _prop_values(record.get("PalCaptureCount")) if isinstance(record, dict) else []
+    return {
+        "last_online": _ticks_to_iso(_prop_value(player_gvas.get("LastOnlineDateTime"), 0)),
+        "position": {
+            "x": round(float(translation.get("y", 0)) / 1000),
+            "y": round(float(translation.get("x", 0)) / 1000),
+        } if isinstance(translation, dict) else None,
+        "discovered_pals": _truthy_map_count(record.get("PaldeckUnlockFlag")) if isinstance(record, dict) else 0,
+        "captured_pals": sum(int(_prop_value(row.get("value"), 0) or 0) for row in capture_rows),
+        "fast_travel_points": _truthy_map_count(record.get("FastTravelPointUnlockFlag")) if isinstance(record, dict) else 0,
+        "field_bosses": _truthy_map_count(record.get("NormalBossDefeatFlag")) if isinstance(record, dict) else 0,
+        "tower_bosses": _truthy_map_count(record.get("TowerBossDefeatFlag")) if isinstance(record, dict) else 0,
+        "dungeons": int(_prop_value(record.get("FixedDungeonClearCount"), 0) or 0) if isinstance(record, dict) else 0,
+        "technology_points": int(_prop_value(player_gvas.get("TechnologyPoint"), 0) or 0),
+        "ancient_technology_points": int(_prop_value(player_gvas.get("bossTechnologyPoint"), 0) or 0),
+        "recipes": len(_prop_values(player_gvas.get("UnlockedRecipeTechnologyNames"))),
+        "explored_areas": _truthy_map_count(record.get("FindAreaFlagMap")) if isinstance(record, dict) else 0,
+        "oil_rig_clears": int(_prop_value(record.get("OilrigClearCount"), 0) or 0) if isinstance(record, dict) else 0,
+        "pal_storage_container_id": _guid_text(player_gvas.get("PalStorageContainerId")),
+        "party_container_id": _guid_text(player_gvas.get("OtomoCharacterContainerId")),
+    }
+
+
+def getPlayerData(player_uid, dir_path, item_containers):
     containers_data = {k: [] for k in PLAYER_CONTAINER_KEYS}
 
     player_sav_file = os.path.join(
         dir_path, str(player_uid).upper().replace("-", "") + ".sav"
     )
     if not os.path.exists(player_sav_file):
-        return containers_data, True
+        return containers_data, {}, True
 
     try:
         player_gvas = _read_gvas(player_sav_file).properties["SaveData"]["value"]
@@ -574,11 +718,11 @@ def getPlayerItems(player_uid, dir_path, item_containers):
             f"{type(e).__name__}: {e}",
             "WARNING",
         )
-        return containers_data, True
+        return containers_data, {}, True
 
     inv = player_gvas.get("InventoryInfo")
     if inv is None:
-        return containers_data, False
+        return containers_data, _player_progress(player_gvas), False
 
     for key in PLAYER_CONTAINER_KEYS:
         ref = inv["value"].get(key)
@@ -592,7 +736,119 @@ def getPlayerItems(player_uid, dir_path, item_containers):
             {**item, "ContainerId": container_id}
             for item in _slot_items(slots)
         ]
-    return containers_data, False
+    return containers_data, _player_progress(player_gvas), False
+
+
+def _item_container_group_ids():
+    groups = {}
+    for row in _prop_values(wsd.get("ItemContainerSaveData")):
+        try:
+            container_id = _guid_text(row.get("key"))
+            belong_info = _prop_value(row.get("value", {}).get("BelongInfo"), {})
+            group_id = _guid_text(belong_info.get("GroupId")) if isinstance(belong_info, dict) else ""
+            if container_id and group_id and group_id != ZERO_GUID:
+                groups[container_id] = hexuid_to_decimal(group_id)
+        except Exception:
+            continue
+    return groups
+
+
+def structure_container_locations(players, bases, guilds=None):
+    locations = {}
+    for player in players:
+        for key, items in (player.get("items") or {}).items():
+            for item in items or []:
+                container_id = str(item.get("ContainerId") or "").lower()
+                if not container_id:
+                    continue
+                locations[container_id] = {
+                    "kind": "player",
+                    "owner": player.get("nickname") or player.get("player_uid"),
+                    "owner_uid": player.get("player_uid"),
+                    "label": PLAYER_CONTAINER_LABELS.get(key, key),
+                    "base_id": None,
+                }
+
+    base_by_id = {str(base.get("id")): base for base in bases}
+    guild_by_base = _guild_by_base_id(guilds or [])
+    guild_by_group = {}
+    for base in bases:
+        guild = guild_by_base.get(str(base.get("id")))
+        group_id = str(base.get("group_id_belong_to") or "")
+        if guild and group_id:
+            guild_by_group[group_id] = guild
+    guild_chest_group_ids = set()
+    for row in _prop_values(wsd.get("MapObjectSaveData")):
+        try:
+            map_id = str(_prop_value(row.get("MapObjectId"), "") or "")
+            model = _parse_map_model(row["Model"]["value"]["RawData"])
+            base = base_by_id.get(model["base_id"])
+            guild = guild_by_base.get(model["base_id"])
+            if map_id == "GuildChest" and guild:
+                group_id = str(model.get("group_id") or "")
+                if group_id:
+                    guild_chest_group_ids.add(group_id)
+            for module in _prop_values(
+                row.get("ConcreteModel", {}).get("value", {}).get("ModuleMap")
+            ):
+                module_type = str(module.get("key") or "")
+                if not module_type.endswith("ItemContainer"):
+                    continue
+                container_id = _container_id_from_module(
+                    module["value"]["RawData"]
+                )
+                locations[container_id] = {
+                    "kind": "base" if base else "world",
+                    "owner": (base.get("display_name") or base.get("id")) if base else "世界容器",
+                    "label": "公会箱" if map_id == "GuildChest" else (map_id or "储物容器"),
+                    "base_id": model["base_id"] if base else None,
+                    "x": model["x"],
+                    "y": model["y"],
+                }
+        except Exception:
+            continue
+
+    container_groups = _item_container_group_ids()
+    for container_id, group_id in container_groups.items():
+        if container_id in locations or group_id not in guild_chest_group_ids:
+            continue
+        guild = guild_by_group.get(group_id)
+        if not guild:
+            continue
+        locations[container_id] = {
+            "kind": "guild",
+            "owner": guild.get("name") or group_id,
+            "label": "公会箱",
+            "base_id": None,
+        }
+    return locations
+
+
+def structure_inventory(containers, locations):
+    totals = {}
+    for container in containers:
+        container_id = str(container.get("id") or "").lower()
+        location = locations.get(container_id)
+        if not location or location.get("kind") not in {"player", "base", "guild"}:
+            continue
+        for slot in container.get("items", []):
+            item_id = str(slot.get("ItemId") or "").lower()
+            if not item_id:
+                continue
+            item = totals.setdefault(item_id, {
+                "item_id": item_id,
+                "count": 0,
+                "locations": [],
+            })
+            count = int(slot.get("StackCount") or 0)
+            item["count"] += count
+            item["locations"].append({
+                **location,
+                "container_id": container_id,
+                "slot": int(slot.get("SlotIndex") or 0),
+                "count": count,
+            })
+    return sorted(totals.values(), key=lambda item: (-item["count"], item["item_id"]))
 
 
 def structure_base_camp():
