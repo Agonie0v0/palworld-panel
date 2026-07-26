@@ -34,6 +34,7 @@ const copy = computed(() =>
         subtitle:
           "浏览存档解析出的基地、全局仓储容器和全部帕鲁。数据来自当前启用的存档源。",
         bases: "基地",
+        workers: "工作帕鲁",
         storage: "仓储",
         pals: "全部帕鲁",
         search: "搜索名称、ID、所有者或物品",
@@ -46,6 +47,14 @@ const copy = computed(() =>
         item: "物品",
         quantity: "数量",
         owner: "所有者",
+        base: "据点",
+        status: "状态",
+        hunger: "饱食度",
+        sanity: "SAN",
+        attention: "需要关注",
+        workerCount: "工作帕鲁",
+        facility: "设施",
+        conditions: "异常",
         playerStorage: "玩家容器",
         worldStorage: "世界容器",
         type: "类型",
@@ -58,6 +67,7 @@ const copy = computed(() =>
         subtitle:
           "Browse bases, global storage containers, and every Pal parsed from the active save source.",
         bases: "Bases",
+        workers: "Worker Pals",
         storage: "Storage",
         pals: "All Pals",
         search: "Search names, IDs, owners, or items",
@@ -70,6 +80,14 @@ const copy = computed(() =>
         item: "Item",
         quantity: "Quantity",
         owner: "Owner",
+        base: "Base",
+        status: "Status",
+        hunger: "Hunger",
+        sanity: "SAN",
+        attention: "Attention",
+        workerCount: "Workers",
+        facility: "Facility",
+        conditions: "Conditions",
         playerStorage: "Player container",
         worldStorage: "World container",
         type: "Type",
@@ -135,6 +153,7 @@ const baseRows = computed(() =>
         level: guild?.base_camp_level || "-",
         location: `${Number(transform.x ?? base.location_x ?? 0).toFixed(0)}, ${Number(transform.y ?? base.location_y ?? 0).toFixed(0)}`,
         area: base.area_range ?? base.area ?? "-",
+        workers: base.pal_count ?? (base.workers || []).length,
       };
     })
     .filter(textMatch),
@@ -179,9 +198,40 @@ const palRows = computed(() =>
       type: palNames.value[pal.type] || pal.type,
       level: pal.level,
       gender: pal.gender,
-      owner: pal.owner_name || pal.owner_uid || "-",
+      owner:
+        pal.location_kind === "base"
+          ? pal.base_name || pal.base_id || "-"
+          : pal.owner_name || pal.owner_uid || "-",
       traits: (pal.skills || []).join(", "),
     }))
+    .filter(textMatch),
+);
+
+const workerRows = computed(() =>
+  world.value.bases
+    .flatMap((base, baseIndex) =>
+      (base.workers || []).map((worker, workerIndex) => ({
+        id: worker.instance_id || `${base.id}:${workerIndex}`,
+        base: base.display_name || base.name || base.id || `Base ${baseIndex + 1}`,
+        pal:
+          worker.nickname ||
+          palNames.value[worker.type] ||
+          worker.type ||
+          worker.name ||
+          "-",
+        type: palNames.value[worker.type] || worker.type || worker.pal_id || "-",
+        level: worker.level,
+        status: worker.activity?.label || worker.current_work_suitability || "-",
+        hunger:
+          worker.hunger_percent !== undefined && worker.hunger_percent !== null
+            ? `${worker.hunger_percent}%`
+            : worker.full_stomach ?? "-",
+        sanity: worker.sanity ?? "-",
+        facility: worker.facility || worker.activity?.facility || "-",
+        conditions: (worker.conditions || worker.diseases || []).join(", "),
+        attention: Boolean(worker.needs_attention),
+      })),
+    )
     .filter(textMatch),
 );
 
@@ -189,6 +239,7 @@ const baseColumns = computed(() => [
   { title: "ID", key: "id", ellipsis: { tooltip: true } },
   { title: copy.value.guild, key: "guild" },
   { title: copy.value.level, key: "level", width: 80 },
+  { title: copy.value.workerCount, key: "workers", width: 100 },
   { title: copy.value.location, key: "location" },
   { title: copy.value.area, key: "area", width: 90 },
 ]);
@@ -224,6 +275,34 @@ const palColumns = computed(() => [
   { title: copy.value.gender, key: "gender", width: 100 },
   { title: copy.value.owner, key: "owner" },
   { title: copy.value.traits, key: "traits", ellipsis: { tooltip: true } },
+]);
+const workerColumns = computed(() => [
+  { title: copy.value.base, key: "base", ellipsis: { tooltip: true } },
+  { title: copy.value.pals, key: "pal", ellipsis: { tooltip: true } },
+  { title: copy.value.type, key: "type", ellipsis: { tooltip: true } },
+  { title: copy.value.level, key: "level", width: 80 },
+  { title: copy.value.status, key: "status", ellipsis: { tooltip: true } },
+  { title: copy.value.hunger, key: "hunger", width: 100 },
+  { title: copy.value.sanity, key: "sanity", width: 90 },
+  { title: copy.value.facility, key: "facility", ellipsis: { tooltip: true } },
+  {
+    title: copy.value.attention,
+    key: "conditions",
+    ellipsis: { tooltip: true },
+    render: (row) =>
+      h(
+        NTag,
+        {
+          size: "small",
+          type: row.attention ? "warning" : "success",
+          bordered: false,
+        },
+        {
+          default: () =>
+            row.conditions || (row.attention ? copy.value.attention : "-"),
+        },
+      ),
+  },
 ]);
 
 watch(
@@ -272,6 +351,20 @@ watch(
           :data="baseRows"
           :loading="loading"
           :pagination="{ pageSize: 30 }"
+          :bordered="false"
+        />
+      </n-tab-pane>
+      <n-tab-pane name="workers">
+        <template #tab
+          ><span class="tab-label"
+            ><n-icon><Paw /></n-icon>{{ copy.workers }}</span
+          ></template
+        >
+        <n-data-table
+          :columns="workerColumns"
+          :data="workerRows"
+          :loading="loading"
+          :pagination="{ pageSize: 50 }"
           :bordered="false"
         />
       </n-tab-pane>

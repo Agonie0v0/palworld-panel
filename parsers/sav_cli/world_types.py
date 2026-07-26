@@ -22,6 +22,9 @@ Field access paths were verified against real v1.0.0.100427 saves:
 import datetime
 
 
+ZERO_GUID = "00000000-0000-0000-0000-000000000000"
+
+
 def hexuid_to_decimal(uid):
     """First 8 hex chars of a UID -> decimal string.
 
@@ -53,6 +56,26 @@ def _byte_value(prop, default=0):
     if isinstance(v, dict):
         return int(v["value"])
     return int(v)
+
+
+def _enum_value(prop, default=""):
+    if not prop:
+        return default
+    value = prop.get("value") if isinstance(prop, dict) else prop
+    while isinstance(value, dict) and "value" in value:
+        value = value["value"]
+    if value is None:
+        return default
+    return str(value).split("::")[-1]
+
+
+def _list_values(prop):
+    if not prop:
+        return []
+    value = prop.get("value") if isinstance(prop, dict) else prop
+    if isinstance(value, dict):
+        value = value.get("values", [])
+    return list(value) if isinstance(value, (list, tuple)) else []
 
 
 def tick2local(tick, real_date_time_ticks, filetime):
@@ -115,8 +138,11 @@ class Player:
 
 
 class Pal:
-    def __init__(self, data, real_date_time_ticks, filetime):
-        self.owner = hexuid_to_decimal(data["OwnerPlayerUId"]["value"])
+    def __init__(self, data, real_date_time_ticks, filetime, instance_id=""):
+        self.instance_id = str(instance_id or "")
+        owner_prop = data.get("OwnerPlayerUId") or {}
+        owner = owner_prop.get("value") if isinstance(owner_prop, dict) else owner_prop
+        self.owner = "" if owner in (None, "", ZERO_GUID) else hexuid_to_decimal(owner)
         self.nickname = data["NickName"]["value"] if data.get("NickName") else ""
         self.level = _byte_value(data.get("Level"), 1)
         self.exp = int(data["Exp"]["value"]) if data.get("Exp") else 0
@@ -155,8 +181,27 @@ class Pal:
             if data.get("PassiveSkillList")
             else []
         )
+        full_stomach = (
+            float(data["FullStomach"]["value"]) if data.get("FullStomach") else 0
+        )
+        self.full_stomach = round(full_stomach, 2)
+        self.sanity = (
+            round(float(data["SanityValue"]["value"]), 2)
+            if data.get("SanityValue")
+            else 100
+        )
+        self.current_work_suitability = _enum_value(data.get("CurrentWorkSuitability"))
+        self.base_worker_event = _enum_value(data.get("BaseCampWorkerEventType"))
+        self.worker_sick = _enum_value(data.get("WorkerSick"))
+        work_options = data.get("WorkSuitabilityOptionInfo")
+        option_value = work_options.get("value", {}) if isinstance(work_options, dict) else {}
+        self.disabled_work = [
+            str(item).split("::")[-1]
+            for item in _list_values(option_value.get("OffWorkSuitabilityList"))
+        ]
 
         self.__order = [
+            "instance_id",
             "owner",
             "nickname",
             "level",
@@ -177,6 +222,12 @@ class Pal:
             "rank_defence",
             "rank_craftspeed",
             "skills",
+            "full_stomach",
+            "sanity",
+            "current_work_suitability",
+            "base_worker_event",
+            "worker_sick",
+            "disabled_work",
         ]
 
     def to_dict(self):
