@@ -516,6 +516,22 @@ def _build_player_pal_locations(container_members, players):
 
 
 def _parse_map_model(raw):
+    data = _prop_value(raw, raw)
+    if isinstance(data, dict):
+        transform = (
+            data.get("initital_transform_cache")
+            or data.get("initial_transform_cache")
+            or data.get("transform")
+            or {}
+        )
+        translation = transform.get("translation", {}) if isinstance(transform, dict) else {}
+        return {
+            "instance_id": _guid_text(data.get("instance_id")),
+            "base_id": hexuid_to_decimal(data.get("base_camp_id_belong_to")),
+            "group_id": hexuid_to_decimal(data.get("group_id_belong_to")),
+            "x": round(float(translation.get("y", 0)) / 1000),
+            "y": round(float(translation.get("x", 0)) / 1000),
+        }
     reader = _read_binary(raw)
     instance_id = reader.guid()
     reader.guid()
@@ -534,6 +550,17 @@ def _parse_map_model(raw):
 
 
 def _container_id_from_module(raw):
+    data = _prop_value(raw, raw)
+    if isinstance(data, dict):
+        for key in (
+            "target_container_id",
+            "container_id",
+            "ContainerId",
+            "ContainerID",
+        ):
+            container_id = _guid_text(data.get(key))
+            if container_id:
+                return container_id
     return _read_binary(raw).guid()
 
 
