@@ -123,10 +123,41 @@ const toPalConf = () => {
 };
 
 const toGithub = () => {
-  window.open("https://github.com/zaigie/palworld-server-tool/releases");
+  window.open(
+    "https://github.com/Agonie0v0/palworld-panel/releases",
+    "_blank",
+    "noopener,noreferrer",
+  );
 };
 const serverToolInfo = ref({});
 const hasNewVersion = ref(false);
+const panelVersionLabel = computed(() => {
+  const version = String(serverToolInfo.value?.version || "").trim();
+  if (!version) return "";
+  return /^v/i.test(version) ? version : `v${version}`;
+});
+const panelVersionTitle = computed(() => {
+  const parts = [
+    locale.value === "zh"
+      ? `面板版本 ${panelVersionLabel.value}`
+      : `Panel ${panelVersionLabel.value}`,
+  ];
+  if (serverToolInfo.value?.commit) {
+    parts.push(
+      locale.value === "zh"
+        ? `提交 ${serverToolInfo.value.commit}`
+        : `Commit ${serverToolInfo.value.commit}`,
+    );
+  }
+  if (serverToolInfo.value?.installedAt) {
+    parts.push(
+      locale.value === "zh"
+        ? `安装时间 ${serverToolInfo.value.installedAt}`
+        : `Installed ${serverToolInfo.value.installedAt}`,
+    );
+  }
+  return parts.join("\n");
+});
 const getServerToolInfo = async () => {
   const { data } = await new ApiService().getServerToolInfo();
   serverToolInfo.value = data.value;
@@ -395,7 +426,9 @@ onMounted(async () => {
   // playerToGuildStore().setUpdateStatus("map");
 });
 
-onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFullscreenState));
+onBeforeUnmount(() =>
+  document.removeEventListener("fullscreenchange", syncFullscreenState),
+);
 </script>
 
 <template>
@@ -411,9 +444,13 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
             v-if="serverToolInfo?.version"
             type="button"
             class="ops-brand-version"
+            :title="panelVersionTitle"
             @click="toGithub"
           >
-            {{ serverToolInfo.version }}<span v-if="serverToolInfo.build"> · {{ serverToolInfo.build }}</span><span v-if="hasNewVersion"> · new</span>
+            {{ panelVersionLabel
+            }}<span v-if="serverToolInfo.build">
+              · {{ serverToolInfo.build }}</span
+            ><span v-if="hasNewVersion"> · new</span>
           </button>
         </div>
       </div>
@@ -433,11 +470,31 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
             quaternary
             circle
             class="ops-preference-button"
-            :aria-label="locale === 'zh' ? (isFullscreen ? '退出全屏' : '进入全屏') : (isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen')"
-            :title="locale === 'zh' ? (isFullscreen ? '退出全屏' : '进入全屏') : (isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen')"
+            :aria-label="
+              locale === 'zh'
+                ? isFullscreen
+                  ? '退出全屏'
+                  : '进入全屏'
+                : isFullscreen
+                  ? 'Exit fullscreen'
+                  : 'Enter fullscreen'
+            "
+            :title="
+              locale === 'zh'
+                ? isFullscreen
+                  ? '退出全屏'
+                  : '进入全屏'
+                : isFullscreen
+                  ? 'Exit fullscreen'
+                  : 'Enter fullscreen'
+            "
             @click="toggleFullscreen"
           >
-            <template #icon><n-icon><ContractOutline v-if="isFullscreen" /><ExpandOutline v-else /></n-icon></template>
+            <template #icon
+              ><n-icon
+                ><ContractOutline v-if="isFullscreen" /><ExpandOutline
+                  v-else /></n-icon
+            ></template>
           </n-button>
           <n-button
             v-if="isAdmin"
@@ -448,7 +505,9 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
             :title="locale === 'zh' ? '编辑导航' : 'Edit navigation'"
             @click="sidebarNav?.toggleEditing()"
           >
-            <template #icon><n-icon><PencilOutline /></n-icon></template>
+            <template #icon
+              ><n-icon><PencilOutline /></n-icon
+            ></template>
           </n-button>
           <n-button
             quaternary
@@ -512,9 +571,14 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
     </aside>
 
     <main class="ops-main">
-      <header class="ops-workspace-header" :class="{ 'is-tool-view': currentDisplay !== 'overview' }">
+      <header
+        class="ops-workspace-header"
+        :class="{ 'is-tool-view': currentDisplay !== 'overview' }"
+      >
         <div class="ops-workspace-heading">
-          <h1 class="ops-workspace-title">{{ serverInfo?.name || $t("status.serverUnavailable") }}</h1>
+          <h1 class="ops-workspace-title">
+            {{ serverInfo?.name || $t("status.serverUnavailable") }}
+          </h1>
           <div class="ops-workspace-context">
             <span>{{ serverInfo?.version || "Unknown" }}</span>
             <span>Palworld Dedicated Server</span>
@@ -526,7 +590,11 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
               class="ops-status-dot"
               :class="{ 'is-online': serverAvailable }"
             ></span>
-            <strong>{{ serverAvailable ? $t("status.online") : $t("status.serverUnavailable") }}</strong>
+            <strong>{{
+              serverAvailable
+                ? $t("status.online")
+                : $t("status.serverUnavailable")
+            }}</strong>
           </div>
           <div class="ops-telemetry-item">
             <span>{{ $t("item.serverFps") }}</span>
@@ -538,7 +606,10 @@ onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFulls
           </div>
         </div>
       </header>
-      <section class="ops-workspace-content" :class="{ 'is-overview': currentDisplay === 'overview' }">
+      <section
+        class="ops-workspace-content"
+        :class="{ 'is-overview': currentDisplay === 'overview' }"
+      >
         <div v-if="loading" class="ops-loading">
           <div class="ops-loading-panel">
             <n-skeleton text :repeat="4" />

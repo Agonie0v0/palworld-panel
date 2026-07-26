@@ -48,7 +48,8 @@ function buildIdentity() {
   return {
     commit: /^[0-9a-f]{7,40}$/i.test(commit) ? commit : "",
     build: commit ? commit.slice(0, 8) : (asset || "unknown"),
-    asset
+    asset,
+    installedAt: String(recorded.installedAt || "").trim()
   };
 }
 
@@ -1590,14 +1591,20 @@ async function querySaveData(config) {
         }))
       )
     );
+    const bases = Array.isArray(parsed.bases)
+      ? parsed.bases
+      : (Array.isArray(parsed.guilds) ? parsed.guilds : []).flatMap((guild) => guild.base_camp || []);
     return {
       players,
       guilds: Array.isArray(parsed.guilds) ? parsed.guilds : [],
       pals,
       inventory,
-      bases: Array.isArray(parsed.bases)
-        ? parsed.bases
-        : (Array.isArray(parsed.guilds) ? parsed.guilds : []).flatMap((guild) => guild.base_camp || []),
+      bases: bases.map((base) => ({
+        ...base,
+        workers: Array.isArray(base.workers) ? base.workers : [],
+        pal_count: Number(base.pal_count || (Array.isArray(base.workers) ? base.workers.length : 0)),
+        worker_attention_count: Number(base.worker_attention_count || 0)
+      })),
       containers: Array.isArray(parsed.containers) ? parsed.containers : [],
       map: parsed.map || null,
       source: config.automation.saveSourceMode === "agent" ? "agent" : "parser"
@@ -2640,14 +2647,29 @@ async function serveStatic(req, res) {
     const stat = await fsp.stat(filePath);
     if (!stat.isFile()) throw new Error("Not a file.");
     res.writeHead(200, {
-      "content-type": contentTypes[path.extname(filePath)] || "application/octet-stream"
+      "content-type": contentTypes[path.extname(filePath)] || "application/octet-stream",
+      "cache-control": staticCacheControl(filePath)
     });
     fs.createReadStream(filePath).pipe(res);
   } catch {
     const fallback = path.join(publicDir, "index.html");
-    res.writeHead(200, { "content-type": contentTypes[".html"] });
+    res.writeHead(200, {
+      "content-type": contentTypes[".html"],
+      "cache-control": staticCacheControl(fallback)
+    });
     fs.createReadStream(fallback).pipe(res);
   }
+}
+
+function staticCacheControl(filePath) {
+  const normalized = String(filePath || "").replace(/\\/g, "/");
+  if (normalized.endsWith("/index.html") || path.extname(normalized) === ".html") {
+    return "no-cache, no-store, must-revalidate";
+  }
+  if (/\/assets\/[^/]+-[A-Za-z0-9_-]+\.(?:css|js)$/.test(normalized)) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=3600";
 }
 
 async function main() {
@@ -2718,6 +2740,7 @@ module.exports = {
   parseDfOutput,
   parsePsOutput,
   playerUidFromId,
+  staticCacheControl,
   testRestConnection,
   testSaveSource,
   trimBackups,

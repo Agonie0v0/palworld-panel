@@ -202,6 +202,8 @@ Agent Token 等同于远程管理权限。请通过安全组或主机防火墙�
 
 ## 更新
 
+左上角显示 `版本号 · 构建短哈希`；悬停可查看完整提交和安装时间。版本号以根目录 `package.json` 为唯一来源，每次发布用户可见功能时按语义化版本规则提升。
+
 ### systemd
 
 在最初克隆的源码目录执行：
@@ -216,6 +218,12 @@ sudo systemctl status palworld-panel
 ```
 
 更新时请继续使用原来的 `PANEL_TOKEN`，否则安装脚本会生成新的备用登录 Token。此流程会更新并重启面板服务，不会主动重启 Palworld 游戏服务；现有面板配置保存在 `/opt/palworld-panel/data/`。
+
+更新后可直接核对运行中的版本：
+
+```bash
+curl -fsS http://127.0.0.1:19090/api/server/tool
+```
 
 ### Docker
 

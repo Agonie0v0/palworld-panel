@@ -25,6 +25,10 @@ if ! command -v node >/dev/null 2>&1; then
   apt-get install -y nodejs
 fi
 
+PANEL_VERSION="$(node -p 'require("./package.json").version')"
+PANEL_BUILD_LABEL="${SOURCE_COMMIT:0:8}"
+PANEL_BUILD_LABEL="${PANEL_BUILD_LABEL:-unknown}"
+
 mkdir -p "$PANEL_DIR/data" "$PANEL_DIR/upstream-web"
 cp -R package.json package-lock.json src public config.example.json parsers scripts "$PANEL_DIR/"
 cp -R upstream-web/dist "$PANEL_DIR/upstream-web/"
@@ -142,6 +146,7 @@ systemctl restart palworld-panel
 cat <<EOF
 
 Panel installed.
+Panel version: v$PANEL_VERSION ($PANEL_BUILD_LABEL)
 Panel URL: http://SERVER_PUBLIC_IP:$PANEL_PORT
 Panel token: $PANEL_TOKEN
 

@@ -20,6 +20,7 @@ const {
   parseRconInfo,
   parseShowPlayers,
   playerUidFromId,
+  staticCacheControl,
   testSaveSource,
   testRestConnection,
   trimBackups,
@@ -28,6 +29,21 @@ const {
   principalCan,
   watchdogSettings
 } = require("../src/server");
+
+test("static cache policy refreshes the app shell while retaining hashed assets", () => {
+  assert.equal(
+    staticCacheControl("/app/upstream-web/dist/index.html"),
+    "no-cache, no-store, must-revalidate",
+  );
+  assert.equal(
+    staticCacheControl("/app/upstream-web/dist/assets/index-BV_v5gyY.js"),
+    "public, max-age=31536000, immutable",
+  );
+  assert.equal(
+    staticCacheControl("/app/upstream-web/public/map/tiles/0/0/0.png"),
+    "public, max-age=3600",
+  );
+});
 
 test("external commands can return save parser payloads larger than Node's default buffer", async () => {
   const bytes = 2 * 1024 * 1024;

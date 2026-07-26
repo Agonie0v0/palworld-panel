@@ -27,6 +27,8 @@ from structurer import (
     structure_player,
     structure_guild,
     structure_base_camp,
+    structure_base_workers,
+    attach_bases_to_guilds,
     structure_item_containers,
 )
 
@@ -60,6 +62,32 @@ def _http_status(response):
 
 def _elapsed(started):
     return f"{time.perf_counter() - started:.2f}s"
+
+
+def _flatten_player_pals(players):
+    pals = []
+    for player in players:
+        for pal in player.get("pals", []):
+            pals.append({
+                **pal,
+                "owner_uid": player.get("player_uid", ""),
+                "owner_name": player.get("nickname", ""),
+                "location_kind": pal.get("location_kind", "player"),
+                "location_key": pal.get("location_key") or player.get("player_uid", ""),
+            })
+    return pals
+
+
+def _dedupe_pals(pals):
+    output = []
+    seen = set()
+    for pal in pals:
+        key = pal.get("instance_id") or f"{pal.get('owner_uid', '')}:{pal.get('type', '')}:{pal.get('nickname', '')}:{pal.get('level', '')}"
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(pal)
+    return output
 
 
 def _sync_resource(requests, resource, url, token, records):
@@ -132,7 +160,10 @@ def main():
     players, player_save_warnings = structure_player(dir_path, filetime=filetime)
     guilds = structure_guild(filetime)
     bases = structure_base_camp()
+    workers = structure_base_workers(players, guilds, bases, filetime)
+    guilds = attach_bases_to_guilds(guilds, bases)
     containers = structure_item_containers()
+    pals = _dedupe_pals([*_flatten_player_pals(players), *workers])
 
     # Fill save_last_online from the player's guild membership record.
     for player in players:
@@ -142,7 +173,7 @@ def main():
                     player["save_last_online"] = guild_player["last_online"]
                     break
 
-    pal_count = sum(len(player.get("pals", [])) for player in players)
+    pal_count = len(pals)
     base_camp_count = sum(len(guild.get("base_camp", [])) for guild in guilds)
     warning_summary = (
         f", player_save_warnings={player_save_warnings}"
@@ -161,6 +192,7 @@ def main():
                 {
                     "players": players,
                     "guilds": guilds,
+                    "pals": pals,
                     "bases": bases,
                     "containers": containers,
                 },
