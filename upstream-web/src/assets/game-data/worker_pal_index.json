@@ -1,0 +1,1630 @@
+{
+  "Alpaca": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/alpaca.webp"
+  },
+  "AmaterasuWolf": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/amaterasuwolf.webp"
+  },
+  "AmaterasuWolf_Dark": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/amaterasuwolf_dark.webp"
+  },
+  "AmaterasuWolf_Dark_Quest_Enemy": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/amaterasuwolf_dark.webp"
+  },
+  "AmaterasuWolf_Dark_Quest_Friend": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/amaterasuwolf_dark.webp"
+  },
+  "Anubis": {
+    "max_full_stomach": 540,
+    "avatar": "/pals/anubis.webp"
+  },
+  "BadCatgirl": {
+    "max_full_stomach": 560,
+    "avatar": "/pals/badcatgirl.webp"
+  },
+  "Baphomet": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/baphomet.webp"
+  },
+  "Baphomet_Dark": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/baphomet_dark.webp"
+  },
+  "Baphomet_Dark_Oilrig": {
+    "max_full_stomach": 680,
+    "avatar": "/pals/baphomet_dark.webp"
+  },
+  "Bastet": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/bastet.webp"
+  },
+  "Bastet_Ice": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/bastet_ice.webp"
+  },
+  "BerryGoat": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/berrygoat.webp"
+  },
+  "BerryGoat_Dark": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/berrygoat_dark.webp"
+  },
+  "BirdDragon": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/birddragon.webp"
+  },
+  "BirdDragon_Ice": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/birddragon_ice.webp"
+  },
+  "BlackCentaur": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/blackcentaur.webp"
+  },
+  "BlackFurDragon": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/blackfurdragon.webp"
+  },
+  "BlackGriffon": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/blackgriffon.webp"
+  },
+  "BlackMetalDragon": {
+    "max_full_stomach": 470,
+    "avatar": "/pals/blackmetaldragon.webp"
+  },
+  "BlackPuppy": {
+    "max_full_stomach": 170,
+    "avatar": "/pals/blackpuppy.webp"
+  },
+  "BlackPuppy_Ice": {
+    "max_full_stomach": 170,
+    "avatar": "/pals/blackpuppy_ice.webp"
+  },
+  "BlueberryFairy": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/blueberryfairy.webp"
+  },
+  "BlueDragon": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/bluedragon.webp"
+  },
+  "BlueDragon_Ice": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/bluedragon_ice.webp"
+  },
+  "BluePlatypus": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/blueplatypus.webp"
+  },
+  "BluePlatypus_Fire": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/blueplatypus_fire.webp"
+  },
+  "BlueSkyDragon": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/blueskydragon.webp"
+  },
+  "BlueThunderHorse": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/bluethunderhorse.webp"
+  },
+  "Boar": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/boar.webp"
+  },
+  "BrownRabbit": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/brownrabbit.webp"
+  },
+  "CactusDoll": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/cactusdoll.webp"
+  },
+  "CactusDoll_Dark": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/cactusdoll_dark.webp"
+  },
+  "CandleGhost": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/candleghost.webp"
+  },
+  "CaptainPenguin": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/captainpenguin.webp"
+  },
+  "CaptainPenguin_Black": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/captainpenguin_black.webp"
+  },
+  "Carbunclo": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/carbunclo.webp"
+  },
+  "CatBat": {
+    "max_full_stomach": 140,
+    "avatar": "/pals/catbat.webp"
+  },
+  "CatMage": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/catmage.webp"
+  },
+  "CatMage_Fire": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/catmage_fire.webp"
+  },
+  "CatVampire": {
+    "max_full_stomach": 490,
+    "avatar": "/pals/catvampire.webp"
+  },
+  "ChickenPal": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/chickenpal.webp"
+  },
+  "ClioneTwins": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/clionetwins.webp"
+  },
+  "CloverFairy": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/cloverfairy.webp"
+  },
+  "ClownRabbit": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/clownrabbit.webp"
+  },
+  "ColorfulBird": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/colorfulbird.webp"
+  },
+  "CowPal": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/cowpal.webp"
+  },
+  "CubeTurtle": {
+    "max_full_stomach": 580,
+    "avatar": "/pals/cubeturtle.webp"
+  },
+  "CubeTurtle_Neutral": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/cubeturtle_neutral.webp"
+  },
+  "CuteButterfly": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/cutebutterfly.webp"
+  },
+  "CuteFox": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/cutefox.webp"
+  },
+  "CuteMole": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/cutemole.webp"
+  },
+  "DandelionGirl": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/dandeliongirl.webp"
+  },
+  "DarkAlien": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/darkalien.webp"
+  },
+  "DarkAlien_Oilrig": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/darkalien.webp"
+  },
+  "DarkCrow": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/darkcrow.webp"
+  },
+  "DarkFlameFox": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/darkflamefox.webp"
+  },
+  "DarkMechaDragon": {
+    "max_full_stomach": 570,
+    "avatar": "/pals/darkmechadragon.webp"
+  },
+  "DarkScorpion": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/darkscorpion.webp"
+  },
+  "DarkScorpion_Ground": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/darkscorpion_ground.webp"
+  },
+  "Deer": {
+    "max_full_stomach": 140,
+    "avatar": "/pals/deer.webp"
+  },
+  "Deer_Ground": {
+    "max_full_stomach": 140,
+    "avatar": "/pals/deer_ground.webp"
+  },
+  "DomeArmorDragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/domearmordragon.webp"
+  },
+  "DreamDemon": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/dreamdemon.webp"
+  },
+  "DrillGame": {
+    "max_full_stomach": 350,
+    "avatar": "/pals/drillgame.webp"
+  },
+  "Eagle": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/eagle.webp"
+  },
+  "ElecCat": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/eleccat.webp"
+  },
+  "ElecLion": {
+    "max_full_stomach": 350,
+    "avatar": "/pals/eleclion.webp"
+  },
+  "ElecLizard": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/eleclizard.webp"
+  },
+  "ElecPanda": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/elecpanda.webp"
+  },
+  "ElecPomeranian": {
+    "max_full_stomach": 170,
+    "avatar": "/pals/elecpomeranian.webp"
+  },
+  "ElecSnail": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/elecsnail.webp"
+  },
+  "ElecSnail_Ground": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/elecsnail_ground.webp"
+  },
+  "FairyDragon": {
+    "max_full_stomach": 200,
+    "avatar": "/pals/fairydragon.webp"
+  },
+  "FairyDragon_Water": {
+    "max_full_stomach": 200,
+    "avatar": "/pals/fairydragon_water.webp"
+  },
+  "FeatherOstrich": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/featherostrich.webp"
+  },
+  "FengyunDeeper": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/fengyundeeper.webp"
+  },
+  "FengyunDeeper_Electric": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/fengyundeeper_electric.webp"
+  },
+  "FireKirin": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/firekirin.webp"
+  },
+  "FireKirin_Dark": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/firekirin_dark.webp"
+  },
+  "FlameBambi": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/flamebambi.webp"
+  },
+  "FlameBuffalo": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/flamebuffalo.webp"
+  },
+  "FlowerDinosaur": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/flowerdinosaur.webp"
+  },
+  "FlowerDinosaur_Electric": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/flowerdinosaur_electric.webp"
+  },
+  "FlowerDoll": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/flowerdoll.webp"
+  },
+  "FlowerDoll_Fire": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/flowerdoll_fire.webp"
+  },
+  "FlowerPrince": {
+    "max_full_stomach": 630,
+    "avatar": "/pals/flowerprince.webp"
+  },
+  "FlowerRabbit": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/flowerrabbit.webp"
+  },
+  "FluffyBird": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/fluffybird.webp"
+  },
+  "FlyingManta": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/flyingmanta.webp"
+  },
+  "FlyingManta_Thunder": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/flyingmanta_thunder.webp"
+  },
+  "FoxExorcist": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/foxexorcist.webp"
+  },
+  "FoxMage": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/foxmage.webp"
+  },
+  "FoxMage_Dark": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/foxmage_dark.webp"
+  },
+  "Ganesha": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/ganesha.webp"
+  },
+  "Garm": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/garm.webp"
+  },
+  "GhostAnglerfish": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/ghostanglerfish.webp"
+  },
+  "GhostAnglerfish_Fire": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/ghostanglerfish_fire.webp"
+  },
+  "GhostBeast": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/ghostbeast.webp"
+  },
+  "GhostBlackCat": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/ghostblackcat.webp"
+  },
+  "GhostDragon": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/ghostdragon.webp"
+  },
+  "GhostDragon_Fire": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/ghostdragon_fire.webp"
+  },
+  "GhostRabbit": {
+    "max_full_stomach": 510,
+    "avatar": "/pals/ghostrabbit.webp"
+  },
+  "GhostRabbit_Grass": {
+    "max_full_stomach": 510,
+    "avatar": "/pals/ghostrabbit_grass.webp"
+  },
+  "GoldenHorse": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/goldenhorse.webp"
+  },
+  "Gorilla": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/gorilla.webp"
+  },
+  "Gorilla_Ground": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/gorilla_ground.webp"
+  },
+  "GrassBoss": {
+    "avatar": "/pals/t_commonhuman_icon_normal.webp"
+  },
+  "GrassGolem": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/grassgolem.webp"
+  },
+  "GrassGolem_Dark": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/grassgolem_dark.webp"
+  },
+  "GrassMammoth": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/grassmammoth.webp"
+  },
+  "GrassMammoth_Ice": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/grassmammoth_ice.webp"
+  },
+  "GrassMinotaur": {
+    "max_full_stomach": 560,
+    "avatar": "/pals/grassminotaur.webp"
+  },
+  "GrassMinotaur_Ice": {
+    "max_full_stomach": 560,
+    "avatar": "/pals/grassminotaur_ice.webp"
+  },
+  "GrassPanda": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/grasspanda.webp"
+  },
+  "GrassPanda_Electric": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/grasspanda_electric.webp"
+  },
+  "GrassPanda_Electric_Tower": {
+    "max_full_stomach": 350,
+    "avatar": "/pals/grasspanda_electric.webp"
+  },
+  "GrassRabbitMan": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/grassrabbitman.webp"
+  },
+  "GrimGirl": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/grimgirl.webp"
+  },
+  "GuardianDog": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/guardiandog.webp"
+  },
+  "GYM_BlackGriffon": {
+    "max_full_stomach": 525,
+    "avatar": "/pals/gym_blackgriffon.webp"
+  },
+  "GYM_BlackGriffon_2": {
+    "max_full_stomach": 525,
+    "avatar": "/pals/blackgriffon.webp"
+  },
+  "GYM_BlackGriffon_2_Avatar": {
+    "max_full_stomach": 525,
+    "avatar": "/pals/blackgriffon.webp"
+  },
+  "GYM_BlueSkyDragon": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/blueskydragon.webp"
+  },
+  "GYM_BlueSkyDragon_2": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/blueskydragon.webp"
+  },
+  "GYM_ElecPanda": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/gym_elecpanda.webp"
+  },
+  "GYM_ElecPanda_2": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/elecpanda.webp"
+  },
+  "GYM_ElecPanda_Otomo": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/elecpanda.webp"
+  },
+  "GYM_Horus": {
+    "max_full_stomach": 525,
+    "avatar": "/pals/gym_horus.webp"
+  },
+  "GYM_Horus_2": {
+    "max_full_stomach": 525,
+    "avatar": "/pals/horus.webp"
+  },
+  "GYM_LilyQueen": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/gym_lilyqueen.webp"
+  },
+  "GYM_LilyQueen_2": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/lilyqueen.webp"
+  },
+  "GYM_MoonQueen": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/gym_moonqueen.webp"
+  },
+  "GYM_MoonQueen_2": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/moonqueen.webp"
+  },
+  "GYM_MoonQueen_2_Servant": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/moonqueen.webp"
+  },
+  "GYM_SnowTigerBeastman": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/gym_snowtigerbeastman.webp"
+  },
+  "GYM_SnowTigerBeastman_2": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/snowtigerbeastman.webp"
+  },
+  "GYM_ThunderDragonMan": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/gym_thunderdragonman.webp"
+  },
+  "GYM_ThunderDragonMan_2": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/thunderdragonman.webp"
+  },
+  "GYM_WorldTreeDragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/none.webp"
+  },
+  "GYM_WorldTreeDragon_2": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/none.webp"
+  },
+  "HadesBird": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/hadesbird.webp"
+  },
+  "HadesBird_Electric": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/hadesbird_electric.webp"
+  },
+  "HadesBird_Oilrig": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/hadesbird.webp"
+  },
+  "HawkBird": {
+    "max_full_stomach": 140,
+    "avatar": "/pals/hawkbird.webp"
+  },
+  "Hedgehog": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/hedgehog.webp"
+  },
+  "Hedgehog_Ice": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/hedgehog_ice.webp"
+  },
+  "HerculesBeetle": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/herculesbeetle.webp"
+  },
+  "HerculesBeetle_Ground": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/herculesbeetle_ground.webp"
+  },
+  "HoodGhost": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/hoodghost.webp"
+  },
+  "Horus": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/horus.webp"
+  },
+  "Horus_Oilrig": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/horus.webp"
+  },
+  "Horus_Water": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/horus_water.webp"
+  },
+  "IceCrocodile": {
+    "max_full_stomach": 310,
+    "avatar": "/pals/t_commonhuman_icon_normal.webp"
+  },
+  "IceDeer": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/icedeer.webp"
+  },
+  "IceFox": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/icefox.webp"
+  },
+  "IceHorse": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/icehorse.webp"
+  },
+  "IceHorse_Dark": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/icehorse_dark.webp"
+  },
+  "IceNarwhal": {
+    "max_full_stomach": 560,
+    "avatar": "/pals/icenarwhal.webp"
+  },
+  "IceNarwhal_Fire": {
+    "max_full_stomach": 560,
+    "avatar": "/pals/icenarwhal_fire.webp"
+  },
+  "IceSeal": {
+    "max_full_stomach": 220,
+    "avatar": "/pals/iceseal.webp"
+  },
+  "IceSeal_Ground": {
+    "max_full_stomach": 220,
+    "avatar": "/pals/none.webp"
+  },
+  "IceWitch": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/icewitch.webp"
+  },
+  "JellyfishFairy": {
+    "max_full_stomach": 220,
+    "avatar": "/pals/jellyfishfairy.webp"
+  },
+  "JellyfishGhost": {
+    "max_full_stomach": 220,
+    "avatar": "/pals/jellyfishghost.webp"
+  },
+  "JetDragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/jetdragon.webp"
+  },
+  "KabukiMan": {
+    "max_full_stomach": 560,
+    "avatar": "/pals/kabukiman.webp"
+  },
+  "Kelpie": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/kelpie.webp"
+  },
+  "Kelpie_Fire": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/kelpie_fire.webp"
+  },
+  "KendoFrog": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/kendofrog.webp"
+  },
+  "KendoFrog_Dark": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/t_commonhuman_icon_normal.webp"
+  },
+  "KingAlpaca": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/kingalpaca.webp"
+  },
+  "KingAlpaca_Ice": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/kingalpaca_ice.webp"
+  },
+  "KingBahamut": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/kingbahamut.webp"
+  },
+  "KingBahamut_Dragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/kingbahamut_dragon.webp"
+  },
+  "KingSunfish": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/kingsunfish.webp"
+  },
+  "KingSunfish_Thunder": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/kingsunfish_thunder.webp"
+  },
+  "KingWhale": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/kingwhale.webp"
+  },
+  "Kirin": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/kirin.webp"
+  },
+  "Kirin_Ice": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/kirin_ice.webp"
+  },
+  "Kitsunebi": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/kitsunebi.webp"
+  },
+  "Kitsunebi_Ice": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/kitsunebi_ice.webp"
+  },
+  "LanternButler": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/t_commonhuman_icon_normal.webp"
+  },
+  "LavaGirl": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/lavagirl.webp"
+  },
+  "LazyCatfish": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/lazycatfish.webp"
+  },
+  "LazyCatfish_Gold": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/lazycatfish_gold.webp"
+  },
+  "LazyDragon": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/lazydragon.webp"
+  },
+  "LazyDragon_Electric": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/lazydragon_electric.webp"
+  },
+  "LazyDragon_Electric_Tower": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/lazydragon_electric.webp"
+  },
+  "LeafMomonga": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/leafmomonga.webp"
+  },
+  "LeafPrincess": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/leafprincess.webp"
+  },
+  "LegendDeer": {
+    "max_full_stomach": 710,
+    "avatar": "/pals/legenddeer.webp"
+  },
+  "LilyQueen": {
+    "max_full_stomach": 540,
+    "avatar": "/pals/lilyqueen.webp"
+  },
+  "LilyQueen_Dark": {
+    "max_full_stomach": 540,
+    "avatar": "/pals/lilyqueen_dark.webp"
+  },
+  "LittleBriarRose": {
+    "max_full_stomach": 140,
+    "avatar": "/pals/littlebriarrose.webp"
+  },
+  "LizardMan": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/lizardman.webp"
+  },
+  "LizardMan_Fire": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/lizardman_fire.webp"
+  },
+  "LizardMan_Oilrig": {
+    "max_full_stomach": 680,
+    "avatar": "/pals/lizardman.webp"
+  },
+  "LongCat": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/longcat.webp"
+  },
+  "LotusDragon": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/lotusdragon.webp"
+  },
+  "Manticore": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/manticore.webp"
+  },
+  "Manticore_Dark": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/manticore_dark.webp"
+  },
+  "MimicDog": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/mimicdog.webp"
+  },
+  "Monkey": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/monkey.webp"
+  },
+  "Monkey_Fire": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/monkey_fire.webp"
+  },
+  "MonochromeQueen": {
+    "max_full_stomach": 680,
+    "avatar": "/pals/monochromequeen.webp"
+  },
+  "MoonChild": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/moonchild.webp"
+  },
+  "MoonQueen": {
+    "max_full_stomach": 680,
+    "avatar": "/pals/moonqueen.webp"
+  },
+  "MopBaby": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/mopbaby.webp"
+  },
+  "MopKing": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/mopking.webp"
+  },
+  "Mothman": {
+    "max_full_stomach": 630,
+    "avatar": "/pals/mothman.webp"
+  },
+  "MummyPal": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/mummypal.webp"
+  },
+  "MushroomDragon": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/mushroomdragon.webp"
+  },
+  "MushroomDragon_Dark": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/mushroomdragon_dark.webp"
+  },
+  "MushroomLady": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/mushroomlady.webp"
+  },
+  "Mutant": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/mutant.webp"
+  },
+  "MysteryMask": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/mysterymask.webp"
+  },
+  "NaughtyCat": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/naughtycat.webp"
+  },
+  "NegativeKoala": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/negativekoala.webp"
+  },
+  "NegativeOctopus": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/negativeoctopus.webp"
+  },
+  "NegativeOctopus_Neutral": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/negativeoctopus_neutral.webp"
+  },
+  "NightBlueHorse": {
+    "max_full_stomach": 440,
+    "avatar": "/pals/nightbluehorse.webp"
+  },
+  "NightBlueHorse_Neutral": {
+    "max_full_stomach": 440,
+    "avatar": "/pals/nightbluehorse_neutral.webp"
+  },
+  "NightFox": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/nightfox.webp"
+  },
+  "NightLady": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/nightlady.webp"
+  },
+  "NightLady_Dark": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/nightlady_dark.webp"
+  },
+  "OctopusGirl": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/octopusgirl.webp"
+  },
+  "OctopusGirl_Neutral": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/octopusgirl_neutral.webp"
+  },
+  "OniGhostGirl": {
+    "max_full_stomach": 290,
+    "avatar": "/pals/onighostgirl.webp"
+  },
+  "PandaGirl": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/pandagirl.webp"
+  },
+  "Penguin": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/penguin.webp"
+  },
+  "Penguin_Electric": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/penguin_electric.webp"
+  },
+  "PinkCat": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/pinkcat.webp"
+  },
+  "PinkLizard": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/pinklizard.webp"
+  },
+  "PinkRabbit": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/pinkrabbit.webp"
+  },
+  "PinkRabbit_Grass": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/pinkrabbit_grass.webp"
+  },
+  "PlantSlime": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/plantslime.webp"
+  },
+  "PlantSlime_Flower": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/plantslime.webp"
+  },
+  "Plesiosaur": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/plesiosaur.webp"
+  },
+  "POLICE_HawkBird": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/hawkbird.webp"
+  },
+  "POLICE_ThunderDog": {
+    "max_full_stomach": 350,
+    "avatar": "/pals/thunderdog.webp"
+  },
+  "PoseidonOrca": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/poseidonorca.webp"
+  },
+  "PREDATOR_AmaterasuWolf": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/amaterasuwolf.webp"
+  },
+  "PREDATOR_Baphomet_Dark": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/baphomet_dark.webp"
+  },
+  "PREDATOR_BirdDragon": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/birddragon.webp"
+  },
+  "PREDATOR_CandleGhost": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/candleghost.webp"
+  },
+  "PREDATOR_DarkScorpion": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/darkscorpion.webp"
+  },
+  "PREDATOR_DrillGame": {
+    "max_full_stomach": 350,
+    "avatar": "/pals/drillgame.webp"
+  },
+  "PREDATOR_FairyDragon": {
+    "max_full_stomach": 200,
+    "avatar": "/pals/fairydragon.webp"
+  },
+  "PREDATOR_FeatherOstrich": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/featherostrich.webp"
+  },
+  "PREDATOR_FlowerDinosaur": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/flowerdinosaur.webp"
+  },
+  "PREDATOR_FlowerRabbit_Quest": {
+    "max_full_stomach": 225,
+    "avatar": "/pals/flowerrabbit.webp"
+  },
+  "PREDATOR_Garm": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/garm.webp"
+  },
+  "PREDATOR_Garm_Quest": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/garm.webp"
+  },
+  "PREDATOR_GhostBeast": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/ghostbeast.webp"
+  },
+  "PREDATOR_GoldenHorse": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/goldenhorse.webp"
+  },
+  "PREDATOR_Gorilla": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/gorilla.webp"
+  },
+  "PREDATOR_GrassMammoth_Ice": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/grassmammoth_ice.webp"
+  },
+  "PREDATOR_GrassMinotaur_Ice": {
+    "max_full_stomach": 560,
+    "avatar": "/pals/none.webp"
+  },
+  "PREDATOR_GrassPanda": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/grasspanda.webp"
+  },
+  "PREDATOR_GrimGirl": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/grimgirl.webp"
+  },
+  "PREDATOR_HadesBird_Electric": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/hadesbird_electric.webp"
+  },
+  "PREDATOR_Horus_Water": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/horus_water.webp"
+  },
+  "PREDATOR_LazyDragon": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/lazydragon.webp"
+  },
+  "PREDATOR_Manticore_Dark": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/manticore_dark.webp"
+  },
+  "PREDATOR_MonochromeQueen": {
+    "max_full_stomach": 680,
+    "avatar": "/pals/monochromequeen.webp"
+  },
+  "PREDATOR_MummyPal": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/mummypal.webp"
+  },
+  "PREDATOR_MushroomDragon": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/mushroomdragon.webp"
+  },
+  "PREDATOR_MysteryMask": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/mysterymask.webp"
+  },
+  "PREDATOR_NightBlueHorse": {
+    "max_full_stomach": 440,
+    "avatar": "/pals/nightbluehorse.webp"
+  },
+  "PREDATOR_PandaGirl": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/pandagirl.webp"
+  },
+  "PREDATOR_PinkLizard": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/pinklizard.webp"
+  },
+  "PREDATOR_PinkLizard_Quest": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/pinklizard.webp"
+  },
+  "PREDATOR_PurpleSpider": {
+    "max_full_stomach": 320,
+    "avatar": "/pals/purplespider.webp"
+  },
+  "PREDATOR_RedArmorBird": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/redarmorbird.webp"
+  },
+  "PREDATOR_RedFlowerBird": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/redflowerbird.webp"
+  },
+  "PREDATOR_Ronin_Dark": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/ronin_dark.webp"
+  },
+  "PREDATOR_ScorpionMan": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/scorpionman.webp"
+  },
+  "PREDATOR_SifuDog": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/sifudog.webp"
+  },
+  "PREDATOR_SnakeGirl": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/snakegirl.webp"
+  },
+  "PREDATOR_Suzaku": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/suzaku.webp"
+  },
+  "PREDATOR_ThunderDog": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/thunderdog.webp"
+  },
+  "PREDATOR_Umihebi_Fire": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/umihebi_fire.webp"
+  },
+  "PREDATOR_Umihebi_Fire_Quest": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/umihebi_fire.webp"
+  },
+  "PREDATOR_VolcanicMonster_Ice": {
+    "max_full_stomach": 490,
+    "avatar": "/pals/volcanicmonster_ice.webp"
+  },
+  "PREDATOR_VolcanoDragon": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/volcanodragon.webp"
+  },
+  "PREDATOR_Werewolf_Ice": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/werewolf_ice.webp"
+  },
+  "PREDATOR_WhiteShieldDragon_Quest": {
+    "max_full_stomach": 225,
+    "avatar": "/pals/whiteshielddragon.webp"
+  },
+  "PREDATOR_WhiteTiger_Ground": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/whitetiger_ground.webp"
+  },
+  "PREDATOR_Yeti": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/yeti.webp"
+  },
+  "PurpleSpider": {
+    "max_full_stomach": 320,
+    "avatar": "/pals/purplespider.webp"
+  },
+  "QueenBee": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/queenbee.webp"
+  },
+  "Quest_Farmer03_PinkCat": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/pinkcat.webp"
+  },
+  "Quest_Farmer03_SheepBall": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/sheepball.webp"
+  },
+  "RAID_DarkMechaDragon": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/darkmechadragon.webp"
+  },
+  "RAID_DarkMechaDragon_2": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/darkmechadragon.webp"
+  },
+  "RAID_KingBahamut_Dragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/kingbahamut_dragon.webp"
+  },
+  "RAID_KingBahamut_Dragon_2": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/kingbahamut_dragon.webp"
+  },
+  "RAID_LegendDeer": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/legenddeer.webp"
+  },
+  "RAID_LegendDeer_2": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/legenddeer.webp"
+  },
+  "RAID_NightLady": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/nightlady.webp"
+  },
+  "RAID_NightLady_Dark": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/nightlady_dark.webp"
+  },
+  "RAID_NightLady_Dark_2": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/nightlady_dark.webp"
+  },
+  "RAID_YakushimaBoss001_Green": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss001_Green_2": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002_2": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002_Hand_Left": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002_Hand_Left_2": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002_Hand_Right": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002_Hand_Right_2": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002_Head": {
+    "max_full_stomach": 150
+  },
+  "RAID_YakushimaBoss002_Head_2": {
+    "max_full_stomach": 150
+  },
+  "RaijinDaughter": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/raijindaughter.webp"
+  },
+  "RaijinDaughter_Water": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/raijindaughter_water.webp"
+  },
+  "RedArmorBird": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/redarmorbird.webp"
+  },
+  "RedFlowerBird": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/redflowerbird.webp"
+  },
+  "RobinHood": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/robinhood.webp"
+  },
+  "RobinHood_Ground": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/robinhood_ground.webp"
+  },
+  "RockBeast": {
+    "max_full_stomach": 580,
+    "avatar": "/pals/rockbeast.webp"
+  },
+  "RockBeast_Ice": {
+    "max_full_stomach": 580,
+    "avatar": "/pals/rockbeast_ice.webp"
+  },
+  "Ronin": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/ronin.webp"
+  },
+  "Ronin_Dark": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/ronin_dark.webp"
+  },
+  "SaintCentaur": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/saintcentaur.webp"
+  },
+  "SakuraSaurus": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/sakurasaurus.webp"
+  },
+  "SakuraSaurus_Water": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/sakurasaurus_water.webp"
+  },
+  "SamuraiDog": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/samuraidog.webp"
+  },
+  "ScorpionMan": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/scorpionman.webp"
+  },
+  "ScorpionMan_Electric": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/scorpionman_electric.webp"
+  },
+  "Sekhmet": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/sekhmet.webp"
+  },
+  "Serpent": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/serpent.webp"
+  },
+  "Serpent_Ground": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/serpent_ground.webp"
+  },
+  "SharkKid": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/sharkkid.webp"
+  },
+  "SharkKid_Fire": {
+    "max_full_stomach": 150,
+    "avatar": "/pals/sharkkid_fire.webp"
+  },
+  "Sheepball": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/sheepball.webp"
+  },
+  "SifuDog": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/sifudog.webp"
+  },
+  "SkyDragon": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/skydragon.webp"
+  },
+  "SkyDragon_Grass": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/skydragon_grass.webp"
+  },
+  "SleeveRabbit": {
+    "max_full_stomach": 400,
+    "avatar": "/pals/sleeverabbit.webp"
+  },
+  "SmallArmadillo": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/smallarmadillo.webp"
+  },
+  "SmallYeti": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/smallyeti.webp"
+  },
+  "SnakeGirl": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/snakegirl.webp"
+  },
+  "SnowPeafowl": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/t_snowpeafowl_icon_normal.webp"
+  },
+  "SnowTigerBeastman": {
+    "max_full_stomach": 730,
+    "avatar": "/pals/snowtigerbeastman.webp"
+  },
+  "SoldierBee": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/soldierbee.webp"
+  },
+  "StuffedShark": {
+    "max_full_stomach": 140,
+    "avatar": "/pals/t_commonhuman_icon_normal.webp"
+  },
+  "StuffedShark_Fire": {
+    "max_full_stomach": 140,
+    "avatar": "/pals/t_commonhuman_icon_normal.webp"
+  },
+  "SUMMON_DarkAlien": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/darkalien.webp"
+  },
+  "SUMMON_DarkAlien_MAX": {
+    "max_full_stomach": 475,
+    "avatar": "/pals/darkalien.webp"
+  },
+  "SUMMON_WhiteAlienDragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/whitealiendragon.webp"
+  },
+  "SUMMON_WhiteAlienDragon_MAX": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/whitealiendragon.webp"
+  },
+  "SumoDog": {
+    "max_full_stomach": 420,
+    "avatar": "/pals/sumodog.webp"
+  },
+  "Suzaku": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/suzaku.webp"
+  },
+  "Suzaku_Water": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/suzaku_water.webp"
+  },
+  "SweetsSheep": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/sweetssheep.webp"
+  },
+  "SweetsSheep_Ground": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/sweetssheep_ground.webp"
+  },
+  "SwordCutlassfish": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/swordcutlassfish.webp"
+  },
+  "SwordCutlassfish_Fire": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/swordcutlassfish_fire.webp"
+  },
+  "TentacleTurtle": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/tentacleturtle.webp"
+  },
+  "TentacleTurtle_Ground": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/tentacleturtle_ground.webp"
+  },
+  "ThiefBird": {
+    "max_full_stomach": 560
+  },
+  "ThunderBird": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/thunderbird.webp"
+  },
+  "ThunderBird_Ice": {
+    "max_full_stomach": 340,
+    "avatar": "/pals/thunderbird_ice.webp"
+  },
+  "ThunderDog": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/thunderdog.webp"
+  },
+  "ThunderDog_Ice": {
+    "max_full_stomach": 280,
+    "avatar": "/pals/thunderdog_ice.webp"
+  },
+  "ThunderDragonMan": {
+    "max_full_stomach": 620,
+    "avatar": "/pals/thunderdragonman.webp"
+  },
+  "ThunderFluffyBird": {
+    "max_full_stomach": 450,
+    "avatar": "/pals/thunderfluffybird.webp"
+  },
+  "TropicalOstrich": {
+    "max_full_stomach": 410,
+    "avatar": "/pals/tropicalostrich.webp"
+  },
+  "Umihebi": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/umihebi.webp"
+  },
+  "Umihebi_Fire": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/umihebi_fire.webp"
+  },
+  "VenusFlytrap": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/venusflytrap.webp"
+  },
+  "VioletFairy": {
+    "max_full_stomach": 380,
+    "avatar": "/pals/violetfairy.webp"
+  },
+  "VolcanicMonster": {
+    "max_full_stomach": 490,
+    "avatar": "/pals/volcanicmonster.webp"
+  },
+  "VolcanicMonster_Ice": {
+    "max_full_stomach": 490,
+    "avatar": "/pals/volcanicmonster_ice.webp"
+  },
+  "VolcanoDragon": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/volcanodragon.webp"
+  },
+  "VolcanoDragon_Ice": {
+    "max_full_stomach": 530,
+    "avatar": "/pals/volcanodragon_ice.webp"
+  },
+  "WeaselDragon": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/weaseldragon.webp"
+  },
+  "WeaselDragon_Fire": {
+    "max_full_stomach": 230,
+    "avatar": "/pals/weaseldragon_fire.webp"
+  },
+  "Werewolf": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/werewolf.webp"
+  },
+  "Werewolf_Ice": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/werewolf_ice.webp"
+  },
+  "WhiteAlienDragon": {
+    "max_full_stomach": 470,
+    "avatar": "/pals/whitealiendragon.webp"
+  },
+  "WhiteDeer": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/whitedeer.webp"
+  },
+  "WhiteDeer_Dark": {
+    "max_full_stomach": 550,
+    "avatar": "/pals/whitedeer_dark.webp"
+  },
+  "WhiteMoth": {
+    "max_full_stomach": 350,
+    "avatar": "/pals/whitemoth.webp"
+  },
+  "WhiteMoth_Neutral": {
+    "max_full_stomach": 350,
+    "avatar": "/pals/whitemoth_neutral.webp"
+  },
+  "WhiteShieldDragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/whiteshielddragon.webp"
+  },
+  "WhiteTiger": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/whitetiger.webp"
+  },
+  "WhiteTiger_Ground": {
+    "max_full_stomach": 480,
+    "avatar": "/pals/whitetiger_ground.webp"
+  },
+  "WindChimes": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/windchimes.webp"
+  },
+  "WindChimes_Ice": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/windchimes_ice.webp"
+  },
+  "WingGolem": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/winggolem.webp"
+  },
+  "WingGolem_Fire": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/winggolem_fire.webp"
+  },
+  "WingGolem_Oilrig": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/winggolem.webp"
+  },
+  "WizardOwl": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/wizardowl.webp"
+  },
+  "WoolFox": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/woolfox.webp"
+  },
+  "WorldTreeDragon": {
+    "max_full_stomach": 600,
+    "avatar": "/pals/worldtreedragon.webp"
+  },
+  "YakushimaBoss001": {
+    "max_full_stomach": 240,
+    "avatar": "/pals/yakushimaboss001.webp"
+  },
+  "YakushimaBoss001_Small": {
+    "max_full_stomach": 220,
+    "avatar": "/pals/yakushimaboss001_small.webp"
+  },
+  "YakushimaMonster001": {
+    "max_full_stomach": 180,
+    "avatar": "/pals/yakushimamonster001.webp"
+  },
+  "YakushimaMonster001_Blue": {
+    "max_full_stomach": 210,
+    "avatar": "/pals/yakushimamonster001_blue.webp"
+  },
+  "YakushimaMonster001_Pink": {
+    "max_full_stomach": 300,
+    "avatar": "/pals/yakushimamonster001_pink.webp"
+  },
+  "YakushimaMonster001_Purple": {
+    "max_full_stomach": 270,
+    "avatar": "/pals/yakushimamonster001_purple.webp"
+  },
+  "YakushimaMonster001_Rainbow": {
+    "max_full_stomach": 330,
+    "avatar": "/pals/yakushimamonster001_rainbow.webp"
+  },
+  "YakushimaMonster001_Red": {
+    "max_full_stomach": 240,
+    "avatar": "/pals/yakushimamonster001_red.webp"
+  },
+  "YakushimaMonster002": {
+    "max_full_stomach": 180,
+    "avatar": "/pals/yakushimamonster002.webp"
+  },
+  "YakushimaMonster003": {
+    "max_full_stomach": 220,
+    "avatar": "/pals/yakushimamonster003.webp"
+  },
+  "YakushimaMonster003_Purple": {
+    "max_full_stomach": 220,
+    "avatar": "/pals/yakushimamonster003_purple.webp"
+  },
+  "Yeti": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/yeti.webp"
+  },
+  "Yeti_Grass": {
+    "max_full_stomach": 460,
+    "avatar": "/pals/yeti_grass.webp"
+  },
+  "Hunter_Fat_GatlingGun": {
+    "max_full_stomach": 100,
+    "avatar": "/pals/hunter_fat_gatlinggun.webp"
+  }
+}

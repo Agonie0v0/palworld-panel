@@ -1119,8 +1119,11 @@ async function liveServerData(config) {
   return { info, players, metrics, settings };
 }
 
-async function runAction(action, config) {
+async function runAction(action, config, onProgress = async () => {}) {
   const service = config.server.serviceName;
+  const report = (progress, message, line = "", force = true) =>
+    Promise.resolve(onProgress(progress, message, line, force)).catch(() => {});
+  await report(8, `Preparing ${action}`, `[panel] Preparing server action: ${action}`);
   if (config.server.mode === "docker") {
     if (config.server.containerName) {
       const dockerActions = {
@@ -1132,12 +1135,18 @@ async function runAction(action, config) {
         if (!config.server.imageName) {
           return { ok: false, stdout: "", stderr: "server.imageName is required for Docker image updates." };
         }
-        const pull = await exec("docker", ["pull", config.server.imageName]);
+        await report(22, "Pulling Docker image", `[docker] Pulling ${config.server.imageName}`);
+        const pull = await spawnWithLogs("docker", ["pull", config.server.imageName], {}, (line, stream) =>
+          report(45, "Pulling Docker image", stream === "stderr" ? `[stderr] ${line}` : line, false));
         if (!pull.ok) return pull;
-        return exec("docker", ["restart", config.server.containerName]);
+        await report(82, "Restarting Docker container", `[docker] Restarting ${config.server.containerName}`);
+        return spawnWithLogs("docker", ["restart", config.server.containerName], {}, (line, stream) =>
+          report(90, "Restarting Docker container", stream === "stderr" ? `[stderr] ${line}` : line, false));
       }
       if (!dockerActions[action]) throw new Error("Unsupported action.");
-      return exec("docker", dockerActions[action]);
+      await report(35, `Running Docker ${action}`, `[docker] docker ${dockerActions[action].join(" ")}`);
+      return spawnWithLogs("docker", dockerActions[action], {}, (line, stream) =>
+        report(70, `Running Docker ${action}`, stream === "stderr" ? `[stderr] ${line}` : line, false));
     }
 
     const dockerActions = {
@@ -1147,7 +1156,10 @@ async function runAction(action, config) {
       update: ["pull"]
     };
     if (!dockerActions[action]) throw new Error("Unsupported action.");
-    return dockerCompose(config, dockerActions[action]);
+    await report(35, `Running Docker Compose ${action}`, `[docker compose] ${dockerActions[action].join(" ")}`);
+    const result = await dockerCompose(config, dockerActions[action]);
+    await report(result.ok ? 92 : 100, result.ok ? "Docker Compose action completed" : "Docker Compose action failed", result.stderr || result.stdout || "[docker compose] Command finished");
+    return result;
   }
 
   const systemdActions = {
@@ -1159,7 +1171,9 @@ async function runAction(action, config) {
   if (!systemdActions[action]) throw new Error("Unsupported action.");
 
   if (action === "update") {
-    const stop = await exec("systemctl", ["stop", service]);
+    await report(15, "Stopping the game service", `[systemd] Stopping ${service}`);
+    const stop = await spawnWithLogs("systemctl", ["stop", service], {}, (line, stream) =>
+      report(24, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
     if (!stop.ok) return stop;
     const depotDownloader = path.basename(config.server.steamcmdPath).toLowerCase().includes("depotdownloader");
     const updateArgs = depotDownloader
@@ -1174,14 +1188,25 @@ async function runAction(action, config) {
         "validate",
         "+quit"
       ];
-    const update = await exec(config.server.steamcmdPath, updateArgs, { timeout: 30 * 60 * 1000 });
+    await report(30, "Updating Palworld server files", `[updater] ${config.server.steamcmdPath} ${updateArgs.join(" ")}`);
+    let updateLines = 0;
+    const update = await spawnWithLogs(config.server.steamcmdPath, updateArgs, { timeout: 30 * 60 * 1000 }, (line, stream) => {
+      updateLines += 1;
+      return report(Math.min(82, 30 + Math.floor(updateLines / 8)), "Updating Palworld server files", stream === "stderr" ? `[stderr] ${line}` : line, false);
+    });
     if (!update.ok) {
-      await exec("systemctl", ["start", service]);
+      await report(88, "Update failed; restoring the service", `[systemd] Starting ${service} after update failure`);
+      await spawnWithLogs("systemctl", ["start", service]);
       return update;
     }
-    return exec("systemctl", ["start", service]);
+    await report(90, "Starting the updated service", `[systemd] Starting ${service}`);
+    return spawnWithLogs("systemctl", ["start", service], {}, (line, stream) =>
+      report(95, "Starting the updated service", stream === "stderr" ? `[stderr] ${line}` : line, false));
   }
-  return exec("systemctl", systemdActions[action]);
+  const actionMessage = { start: "Starting", stop: "Stopping", restart: "Restarting" }[action] || "Running";
+  await report(35, `${actionMessage} the game service`, `[systemd] systemctl ${systemdActions[action].join(" ")}`);
+  return spawnWithLogs("systemctl", systemdActions[action], {}, (line, stream) =>
+    report(78, `Running server ${action}`, stream === "stderr" ? `[stderr] ${line}` : line, false));
 }
 
 function remoteSaveSourceUrl(config) {
@@ -1268,15 +1293,21 @@ async function prepareSaveSource(config, purpose) {
   }
 }
 
-async function createBackup(config) {
+async function createBackup(config, onProgress = async () => {}) {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const report = (progress, message, line = "", force = true) =>
+    Promise.resolve(onProgress(progress, message, line, force)).catch(() => {});
+  await report(8, "Preparing save backup", `[backup] Creating backup ${stamp}`);
   await fsp.mkdir(config.server.backupDir, { recursive: true });
   const target = path.join(config.server.backupDir, `palworld-save-${stamp}.tar.gz`);
   const source = config.automation.saveSourceMode === "agent"
     ? await prepareSaveSource(config, "backup")
     : { directory: config.server.saveDir, cleanup: async () => {} };
   try {
-    const result = await exec("tar", ["-czf", target, "-C", source.directory, "."]);
+    await report(30, "Archiving save data", `[backup] Source: ${source.directory}\n[backup] Target: ${target}`);
+    const result = await spawnWithLogs("tar", ["-czf", target, "-C", source.directory, "."], {}, (line, stream) =>
+      report(70, "Archiving save data", stream === "stderr" ? `[stderr] ${line}` : line, false));
+    await report(result.ok ? 95 : 100, result.ok ? "Save backup created" : "Save backup failed", result.ok ? `[backup] Completed: ${target}` : (result.stderr || result.stdout));
     return { ...result, backup: target };
   } finally {
     await source.cleanup();
@@ -2371,6 +2402,45 @@ async function handleApi(req, res, config) {
 
   if (req.method === "POST" && req.url === "/api/action") {
     const body = await readBody(req);
+    if (body.live) {
+      const action = String(body.action || "");
+      if (!["start", "stop", "restart", "update", "backup"].includes(action)) return sendError(res, 400, "Unsupported action.");
+      const job = await advancedFeatures.queueJob(
+        `server-${action}`,
+        `Server ${action}`,
+        async (onJobProgress) => {
+          const logs = [];
+          let lineCount = 0;
+          let reportChain = Promise.resolve();
+          const report = (progress, message, line = "", force = true) => {
+            if (line) {
+              logs.push(...String(line).split(/\r?\n/).filter(Boolean));
+              if (logs.length > 500) logs.splice(0, logs.length - 500);
+              lineCount += 1;
+            }
+            if (!force && lineCount % 8 !== 0) return reportChain;
+            reportChain = reportChain.then(() => onJobProgress(progress, message, { logs: logs.slice(-500) })).catch(() => {});
+            return reportChain;
+          };
+          await report(3, `Queued server ${action}`, `[panel] Server ${action} task started`);
+          const result = await managedCall("action", { action }, () => action === "backup" ? createBackup(config, report) : runAction(action, config, report));
+          if (result.stdout) logs.push(...String(result.stdout).split(/\r?\n/).filter(Boolean));
+          if (result.stderr) logs.push(...String(result.stderr).split(/\r?\n/).filter(Boolean).map((line) => `[stderr] ${line}`));
+          await reportChain;
+          if (!result.ok) {
+            const error = new Error(result.stderr || result.stdout || `Server ${action} failed.`);
+            error.logs = logs.slice(-500);
+            error.result = result;
+            throw error;
+          }
+          logs.push(`[panel] Server ${action} completed successfully`);
+          await onJobProgress(98, `Server ${action} completed`, { logs: logs.slice(-500) });
+          return { ...result, logs: logs.slice(-500), message: `Server ${action} completed` };
+        },
+        { action }
+      );
+      return sendJson(res, 202, { ok: true, job });
+    }
     const result = await managedCall("action", { action: body.action }, () => body.action === "backup" ? createBackup(config) : runAction(body.action, config));
     return sendJson(res, result.ok ? 200 : 500, { ok: result.ok, result });
   }

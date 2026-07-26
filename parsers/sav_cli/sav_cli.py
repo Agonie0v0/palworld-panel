@@ -30,6 +30,8 @@ from structurer import (
     structure_base_workers,
     attach_bases_to_guilds,
     structure_item_containers,
+    structure_container_locations,
+    structure_inventory,
 )
 
 MAX_ERROR_BODY_LENGTH = 512
@@ -163,6 +165,8 @@ def main():
     workers = structure_base_workers(players, guilds, bases, filetime)
     guilds = attach_bases_to_guilds(guilds, bases)
     containers = structure_item_containers()
+    container_locations = structure_container_locations(players, bases, guilds)
+    inventory = structure_inventory(containers, container_locations)
     pals = _dedupe_pals([*_flatten_player_pals(players), *workers])
 
     # Fill save_last_online from the player's guild membership record.
@@ -194,6 +198,7 @@ def main():
                     "guilds": guilds,
                     "pals": pals,
                     "bases": bases,
+                    "inventory": inventory,
                     "containers": containers,
                 },
                 f,

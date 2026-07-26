@@ -229,8 +229,8 @@ class ApiService extends Service {
     return this.fetch(`/api/deploy/server`).post(param).json();
   }
 
-  async runServerAction(action) {
-    return this.fetch(`/api/action`).post({ action }).json();
+  async runServerAction(action, live = false) {
+    return this.fetch(`/api/action`).post({ action, ...(live ? { live: true } : {}) }).json();
   }
 
   async resetWorld(param) {

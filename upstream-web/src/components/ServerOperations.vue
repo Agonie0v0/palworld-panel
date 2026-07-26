@@ -79,14 +79,20 @@ const deploymentStatusType = computed(() => {
 });
 const deploymentStatusText = computed(() => {
   const status = deploymentJob.value?.status || "queued";
+  const deployJob = deploymentJob.value?.type === "server-deploy";
   const key = {
-    queued: "operations.deployQueued",
-    running: "operations.deployRunning",
-    completed: "operations.deployCompleted",
-    failed: "operations.deployFailed",
+    queued: deployJob ? "operations.deployQueued" : "operations.operationQueued",
+    running: deployJob ? "operations.deployRunning" : "operations.operationRunning",
+    completed: deployJob ? "operations.deployCompleted" : "operations.operationCompleted",
+    failed: deployJob ? "operations.deployFailed" : "operations.operationFailed",
   }[status];
   return key ? t(key) : status;
 });
+const operationModalTitle = computed(() =>
+  deploymentJob.value?.type === "server-deploy"
+    ? t("operations.deployProgressTitle")
+    : t("operations.operationProgressTitle"),
+);
 
 const formatBytes = (bytes) => {
   const value = Number(bytes || 0);
@@ -144,6 +150,7 @@ watch(
   (show) => {
     if (show) refresh();
   },
+  { immediate: true },
 );
 
 const stopDeploymentPolling = () => {
@@ -163,11 +170,11 @@ const pollDeploymentJob = async (jobId) => {
   busy.value = "";
   if (previousStatus === job.status) return;
   if (job.status === "completed") {
-    message.success(t("operations.deploySuccess"));
+    message.success(t(job.type === "server-deploy" ? "operations.deploySuccess" : "operations.actionSuccess"));
     await refresh();
     emit("server-changed");
   } else {
-    message.error(job.error || t("operations.deployFailed"));
+    message.error(job.error || t(job.type === "server-deploy" ? "operations.deployFailed" : "operations.actionFailed"));
   }
 };
 
@@ -181,13 +188,25 @@ onBeforeUnmount(stopDeploymentPolling);
 
 const runAction = async (action) => {
   busy.value = action;
-  const { data, statusCode } = await api.runServerAction(action);
-  busy.value = "";
-  if (statusCode.value === 200 && data.value?.ok !== false) {
-    message.success(t("operations.actionSuccess"));
-    await refresh();
+  deploymentModal.value = true;
+  deploymentJob.value = { type: `server-${action}`, status: "queued", progress: 0, message: t("operations.operationWaiting"), logs: [], metadata: { action } };
+  const { data, statusCode } = await api.runServerAction(action, true);
+  if ([200, 202].includes(statusCode.value) && data.value?.ok !== false) {
+    if (data.value?.job?.id) {
+      deploymentJob.value = data.value.job;
+      startDeploymentPolling(data.value.job.id);
+    } else {
+      busy.value = "";
+      deploymentJob.value = { type: `server-${action}`, status: "completed", progress: 100, message: t("operations.operationCompleted"), result: data.value?.result || {} };
+      message.success(t("operations.actionSuccess"));
+      await refresh();
+      emit("server-changed");
+    }
   } else {
-    message.error(data.value?.error || data.value?.result?.stderr || t("operations.actionFailed"));
+    busy.value = "";
+    const error = data.value?.error || data.value?.result?.stderr || t("operations.actionFailed");
+    deploymentJob.value = { type: `server-${action}`, status: "failed", progress: 100, message: t("operations.operationFailed"), error, result: data.value?.result || {} };
+    message.error(error);
   }
 };
 
@@ -201,6 +220,7 @@ const submitDeploy = () => {
       busy.value = "deploy";
       deploymentModal.value = true;
       deploymentJob.value = {
+        type: "server-deploy",
         status: "queued",
         progress: 0,
         message: t("operations.deployWaiting"),
@@ -214,6 +234,7 @@ const submitDeploy = () => {
         } else {
           busy.value = "";
           deploymentJob.value = {
+            type: "server-deploy",
             status: "completed",
             progress: 100,
             message: t("operations.deployCompleted"),
@@ -227,6 +248,7 @@ const submitDeploy = () => {
         busy.value = "";
         const error = data.value?.result?.stderr || data.value?.error || t("operations.deployFailed");
         deploymentJob.value = {
+          type: "server-deploy",
           status: "failed",
           progress: 100,
           message: t("operations.deployFailed"),
@@ -335,7 +357,7 @@ const maintenance = (operation) => {
               <template #icon><n-icon><SystemUpdateAltRound /></n-icon></template>{{ $t('operations.update') }}
             </n-button>
             <n-button secondary :loading="busy === 'backup'" @click="runAction('backup')">
-              <template #icon><n-icon><SaveOutlined /></n-icon></template>{{ $t('button.backup') }}
+              <template #icon><n-icon><SaveOutlined /></n-icon></template>{{ $t('operations.createBackup') }}
             </n-button>
           </n-flex>
           </section>
@@ -527,7 +549,7 @@ const maintenance = (operation) => {
   >
     <n-card
       class="deployment-progress-card"
-      :title="$t('operations.deployProgressTitle')"
+      :title="operationModalTitle"
       :closable="!deploymentActive"
       @close="deploymentModal = false"
     >
@@ -555,11 +577,11 @@ const maintenance = (operation) => {
         {{ deploymentJob.error }}
       </n-alert>
       <div class="deployment-log-heading">
-        <span>{{ $t('operations.deployLogs') }}</span>
+        <span>{{ deploymentJob?.type === 'server-deploy' ? $t('operations.deployLogs') : $t('operations.operationLogs') }}</span>
         <small>{{ deploymentLogs.length }}</small>
       </div>
       <n-scrollbar class="deployment-log-scroll" trigger="none">
-        <pre aria-live="polite">{{ deploymentLogs.length ? deploymentLogs.join('\n') : $t('operations.deployWaitingForLogs') }}</pre>
+        <pre aria-live="polite">{{ deploymentLogs.length ? deploymentLogs.join('\n') : (deploymentJob?.type === 'server-deploy' ? $t('operations.deployWaitingForLogs') : $t('operations.operationWaitingForLogs')) }}</pre>
       </n-scrollbar>
       <template #footer>
         <n-flex justify="end">
