@@ -9,10 +9,8 @@ import {
 } from "@vicons/material";
 import {
   Activity,
-  BrandSteam,
   ChevronsLeft,
   Database,
-  Dna,
   Package,
   Paw,
 } from "@vicons/tabler";
@@ -55,8 +53,6 @@ import PalStatusManager from "@/components/PalStatusManager.vue";
 import PlayerDataManager from "@/components/PlayerDataManager.vue";
 import PalArchiveManager from "@/components/PalArchiveManager.vue";
 import InventoryManager from "@/components/InventoryManager.vue";
-import BreedingLab from "@/components/BreedingLab.vue";
-import WorkshopManager from "@/components/WorkshopManager.vue";
 import MapView from "@/views/PcHome/component/MapView.vue";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import themeStore from "@/stores/model/theme.js";
@@ -308,8 +304,6 @@ const showPalStatus = ref(false);
 const showPlayerData = ref(false);
 const showPalArchive = ref(false);
 const showInventory = ref(false);
-const showBreedingLab = ref(false);
-const showWorkshop = ref(false);
 const handleShutdown = () => {
   if (checkAuthToken()) {
     showShutdownDialog.value = true;
@@ -340,8 +334,6 @@ const executeAdminAction = (key) => {
   if (key === "player-data") openAuthenticated(showPlayerData);
   if (key === "pal-archive") openAuthenticated(showPalArchive);
   if (key === "inventory") openAuthenticated(showInventory);
-  if (key === "breeding") openAuthenticated(showBreedingLab);
-  if (key === "workshop") openAuthenticated(showWorkshop);
   if (key === "settings") {
     if (checkAuthToken()) emit("open-config");
     else {
@@ -800,22 +792,6 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="mobile-tool-button"
-          @click="handleAdminAction('breeding')"
-        >
-          <n-icon><Dna /></n-icon>
-          <span>{{ locale === "zh" ? "配种实验室" : "Breeding lab" }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('workshop')"
-        >
-          <n-icon><BrandSteam /></n-icon>
-          <span>Workshop</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
           @click="handleAdminAction('palconf')"
         >
           <n-icon><Settings /></n-icon>
@@ -935,8 +911,6 @@ onBeforeUnmount(() => {
   <player-data-manager v-model:show="showPlayerData" />
   <pal-archive-manager v-model:show="showPalArchive" />
   <inventory-manager v-model:show="showInventory" />
-  <breeding-lab v-model:show="showBreedingLab" />
-  <workshop-manager v-model:show="showWorkshop" />
   <whitelist-manager
     v-model:show="showWhitelistManager"
     :players="playerList"

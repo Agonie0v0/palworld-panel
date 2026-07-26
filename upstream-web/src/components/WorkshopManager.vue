@@ -46,7 +46,7 @@ const translation = ref({});
 const copy = computed(() =>
   locale.value === "zh"
     ? {
-        title: "Steam Workshop",
+        title: "创意工坊",
         subtitle:
           "搜索 Palworld 创意工坊，查看真实模组信息，并通过 SteamCMD 安装到服务器。安装和更新后需要重启。",
         search: "搜索",
@@ -54,7 +54,7 @@ const copy = computed(() =>
         settings: "设置",
         query: "搜索模组名称或关键词",
         noResults: "没有搜索结果",
-        noInstalled: "还没有通过面板安装 Workshop 模组",
+        noInstalled: "还没有通过面板安装创意工坊模组",
         install: "安装",
         translate: "翻译",
         queued: "安装任务已提交，可在运维中心查看进度。",
@@ -74,13 +74,13 @@ const copy = computed(() =>
         translationKey: "翻译 API Key",
         translationKeyHint: "留空则保持现有 Key。公网地址必须使用 HTTPS。",
         save: "保存设置",
-        saved: "Workshop 设置已保存。",
-        removed: "Workshop 模组已删除。",
+        saved: "创意工坊设置已保存。",
+        removed: "创意工坊模组已删除。",
         changed: "模组状态已更新，重启后生效。",
-        removeConfirm: "将删除服务器上的 Workshop 模组文件。",
+        removeConfirm: "将删除服务器上的创意工坊模组文件。",
       }
     : {
-        title: "Steam Workshop",
+        title: "Creative Workshop",
         subtitle:
           "Search the Palworld Workshop, inspect real mod metadata, and install with SteamCMD. A restart is required after installs or updates.",
         search: "Search",
@@ -249,6 +249,7 @@ watch(
     :title="copy.title"
     width="min(94vw, 1180px)"
     :embedded="embedded"
+    :inherit-workspace-title="false"
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra

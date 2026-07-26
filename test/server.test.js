@@ -20,6 +20,9 @@ const {
   parseRconInfo,
   parseShowPlayers,
   playerUidFromId,
+  productionInventoryDiff,
+  productionInventorySnapshot,
+  publicOfflineProductionState,
   staticCacheControl,
   testSaveSource,
   testRestConnection,
@@ -29,6 +32,55 @@ const {
   principalCan,
   watchdogSettings
 } = require("../src/server");
+
+test("offline production snapshots only include base and guild inventory", () => {
+  const snapshot = productionInventorySnapshot({
+    inventory: [
+      {
+        item_id: "Wood",
+        locations: [
+          { kind: "player", count: 40 },
+          { kind: "base", count: 120 },
+          { kind: "guild", count: 30 },
+        ],
+      },
+      { item_id: "Stone", locations: [{ kind: "base", count: 75 }] },
+    ],
+  });
+  assert.deepEqual(snapshot, { wood: 150, stone: 75 });
+});
+
+test("offline production diffs separate gains from inventory withdrawals", () => {
+  const diff = productionInventoryDiff(
+    { wood: 100, stone: 80 },
+    { wood: 145, stone: 50, fiber: 20 },
+  );
+  assert.equal(diff.totalGain, 65);
+  assert.equal(diff.totalLoss, 30);
+  assert.deepEqual(diff.gains.map((row) => [row.item_id, row.delta]), [
+    ["wood", 45],
+    ["fiber", 20],
+  ]);
+  assert.deepEqual(diff.losses.map((row) => [row.item_id, row.delta]), [
+    ["stone", -30],
+  ]);
+});
+
+test("offline production public state does not expose raw inventory baselines", () => {
+  const value = publicOfflineProductionState({
+    current: {
+      id: "window-1",
+      startedAt: "2026-07-26T10:00:00.000Z",
+      lastSampleAt: "2026-07-26T11:00:00.000Z",
+      baseline: { wood: 100 },
+      latest: { wood: 130 },
+    },
+    history: [],
+  });
+  assert.equal(value.current.totalGain, 30);
+  assert.equal("baseline" in value.current, false);
+  assert.equal("latest" in value.current, false);
+});
 
 test("static cache policy refreshes the app shell while retaining hashed assets", () => {
   assert.equal(

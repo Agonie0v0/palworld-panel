@@ -1536,7 +1536,7 @@ function createAdvancedFeatures(deps) {
           webdav: true,
           saveSources: true,
           mods: true,
-          breeding: true,
+          breeding: false,
           workshop: true,
         },
       });

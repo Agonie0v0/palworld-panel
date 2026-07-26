@@ -6,16 +6,24 @@ import {
   AlertTriangle,
   Apple,
   BuildingCommunity,
+  Clock,
   Heart,
+  Package,
   Paw,
   Refresh,
   Search,
   Tools,
+  TrendingUp,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
-import palCatalog from "@/assets/pal.json";
-import unknownPal from "@/assets/pals/unknown.png";
+import unknownAsset from "@/assets/pals/unknown.png";
+import {
+  enrichInventory,
+  enrichPals,
+  itemIcon,
+  palPortrait,
+} from "@/utils/gameData";
 import { buildPalWorkerRows, filterPalWorkerRows } from "@/utils/palWorkers";
 
 const props = defineProps({
@@ -28,143 +36,265 @@ const api = new ApiService();
 const loading = ref(false);
 const loadError = ref("");
 const bases = ref([]);
+const production = ref({ current: null, history: [] });
+const activeTab = ref("workers");
 const selectedBase = ref("all");
 const search = ref("");
 const attentionOnly = ref(false);
+const selectedWork = ref([]);
+const selectedPassives = ref([]);
+const selected = ref(null);
 
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() =>
   zh.value
     ? {
         title: "帕鲁状态",
-        subtitle: "查看各据点工作帕鲁的当前任务、身体状态与异常情况。",
+        subtitle: "查看据点帕鲁的当前任务、设施、工作能力、被动词条、身体状态与离线物资增量。",
         refresh: "重新解析",
+        workersTab: "工作状态",
+        productionTab: "离线产出",
         allBases: "全部据点",
-        search: "搜索帕鲁、工作、设施或异常",
+        search: "搜索帕鲁、任务、设施或被动词条",
         attentionOnly: "只看需关注",
         workers: "工作帕鲁",
-        bases: "有帕鲁的据点",
-        attention: "需关注",
-        pal: "帕鲁",
-        activity: "当前状态",
-        condition: "身体状态",
-        assignment: "工作设施",
+        bases: "活跃据点",
+        attention: "需要关注",
+        workingNow: "有明确任务",
+        currentTask: "当前任务",
+        facility: "工作设施",
+        wellbeing: "身体状态",
         hunger: "饱食度",
         sanity: "SAN",
-        level: "等级",
         healthy: "状态正常",
-        autonomous: "自主工作",
-        working: "工作中",
-        assigned: "已分配",
-        event: "特殊状态",
         noFacility: "未记录设施",
-        empty: "当前筛选条件下没有工作帕鲁",
-        unavailable: "存档数据读取失败，请确认存档源与解析器状态。",
+        work: "工作能力",
+        passives: "被动词条",
+        skills: "已装备主动技能",
+        masteredSkills: "已掌握主动技能",
+        partner: "伙伴技能",
+        disabledWork: "已禁用工作",
+        iv: "个体值",
+        workSpeed: "工作速度",
+        empty: "没有符合筛选条件的工作帕鲁",
+        unavailable: "存档数据读取失败，请检查存档源与解析器状态。",
+        currentWindow: "当前无人时段",
+        history: "最近无人时段",
+        collecting: "正在估算",
+        noWindow: "当前有玩家在线，等待下一次无人时段开始统计。",
+        estimate: "按据点仓库和公会箱的库存净变化估算，不包含玩家背包。",
+        totalGain: "物资净增",
+        itemTypes: "增长种类",
+        lastSample: "最近采样",
+        withdrawals: "取用或消耗",
+        noGain: "该时段暂未检测到物资增长",
+        noHistory: "还没有完成的无人在线时段记录",
+        detail: "工作帕鲁详情",
+        level: "等级",
+        owner: "所在据点",
+        stars: "星级",
       }
     : {
         title: "Pal status",
-        subtitle:
-          "Monitor current work, wellbeing, and alerts across every base.",
+        subtitle: "Inspect current tasks, facilities, work levels, passives, wellbeing, and estimated offline production.",
         refresh: "Parse again",
+        workersTab: "Work status",
+        productionTab: "Offline production",
         allBases: "All bases",
-        search: "Search Pals, work, facilities, or conditions",
+        search: "Search Pals, tasks, facilities, or passives",
         attentionOnly: "Needs attention only",
         workers: "Worker Pals",
         bases: "Active bases",
         attention: "Need attention",
-        pal: "Pal",
-        activity: "Current status",
-        condition: "Wellbeing",
-        assignment: "Facility",
+        workingNow: "Assigned tasks",
+        currentTask: "Current task",
+        facility: "Facility",
+        wellbeing: "Wellbeing",
         hunger: "Hunger",
         sanity: "SAN",
-        level: "Level",
         healthy: "Healthy",
-        autonomous: "Autonomous",
-        working: "Working",
-        assigned: "Assigned",
-        event: "Special event",
         noFacility: "No facility recorded",
+        work: "Work suitability",
+        passives: "Passives",
+        skills: "Equipped active skills",
+        masteredSkills: "Mastered active skills",
+        partner: "Partner skill",
+        disabledWork: "Disabled work",
+        iv: "IVs",
+        workSpeed: "Work speed",
         empty: "No worker Pals match these filters",
-        unavailable:
-          "Save data could not be loaded. Check the save source and parser.",
+        unavailable: "Save data could not be loaded. Check the save source and parser.",
+        currentWindow: "Current empty-server window",
+        history: "Recent empty-server windows",
+        collecting: "Estimating",
+        noWindow: "Players are online. Tracking starts when the server becomes empty.",
+        estimate: "Estimated from net changes in base and guild storage. Player inventories are excluded.",
+        totalGain: "Net materials gained",
+        itemTypes: "Growing item types",
+        lastSample: "Last sample",
+        withdrawals: "Used or withdrawn",
+        noGain: "No material growth has been detected in this window yet",
+        noHistory: "No completed empty-server windows yet",
+        detail: "Worker Pal details",
+        level: "Level",
+        owner: "Base",
+        stars: "Stars",
       },
 );
 
-const palNames = computed(() => palCatalog[zh.value ? "zh" : "en"] || {});
-const rows = computed(() => buildPalWorkerRows(bases.value, palNames.value));
+const workLabels = computed(() =>
+  zh.value
+    ? {
+        EmitFlame: "生火",
+        Watering: "浇水",
+        Seeding: "播种",
+        GenerateElectricity: "发电",
+        Handcraft: "手工作业",
+        Collection: "采集",
+        Deforest: "伐木",
+        Mining: "采矿",
+        ProductMedicine: "制药",
+        Cool: "冷却",
+        Transport: "搬运",
+        MonsterFarm: "牧场",
+      }
+    : {
+        EmitFlame: "Kindling",
+        Watering: "Watering",
+        Seeding: "Planting",
+        GenerateElectricity: "Electricity",
+        Handcraft: "Handiwork",
+        Collection: "Gathering",
+        Deforest: "Lumbering",
+        Mining: "Mining",
+        ProductMedicine: "Medicine",
+        Cool: "Cooling",
+        Transport: "Transport",
+        MonsterFarm: "Farming",
+      },
+);
+
+const enrichedBases = computed(() =>
+  bases.value.map((base) => ({
+    ...base,
+    workers: enrichPals(
+      (Array.isArray(base.workers) ? base.workers : []).map((worker) => ({
+        ...worker,
+        base_name: base.display_name || base.name || base.id,
+        location_kind: "base",
+      })),
+    ),
+  })),
+);
+const rows = computed(() => buildPalWorkerRows(enrichedBases.value));
 const visibleRows = computed(() =>
   filterPalWorkerRows(rows.value, {
     baseId: selectedBase.value,
     search: search.value,
     attentionOnly: attentionOnly.value,
+    work: selectedWork.value,
+    passives: selectedPassives.value,
   }),
 );
-const activeBases = computed(
-  () => new Set(rows.value.map((row) => row.baseId)).size,
-);
-const attentionCount = computed(
-  () => rows.value.filter((row) => row.attention).length,
-);
+const activeBases = computed(() => new Set(rows.value.map((row) => row.baseId)).size);
+const attentionCount = computed(() => rows.value.filter((row) => row.attention).length);
+const assignedCount = computed(() => rows.value.filter((row) => ["working", "assigned"].includes(row.activityKind)).length);
 const baseOptions = computed(() => [
   { label: `${copy.value.allBases} (${rows.value.length})`, value: "all" },
-  ...bases.value
-    .filter((base) => (base.workers || []).length)
+  ...enrichedBases.value
+    .filter((base) => base.workers.length)
     .map((base, index) => ({
-      label: `${base.display_name || base.name || base.id || `Base ${index + 1}`} (${(base.workers || []).length})`,
+      label: `${base.display_name || base.name || base.id || `Base ${index + 1}`} (${base.workers.length})`,
       value: String(base.id || `base-${index + 1}`),
     })),
 ]);
+const workOptions = computed(() =>
+  Object.entries(workLabels.value).map(([id, label]) => ({
+    id,
+    label,
+    count: rows.value.filter((row) => row.workSuitabilities.some((work) => work.id === id)).length,
+  })),
+);
+const passiveOptions = computed(() => {
+  const values = new Map();
+  rows.value.forEach((row) =>
+    row.passives.forEach((skill) => values.set(skill.id, { label: skill.name, value: skill.id })),
+  );
+  return [...values.values()].sort((a, b) => a.label.localeCompare(b.label));
+});
+const currentProductionItems = computed(() => productionItems(production.value.current));
 
 const result = (response) => response?.data?.value || {};
 const load = async () => {
   loading.value = true;
   loadError.value = "";
-  try {
-    const response = await api.getWorldData();
-    const data = result(response).data || {};
+  const [worldResult, productionResult] = await Promise.allSettled([
+    api.getWorldData(),
+    api.getOfflineProduction(),
+  ]);
+  if (worldResult.status === "fulfilled") {
+    const data = result(worldResult.value).data || {};
     bases.value = Array.isArray(data.bases) ? data.bases : [];
-  } catch {
+  } else {
     bases.value = [];
     loadError.value = copy.value.unavailable;
-  } finally {
-    loading.value = false;
   }
+  if (productionResult.status === "fulfilled") {
+    production.value = result(productionResult.value).data || { current: null, history: [] };
+  }
+  loading.value = false;
 };
 
-const portrait = (row) =>
-  row.assetKey
-    ? new URL(`../assets/pals/${row.assetKey}.png`, import.meta.url).href
-    : unknownPal;
-const useFallbackPortrait = (event) => {
-  if (event.target.src !== unknownPal) event.target.src = unknownPal;
+const toggleWork = (id) => {
+  selectedWork.value = selectedWork.value.includes(id)
+    ? selectedWork.value.filter((value) => value !== id)
+    : [...selectedWork.value, id];
 };
-const rounded = (value) => (value === null ? "-" : `${Math.round(value)}%`);
+const useFallback = (event) => {
+  if (event.target.src !== unknownAsset) event.target.src = unknownAsset;
+};
+const rounded = (value) => (value == null ? "-" : `${Math.round(Number(value))}%`);
 const meterStatus = (value, warning) => {
-  if (value === null) return "default";
+  if (value == null) return "default";
   if (value < warning) return "error";
   if (value < warning + 20) return "warning";
   return "success";
 };
+const humanizeToken = (value) =>
+  String(value || "")
+    .replace(/^EPalWorkSuitability::/i, "")
+    .replace(/^PalWorkDef_/i, "")
+    .replace(/_/g, " ")
+    .trim();
 const activityLabel = (row) => {
-  if (zh.value) return row.activityLabel;
-  if (row.activityKind === "working") {
-    const detail = String(row.workSuitability || "")
-      .replace(/^EPalWorkSuitability::/i, "")
-      .replace(/_/g, " ")
-      .trim();
-    return detail ? `${copy.value.working} · ${detail}` : copy.value.working;
+  if (row.activityKind === "working" && row.workSuitability) {
+    const id = humanizeToken(row.workSuitability);
+    return zh.value ? `正在${workLabels.value[id] || id}` : `Working: ${workLabels.value[id] || id}`;
   }
-  return copy.value[row.activityKind] || row.activityLabel;
+  return row.activityLabel || "-";
 };
-const activityIcon = (kind) =>
-  kind === "event" ? AlertTriangle : kind === "working" ? Tools : Activity;
+const facilityLabel = (row) => humanizeToken(row.facility) || copy.value.noFacility;
+const formatTime = (value) =>
+  value ? new Intl.DateTimeFormat(zh.value ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-";
+const formatDuration = (seconds) => {
+  const total = Math.max(0, Number(seconds || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return zh.value ? `${hours} 小时 ${minutes} 分钟` : `${hours}h ${minutes}m`;
+};
+const liveDuration = (session) =>
+  session?.startedAt ? formatDuration((Date.now() - Date.parse(session.startedAt)) / 1000) : "-";
+function productionItems(session) {
+  return enrichInventory(
+    (Array.isArray(session?.gains) ? session.gains : []).map((item) => ({
+      ...item,
+      count: item.delta,
+      locations: [],
+    })),
+  );
+}
 
-watch(
-  () => props.show,
-  (show) => show && load(),
-  { immediate: true },
-);
+watch(() => props.show, (show) => show && load(), { immediate: true });
 </script>
 
 <template>
@@ -172,482 +302,148 @@ watch(
     :show="show"
     class="pal-status-modal"
     :title="copy.title"
-    width="min(96vw, 1280px)"
+    width="min(97vw, 1380px)"
     :embedded="embedded"
     @update:show="emit('update:show', $event)"
   >
     <template #description>{{ copy.subtitle }}</template>
     <template #header-extra>
       <n-button quaternary :loading="loading" @click="load">
-        <template #icon
-          ><n-icon><Refresh /></n-icon
-        ></template>
+        <template #icon><n-icon><Refresh /></n-icon></template>
         {{ copy.refresh }}
       </n-button>
     </template>
 
-    <div class="pal-status-summary" aria-live="polite">
-      <div>
-        <n-icon><Paw /></n-icon>
-        <span>{{ copy.workers }}</span>
-        <strong>{{ rows.length }}</strong>
-      </div>
-      <div>
-        <n-icon><BuildingCommunity /></n-icon>
-        <span>{{ copy.bases }}</span>
-        <strong>{{ activeBases }}</strong>
-      </div>
-      <div :class="{ 'has-alerts': attentionCount > 0 }">
-        <n-icon><AlertTriangle /></n-icon>
-        <span>{{ copy.attention }}</span>
-        <strong>{{ attentionCount }}</strong>
-      </div>
-    </div>
-
-    <div class="pal-status-toolbar">
-      <n-input v-model:value="search" clearable :placeholder="copy.search">
-        <template #prefix
-          ><n-icon><Search /></n-icon
-        ></template>
-      </n-input>
-      <n-select
-        v-model:value="selectedBase"
-        :options="baseOptions"
-        :consistent-menu-width="false"
-      />
-      <label class="attention-filter">
-        <n-switch v-model:value="attentionOnly" />
-        <span>{{ copy.attentionOnly }}</span>
-      </label>
-    </div>
-
-    <n-alert v-if="loadError" type="error" :show-icon="true">
-      {{ loadError }}
-    </n-alert>
-
-    <n-spin :show="loading">
-      <div v-if="visibleRows.length" class="pal-status-list">
-        <div class="pal-status-head" aria-hidden="true">
-          <span>{{ copy.pal }}</span>
-          <span>{{ copy.activity }}</span>
-          <span>{{ copy.condition }}</span>
-          <span>{{ copy.assignment }}</span>
+    <n-tabs v-model:value="activeTab" type="segment" :animated="false">
+      <n-tab-pane name="workers" :tab="copy.workersTab">
+        <div class="status-summary" aria-live="polite">
+          <div><n-icon><Paw /></n-icon><span>{{ copy.workers }}</span><strong>{{ rows.length }}</strong></div>
+          <div><n-icon><BuildingCommunity /></n-icon><span>{{ copy.bases }}</span><strong>{{ activeBases }}</strong></div>
+          <div :class="{ alert: attentionCount }"><n-icon><AlertTriangle /></n-icon><span>{{ copy.attention }}</span><strong>{{ attentionCount }}</strong></div>
+          <div><n-icon><Tools /></n-icon><span>{{ copy.workingNow }}</span><strong>{{ assignedCount }}</strong></div>
         </div>
 
-        <article
-          v-for="row in visibleRows"
-          :key="row.id"
-          class="pal-status-row"
-          :class="{ 'needs-attention': row.attention }"
-        >
-          <div class="pal-identity">
-            <div class="pal-portrait" :class="{ 'has-alert': row.attention }">
-              <img
-                :src="portrait(row)"
-                :alt="row.speciesName"
-                @error="useFallbackPortrait"
-              />
+        <section class="worker-filters">
+          <div class="filter-main">
+            <n-input v-model:value="search" clearable :placeholder="copy.search">
+              <template #prefix><n-icon><Search /></n-icon></template>
+            </n-input>
+            <n-select v-model:value="selectedBase" :options="baseOptions" :consistent-menu-width="false" />
+            <n-select v-model:value="selectedPassives" multiple filterable clearable :max-tag-count="1" :placeholder="copy.passives" :options="passiveOptions" />
+            <label class="attention-filter"><n-switch v-model:value="attentionOnly" /><span>{{ copy.attentionOnly }}</span></label>
+          </div>
+          <div class="work-filter">
+            <span>{{ copy.work }}</span>
+            <div>
+              <button v-for="work in workOptions" :key="work.id" type="button" :class="{ active: selectedWork.includes(work.id) }" @click="toggleWork(work.id)">
+                <span>{{ work.label }}</span><small>{{ work.count }}</small>
+              </button>
             </div>
-            <div class="pal-name">
-              <div>
-                <strong>{{ row.name }}</strong>
-                <n-tag size="small" :bordered="false">
-                  {{ copy.level }} {{ row.level || "-" }}
-                </n-tag>
+          </div>
+        </section>
+
+        <n-alert v-if="loadError" type="error" :bordered="false">{{ loadError }}</n-alert>
+        <div class="result-count">{{ visibleRows.length }} / {{ rows.length }}</div>
+        <div v-if="visibleRows.length" class="worker-grid" :aria-busy="loading">
+          <button v-for="row in visibleRows" :key="row.id" type="button" class="worker-card" :class="{ attention: row.attention }" @click="selected = row">
+            <span class="pal-portrait"><img :src="palPortrait(row.type)" :alt="row.speciesName" @error="useFallback" /></span>
+            <span class="worker-main">
+              <span class="worker-name"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
+              <span class="worker-task"><n-icon><Activity /></n-icon><span><strong>{{ activityLabel(row) }}</strong><small>{{ facilityLabel(row) }} · {{ row.baseName }}</small></span></span>
+              <span class="work-chips"><i v-for="work in row.workSuitabilities" :key="work.id">{{ workLabels[work.id] || work.id }} {{ work.level }}</i></span>
+              <span v-if="row.passives.length" class="passive-line">{{ row.passives.slice(0, 3).map((skill) => skill.name).join(' · ') }}</span>
+            </span>
+            <span class="worker-vitals">
+              <span><n-icon><Apple /></n-icon><i>{{ copy.hunger }}</i><strong>{{ rounded(row.hunger) }}</strong></span>
+              <n-progress type="line" :percentage="row.hunger ?? 0" :status="meterStatus(row.hunger, 20)" :show-indicator="false" :height="5" />
+              <span><n-icon><Heart /></n-icon><i>{{ copy.sanity }}</i><strong>{{ rounded(row.sanity) }}</strong></span>
+              <n-progress type="line" :percentage="row.sanity ?? 0" :status="meterStatus(row.sanity, 50)" :show-indicator="false" :height="5" />
+              <n-tag v-if="row.attention" size="small" type="warning" :bordered="false">{{ row.conditions.join(' · ') }}</n-tag>
+              <n-tag v-else size="small" type="success" :bordered="false">{{ copy.healthy }}</n-tag>
+            </span>
+          </button>
+        </div>
+        <n-empty v-else-if="!loading" class="status-empty" :description="copy.empty"><template #icon><n-icon><Paw /></n-icon></template></n-empty>
+      </n-tab-pane>
+
+      <n-tab-pane name="production" :tab="copy.productionTab">
+        <n-alert type="info" :bordered="false" class="production-note">{{ copy.estimate }}</n-alert>
+        <section v-if="production.current" class="production-current">
+          <header>
+            <div><span class="live-dot" /><div><strong>{{ copy.currentWindow }}</strong><small>{{ formatTime(production.current.startedAt) }} · {{ liveDuration(production.current) }}</small></div></div>
+            <n-tag type="success" :bordered="false">{{ copy.collecting }}</n-tag>
+          </header>
+          <div class="production-summary">
+            <div><n-icon><TrendingUp /></n-icon><span>{{ copy.totalGain }}</span><strong>+{{ Number(production.current.totalGain || 0).toLocaleString() }}</strong></div>
+            <div><n-icon><Package /></n-icon><span>{{ copy.itemTypes }}</span><strong>{{ currentProductionItems.length }}</strong></div>
+            <div><n-icon><Clock /></n-icon><span>{{ copy.lastSample }}</span><strong>{{ formatTime(production.current.lastSampleAt) }}</strong></div>
+            <div><n-icon><AlertTriangle /></n-icon><span>{{ copy.withdrawals }}</span><strong>{{ Number(production.current.totalLoss || 0).toLocaleString() }}</strong></div>
+          </div>
+          <div v-if="currentProductionItems.length" class="gain-grid">
+            <div v-for="item in currentProductionItems" :key="item.itemId" class="gain-row">
+              <img :src="itemIcon(item.itemId)" alt="" @error="useFallback" /><span><strong>{{ item.name }}</strong><small>{{ item.category }}</small></span><b>+{{ item.count.toLocaleString() }}</b>
+            </div>
+          </div>
+          <n-empty v-else :description="copy.noGain" />
+        </section>
+        <n-empty v-else class="production-empty" :description="copy.noWindow"><template #icon><n-icon><Clock /></n-icon></template></n-empty>
+
+        <section class="production-history">
+          <h3>{{ copy.history }}</h3>
+          <n-collapse v-if="production.history?.length">
+            <n-collapse-item v-for="session in production.history" :key="session.id" :name="session.id">
+              <template #header>
+                <div class="history-header"><span><strong>{{ formatTime(session.startedAt) }}</strong><small>{{ formatDuration(session.durationSeconds) }}</small></span><b>+{{ Number(session.totalGain || 0).toLocaleString() }}</b></div>
+              </template>
+              <div v-if="productionItems(session).length" class="gain-grid compact">
+                <div v-for="item in productionItems(session)" :key="item.itemId" class="gain-row">
+                  <img :src="itemIcon(item.itemId)" alt="" @error="useFallback" /><span><strong>{{ item.name }}</strong><small>{{ item.category }}</small></span><b>+{{ item.count.toLocaleString() }}</b>
+                </div>
               </div>
-              <span>{{ row.baseName }}</span>
-              <small v-if="row.name !== row.speciesName">{{
-                row.speciesName
-              }}</small>
-            </div>
-          </div>
-
-          <div class="pal-activity">
-            <n-icon :class="`activity-${row.activityKind}`">
-              <component :is="activityIcon(row.activityKind)" />
-            </n-icon>
-            <div>
-              <strong>{{ activityLabel(row) }}</strong>
-              <span>{{ row.activityDetail || row.baseName }}</span>
-            </div>
-          </div>
-
-          <div class="pal-wellbeing">
-            <div class="wellbeing-meter">
-              <span
-                ><n-icon><Apple /></n-icon>{{ copy.hunger }}</span
-              >
-              <n-progress
-                type="line"
-                :percentage="row.hunger ?? 0"
-                :status="meterStatus(row.hunger, 20)"
-                :show-indicator="false"
-                :height="6"
-                :border-radius="3"
-              />
-              <strong>{{ rounded(row.hunger) }}</strong>
-            </div>
-            <div class="wellbeing-meter">
-              <span
-                ><n-icon><Heart /></n-icon>{{ copy.sanity }}</span
-              >
-              <n-progress
-                type="line"
-                :percentage="row.sanity ?? 0"
-                :status="meterStatus(row.sanity, 50)"
-                :show-indicator="false"
-                :height="6"
-                :border-radius="3"
-              />
-              <strong>{{ rounded(row.sanity) }}</strong>
-            </div>
-            <div class="condition-tags">
-              <n-tag
-                v-if="!row.conditions.length"
-                size="small"
-                type="success"
-                :bordered="false"
-              >
-                {{ copy.healthy }}
-              </n-tag>
-              <n-tag
-                v-for="condition in row.conditions"
-                v-else
-                :key="condition"
-                size="small"
-                type="warning"
-                :bordered="false"
-              >
-                {{ condition }}
-              </n-tag>
-            </div>
-          </div>
-
-          <div class="pal-facility">
-            <n-icon><BuildingCommunity /></n-icon>
-            <div>
-              <strong>{{ row.facility || copy.noFacility }}</strong>
-              <span>{{ row.guildName || row.baseName }}</span>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <n-empty
-        v-else-if="!loading"
-        class="pal-status-empty"
-        :description="copy.empty"
-      >
-        <template #icon
-          ><n-icon><Paw /></n-icon
-        ></template>
-      </n-empty>
-    </n-spin>
+              <n-empty v-else :description="copy.noGain" />
+            </n-collapse-item>
+          </n-collapse>
+          <n-empty v-else :description="copy.noHistory" />
+        </section>
+      </n-tab-pane>
+    </n-tabs>
   </tool-surface>
+
+  <n-drawer :show="Boolean(selected)" :width="580" placement="right" @update:show="$event || (selected = null)">
+    <n-drawer-content v-if="selected" :title="copy.detail" closable>
+      <div class="detail-hero"><img :src="palPortrait(selected.type)" alt="" @error="useFallback" /><div><h2>{{ selected.name }}</h2><p>{{ selected.speciesName }} · Lv.{{ selected.level }} · {{ '★'.repeat(selected.stars) || (zh ? '零星' : 'No stars') }}</p><n-flex><n-tag v-if="selected.lucky" type="warning">Lucky</n-tag><n-tag v-if="selected.alpha" type="error">Alpha</n-tag></n-flex></div></div>
+      <n-descriptions :column="2" bordered label-placement="top">
+        <n-descriptions-item :label="copy.owner">{{ selected.baseName }}</n-descriptions-item>
+        <n-descriptions-item :label="copy.currentTask">{{ activityLabel(selected) }}</n-descriptions-item>
+        <n-descriptions-item :label="copy.facility">{{ facilityLabel(selected) }}</n-descriptions-item>
+        <n-descriptions-item :label="copy.workSpeed">{{ selected.workSpeed || '-' }}</n-descriptions-item>
+        <n-descriptions-item label="HP">{{ selected.hp || '-' }} / {{ selected.maxHp || '-' }}</n-descriptions-item>
+        <n-descriptions-item :label="copy.wellbeing">{{ copy.hunger }} {{ rounded(selected.hunger) }} · {{ copy.sanity }} {{ rounded(selected.sanity) }}</n-descriptions-item>
+        <n-descriptions-item label="HP IV">{{ selected.iv.hp }}</n-descriptions-item>
+        <n-descriptions-item label="Attack IV">{{ selected.iv.attack }}</n-descriptions-item>
+        <n-descriptions-item label="Defense IV">{{ selected.iv.defense }}</n-descriptions-item>
+        <n-descriptions-item :label="copy.iv">{{ selected.iv.average }}</n-descriptions-item>
+      </n-descriptions>
+      <section class="detail-section"><h3>{{ copy.work }}</h3><div class="detail-tags"><n-tag v-for="work in selected.workSuitabilities" :key="work.id">{{ workLabels[work.id] || work.id }} Lv.{{ work.level }}</n-tag><span v-if="!selected.workSuitabilities.length">-</span></div></section>
+      <section v-if="selected.disabledWork.length" class="detail-section"><h3>{{ copy.disabledWork }}</h3><div class="detail-tags"><n-tag v-for="work in selected.disabledWork" :key="work" type="warning">{{ workLabels[work] || humanizeToken(work) }}</n-tag></div></section>
+      <section class="detail-section"><h3>{{ copy.passives }}</h3><div class="skill-list"><div v-for="skill in selected.passives" :key="skill.id"><strong>{{ skill.name }}</strong><p>{{ skill.description || skill.id }}</p></div><span v-if="!selected.passives.length">-</span></div></section>
+      <section class="detail-section"><h3>{{ copy.partner }}</h3><div v-if="selected.partnerSkill" class="skill-list"><div><strong>{{ selected.partnerSkill.name }}</strong><p>{{ selected.partnerSkill.description }}</p></div></div><span v-else>-</span></section>
+      <section class="detail-section"><h3>{{ copy.skills }}</h3><div class="skill-list"><div v-for="skill in selected.equippedSkills" :key="skill.id"><strong>{{ skill.name }}</strong><p>{{ [skill.element, skill.power != null ? `Power ${skill.power}` : '', skill.cooldown != null ? `CD ${skill.cooldown}s` : ''].filter(Boolean).join(' · ') }}</p></div><span v-if="!selected.equippedSkills.length">-</span></div></section>
+      <section class="detail-section"><h3>{{ copy.masteredSkills }}</h3><div class="skill-list"><div v-for="skill in selected.masteredSkills" :key="skill.id"><strong>{{ skill.name }}</strong><p>{{ [skill.element, skill.power != null ? `Power ${skill.power}` : '', skill.cooldown != null ? `CD ${skill.cooldown}s` : ''].filter(Boolean).join(' · ') }}</p></div><span v-if="!selected.masteredSkills.length">-</span></div></section>
+    </n-drawer-content>
+  </n-drawer>
 </template>
 
 <style scoped>
-:global(.pal-status-modal) {
-  width: min(1280px, 96vw);
-}
-
-.pal-status-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: 16px;
-  background: var(--app-surface-muted);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-}
-
-.pal-status-summary > div {
-  display: grid;
-  min-height: 68px;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-}
-
-.pal-status-summary > div + div {
-  border-left: 1px solid var(--app-border);
-}
-
-.pal-status-summary .n-icon {
-  color: var(--app-accent);
-  font-size: 1.25rem;
-}
-
-.pal-status-summary span {
-  color: var(--app-ink-muted);
-  font-size: 0.75rem;
-  font-weight: 650;
-}
-
-.pal-status-summary strong {
-  color: var(--app-ink);
-  font-family: var(--app-font-data);
-  font-size: 1.375rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.pal-status-summary .has-alerts .n-icon,
-.pal-status-summary .has-alerts strong {
-  color: var(--app-warning);
-}
-
-.pal-status-toolbar {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(180px, 260px) auto;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.attention-filter {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  color: var(--app-ink-secondary);
-  font-size: 0.8125rem;
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-.pal-status-list {
-  overflow: hidden;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-}
-
-.pal-status-head,
-.pal-status-row {
-  display: grid;
-  grid-template-columns:
-    minmax(240px, 1.45fr)
-    minmax(180px, 1fr)
-    minmax(220px, 1.25fr)
-    minmax(170px, 0.9fr);
-  align-items: center;
-  gap: 16px;
-}
-
-.pal-status-head {
-  min-height: 38px;
-  padding: 8px 16px;
-  color: var(--app-ink-muted);
-  background: var(--app-surface-muted);
-  border-bottom: 1px solid var(--app-border);
-  font-size: 0.6875rem;
-  font-weight: 700;
-}
-
-.pal-status-row {
-  min-height: 92px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--app-border);
-  transition: background-color 160ms ease-in-out;
-}
-
-.pal-status-row:last-child {
-  border-bottom: 0;
-}
-
-.pal-status-row:hover {
-  background: var(--app-surface-muted);
-}
-
-.pal-status-row.needs-attention {
-  box-shadow: inset 3px 0 0 var(--app-warning);
-}
-
-.pal-identity,
-.pal-activity,
-.pal-facility {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-
-.pal-portrait {
-  display: grid;
-  width: 58px;
-  height: 58px;
-  flex: 0 0 58px;
-  place-items: center;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--app-info-soft) 72%, var(--app-surface));
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-}
-
-.pal-portrait.has-alert {
-  background: var(--app-warning-soft);
-  border-color: color-mix(in srgb, var(--app-warning) 42%, var(--app-border));
-}
-
-.pal-portrait img {
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
-}
-
-.pal-name,
-.pal-activity > div,
-.pal-facility > div {
-  min-width: 0;
-}
-
-.pal-name > div {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.pal-name strong,
-.pal-activity strong,
-.pal-facility strong {
-  display: block;
-  overflow: hidden;
-  color: var(--app-ink);
-  font-size: 0.875rem;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pal-name span,
-.pal-name small,
-.pal-activity span,
-.pal-facility span {
-  display: block;
-  overflow: hidden;
-  color: var(--app-ink-muted);
-  font-size: 0.75rem;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pal-name > span {
-  margin-top: 4px;
-  color: var(--app-ink-secondary);
-  font-weight: 650;
-}
-
-.pal-activity > .n-icon,
-.pal-facility > .n-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  place-items: center;
-  color: var(--app-accent);
-  background: var(--app-accent-soft);
-  border-radius: 8px;
-  font-size: 1.125rem;
-}
-
-.pal-activity > .activity-event {
-  color: var(--app-warning);
-  background: var(--app-warning-soft);
-}
-
-.pal-wellbeing {
-  display: grid;
-  min-width: 0;
-  gap: 8px;
-}
-
-.wellbeing-meter {
-  display: grid;
-  grid-template-columns: 68px minmax(50px, 1fr) 38px;
-  align-items: center;
-  gap: 8px;
-}
-
-.wellbeing-meter > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--app-ink-muted);
-  font-size: 0.6875rem;
-  font-weight: 650;
-}
-
-.wellbeing-meter > span .n-icon {
-  color: var(--app-info);
-  font-size: 0.875rem;
-}
-
-.wellbeing-meter > strong {
-  color: var(--app-ink-secondary);
-  font-family: var(--app-font-data);
-  font-size: 0.6875rem;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.condition-tags {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.pal-status-empty {
-  min-height: 280px;
-  padding: 48px 16px;
-  border: 1px dashed var(--app-border-strong);
-  border-radius: 8px;
-}
-
-@media (max-width: 1050px) {
-  .pal-status-head {
-    display: none;
-  }
-
-  .pal-status-row {
-    grid-template-columns: minmax(220px, 1.2fr) minmax(170px, 1fr);
-  }
-}
-
-@media (max-width: 700px) {
-  :global(.pal-status-modal) {
-    width: 100vw;
-    max-width: 100vw;
-  }
-
-  .pal-status-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .pal-status-summary > div {
-    min-height: 52px;
-  }
-
-  .pal-status-summary > div + div {
-    border-top: 1px solid var(--app-border);
-    border-left: 0;
-  }
-
-  .pal-status-toolbar,
-  .pal-status-row {
-    grid-template-columns: 1fr;
-  }
-
-  .pal-status-row {
-    gap: 14px;
-    padding: 16px;
-  }
-
-  .pal-wellbeing {
-    padding-block: 12px;
-    border-block: 1px solid var(--app-border);
-  }
-}
+:global(.pal-status-modal) { width: min(1380px, 97vw); }
+.status-summary,.production-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 14px 0 16px; overflow: hidden; background: var(--app-border); border: 1px solid var(--app-border); border-radius: 8px; gap: 1px; }
+.status-summary > div,.production-summary > div { display: grid; min-height: 68px; grid-template-columns: 26px minmax(0,1fr) auto; align-items: center; gap: 9px; padding: 12px 15px; background: var(--app-surface); }
+.status-summary .n-icon,.production-summary .n-icon { color: var(--app-accent); font-size: 20px; }.status-summary span,.production-summary span { color: var(--app-ink-muted); font-size: 11px; }.status-summary strong,.production-summary strong { font-family: var(--app-font-data); font-size: 18px; font-variant-numeric: tabular-nums; }.status-summary .alert .n-icon,.status-summary .alert strong { color: var(--app-warning); }
+.worker-filters { overflow: hidden; border: 1px solid var(--app-border); border-radius: 8px; }.filter-main { display: grid; grid-template-columns: minmax(240px,1fr) minmax(170px,.55fr) minmax(200px,.65fr) auto; align-items: center; gap: 10px; padding: 14px; }.attention-filter { display: flex; align-items: center; gap: 8px; color: var(--app-ink-secondary); font-size: 12px; white-space: nowrap; }.work-filter { display: grid; grid-template-columns: 110px minmax(0,1fr); align-items: start; gap: 12px; padding: 12px 14px; background: var(--app-surface-muted); border-top: 1px solid var(--app-border); }.work-filter > span { padding-top: 6px; font-weight: 700; }.work-filter > div { display: flex; flex-wrap: wrap; gap: 6px; }.work-filter button { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 5px 9px; color: var(--app-ink-secondary); background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 6px; cursor: pointer; }.work-filter button.active { color: var(--app-accent); background: var(--app-accent-soft); border-color: color-mix(in srgb,var(--app-accent) 45%,var(--app-border)); }.work-filter small { color: var(--app-ink-muted); font-family: var(--app-font-data); }
+.result-count { margin: 11px 0 7px; color: var(--app-ink-muted); font: 12px var(--app-font-data); text-align: right; }.worker-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(390px,1fr)); gap: 8px; }.worker-card { display: grid; grid-template-columns: 72px minmax(0,1fr) 108px; align-items: center; gap: 12px; min-height: 142px; padding: 12px; color: var(--app-ink); background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 8px; cursor: pointer; text-align: left; transition: border-color 180ms cubic-bezier(.22,1,.36,1),background-color 180ms cubic-bezier(.22,1,.36,1); }.worker-card:hover { border-color: color-mix(in srgb,var(--app-accent) 48%,var(--app-border)); }.worker-card.attention { background: color-mix(in srgb,var(--app-warning-soft) 38%,var(--app-surface)); border-color: color-mix(in srgb,var(--app-warning) 36%,var(--app-border)); }.pal-portrait { display: grid; width: 72px; height: 72px; place-items: center; overflow: hidden; background: var(--app-surface-muted); border-radius: 8px; }.pal-portrait img { width: 68px; height: 68px; object-fit: contain; }.worker-main,.worker-name,.worker-task,.worker-vitals { min-width: 0; }.worker-name strong,.worker-name small,.passive-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.worker-name small { margin-top: 3px; color: var(--app-ink-muted); font-size: 10px; }.worker-name b { color: var(--app-warning); }.worker-task { display: flex; align-items: center; gap: 7px; margin-top: 9px; }.worker-task > .n-icon { color: var(--app-accent); }.worker-task span { min-width: 0; }.worker-task strong,.worker-task small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.worker-task strong { font-size: 12px; }.worker-task small { margin-top: 2px; color: var(--app-ink-muted); font-size: 10px; }.work-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }.work-chips i { padding: 2px 5px; color: var(--app-accent); background: var(--app-accent-soft); border-radius: 4px; font-size: 9px; font-style: normal; }.passive-line { margin-top: 7px; color: var(--app-ink-secondary); font-size: 10px; }.worker-vitals { display: grid; gap: 5px; }.worker-vitals > span { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 4px; }.worker-vitals i { color: var(--app-ink-muted); font-size: 9px; font-style: normal; }.worker-vitals strong { font: 10px var(--app-font-data); }.worker-vitals .n-tag { max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.status-empty,.production-empty { min-height: 260px; padding: 44px 16px; }
+.production-note { margin: 14px 0; }.production-current { border-bottom: 1px solid var(--app-border); padding-bottom: 22px; }.production-current > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.production-current > header > div { display: flex; align-items: center; gap: 10px; }.production-current header strong,.production-current header small { display: block; }.production-current header small { margin-top: 3px; color: var(--app-ink-muted); }.live-dot { width: 9px; height: 9px; background: var(--app-success); border-radius: 50%; }.production-summary > div { grid-template-columns: 24px minmax(0,1fr); }.production-summary strong { grid-column: 2; font-size: 15px; }.gain-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 1px; overflow: hidden; background: var(--app-border); border: 1px solid var(--app-border); border-radius: 8px; }.gain-row { display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 10px; min-height: 62px; padding: 9px 12px; background: var(--app-surface); }.gain-row img { width: 42px; height: 42px; object-fit: contain; background: var(--app-surface-muted); border-radius: 6px; }.gain-row span,.gain-row strong,.gain-row small { min-width: 0; }.gain-row strong,.gain-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.gain-row small { margin-top: 3px; color: var(--app-ink-muted); font-size: 10px; }.gain-row b { color: var(--app-success); font: 15px var(--app-font-data); }.production-history { padding-top: 22px; }.production-history h3 { margin: 0 0 12px; font-size: 15px; }.history-header { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding-right: 8px; }.history-header strong,.history-header small { display: block; }.history-header small { margin-top: 2px; color: var(--app-ink-muted); font-size: 10px; }.history-header b { color: var(--app-success); font: 14px var(--app-font-data); }.gain-grid.compact { margin-bottom: 12px; }
+.detail-hero { display: flex; align-items: center; gap: 18px; margin-bottom: 20px; }.detail-hero img { width: 104px; height: 104px; object-fit: contain; background: var(--app-surface-muted); border-radius: 8px; }.detail-hero h2 { margin: 0; font-size: 22px; }.detail-hero p { margin: 5px 0 10px; color: var(--app-ink-muted); }.detail-section { padding: 17px 0; border-bottom: 1px solid var(--app-border); }.detail-section h3 { margin: 0 0 10px; font-size: 14px; }.detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }.skill-list { display: grid; gap: 6px; }.skill-list > div { padding: 10px 12px; background: var(--app-surface-muted); border-radius: 6px; }.skill-list p { margin: 4px 0 0; color: var(--app-ink-muted); font-size: 11px; line-height: 1.5; }
+@media (max-width: 1050px) { .filter-main { grid-template-columns: 1fr 1fr; }.status-summary,.production-summary { grid-template-columns: repeat(2,1fr); }.worker-grid { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { :global(.pal-status-modal) { width: 100vw; max-width: 100vw; }.status-summary,.production-summary,.filter-main { grid-template-columns: 1fr; }.work-filter { grid-template-columns: 1fr; }.worker-card { grid-template-columns: 62px minmax(0,1fr); }.pal-portrait { width: 62px; height: 62px; }.pal-portrait img { width: 58px; height: 58px; }.worker-vitals { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; padding-top: 10px; border-top: 1px solid var(--app-border); }.worker-vitals .n-tag { grid-column: 1 / -1; max-width: none; }.gain-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .worker-card { transition: none; } }
 </style>

@@ -6,12 +6,15 @@ const props = defineProps({
   embedded: { type: Boolean, default: false },
   title: { type: String, default: "" },
   width: { type: String, default: "min(94vw, 1180px)" },
+  inheritWorkspaceTitle: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(["update:show"]);
 const workspaceTitle = inject("workspace-title", null);
 const resolvedTitle = computed(() =>
-  props.embedded && workspaceTitle?.value ? workspaceTitle.value : props.title,
+  props.embedded && props.inheritWorkspaceTitle && workspaceTitle?.value
+    ? workspaceTitle.value
+    : props.title,
 );
 
 const close = () => emit("update:show", false);

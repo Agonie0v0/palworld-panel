@@ -19,6 +19,8 @@ const bases = [
         sanity: 45,
         activity: { kind: "working", label: "正在采矿" },
         facility: "StonePit",
+        workSuitabilities: [{ id: "Mining", level: 2 }],
+        passives: [{ id: "Artisan", name: "工匠精神" }],
         conditions: ["饱食度偏低", "SAN 偏低"],
         needs_attention: true,
       },
@@ -34,6 +36,8 @@ test("maps base workers into visual status records", () => {
   assert.equal(rows[0].assetKey, "sheepball");
   assert.equal(rows[0].hunger, 18.4);
   assert.equal(rows[0].attention, true);
+  assert.equal(rows[0].workSuitabilities[0].level, 2);
+  assert.equal(rows[0].passives[0].name, "工匠精神");
 });
 
 test("filters workers by base, attention, and searchable status fields", () => {
@@ -43,6 +47,9 @@ test("filters workers by base, attention, and searchable status fields", () => {
   assert.equal(filterPalWorkerRows(rows, { attentionOnly: true }).length, 1);
   assert.equal(filterPalWorkerRows(rows, { search: "采矿" }).length, 1);
   assert.equal(filterPalWorkerRows(rows, { search: "伐木" }).length, 0);
+  assert.equal(filterPalWorkerRows(rows, { work: ["Mining"] }).length, 1);
+  assert.equal(filterPalWorkerRows(rows, { passives: ["Artisan"] }).length, 1);
+  assert.equal(filterPalWorkerRows(rows, { work: ["Watering"] }).length, 0);
 });
 
 test("normalizes Pal type names for portrait assets", () => {

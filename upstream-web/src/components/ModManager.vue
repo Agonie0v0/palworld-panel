@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { AlertCircle, Package, Refresh, Trash, Upload } from "@vicons/tabler";
 import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
+import WorkshopManager from "@/components/WorkshopManager.vue";
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -18,6 +19,7 @@ const dialog = useDialog();
 
 const loading = ref(false);
 const busyId = ref("");
+const activeSection = ref("local");
 const mods = ref([]);
 const directories = ref({});
 const uploadType = ref("pak");
@@ -27,6 +29,8 @@ const copy = computed(() =>
   locale.value === "zh"
     ? {
         title: "模组管理",
+        localTab: "本地模组",
+        workshopTab: "创意工坊",
         subtitle:
           "管理本机 Palworld 的 Pak、LogicMods 和 UE4SS 模组。启用状态改变后通常需要重启服务器。",
         scan: "扫描目录",
@@ -53,6 +57,8 @@ const copy = computed(() =>
       }
     : {
         title: "Mods",
+        localTab: "Local mods",
+        workshopTab: "Creative Workshop",
         subtitle:
           "Manage Pak, LogicMods, and UE4SS mods installed on this Palworld host. A server restart is usually required after changes.",
         scan: "Scan folders",
@@ -182,7 +188,12 @@ watch(
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
-      <n-button quaternary :loading="loading" @click="load(true)">
+      <n-button
+        v-if="activeSection === 'local'"
+        quaternary
+        :loading="loading"
+        @click="load(true)"
+      >
         <template #icon
           ><n-icon><Refresh /></n-icon
         ></template>
@@ -190,12 +201,14 @@ watch(
       </n-button>
     </template>
 
-    <p class="manager-intro">{{ copy.subtitle }}</p>
-    <div class="mod-restart-notice">
-      <n-icon><AlertCircle /></n-icon><span>{{ copy.restartNotice }}</span>
-    </div>
+    <n-tabs v-model:value="activeSection" type="segment" :animated="false">
+      <n-tab-pane name="local" :tab="copy.localTab">
+        <p class="manager-intro">{{ copy.subtitle }}</p>
+        <div class="mod-restart-notice">
+          <n-icon><AlertCircle /></n-icon><span>{{ copy.restartNotice }}</span>
+        </div>
 
-    <section class="mod-upload-band">
+        <section class="mod-upload-band">
       <div>
         <strong>{{ copy.upload }}</strong>
         <p>{{ copy.uploadHint }}</p>
@@ -222,9 +235,9 @@ watch(
         ></template>
         {{ copy.upload }}
       </n-button>
-    </section>
+        </section>
 
-    <n-spin :show="loading">
+        <n-spin :show="loading">
       <n-empty
         v-if="mods.length === 0"
         class="mod-empty"
@@ -270,18 +283,23 @@ watch(
           </div>
         </article>
       </div>
-    </n-spin>
+        </n-spin>
 
-    <n-collapse v-if="Object.keys(directories).length" class="mod-paths">
-      <n-collapse-item :title="copy.paths" name="paths">
-        <dl>
-          <template v-for="(directory, type) in directories" :key="type">
-            <dt>{{ copy[type] || type }}</dt>
-            <dd>{{ directory }}</dd>
-          </template>
-        </dl>
-      </n-collapse-item>
-    </n-collapse>
+        <n-collapse v-if="Object.keys(directories).length" class="mod-paths">
+          <n-collapse-item :title="copy.paths" name="paths">
+            <dl>
+              <template v-for="(directory, type) in directories" :key="type">
+                <dt>{{ copy[type] || type }}</dt>
+                <dd>{{ directory }}</dd>
+              </template>
+            </dl>
+          </n-collapse-item>
+        </n-collapse>
+      </n-tab-pane>
+      <n-tab-pane name="workshop" :tab="copy.workshopTab">
+        <workshop-manager :show="show" embedded />
+      </n-tab-pane>
+    </n-tabs>
   </tool-surface>
 </template>
 
@@ -293,6 +311,20 @@ watch(
   margin: 0 0 14px;
   color: var(--app-ink-muted);
   font-size: 13px;
+}
+.mod-manager-modal :deep(.workshop-modal.tool-surface) {
+  padding: 18px 0 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.mod-manager-modal :deep(.workshop-modal .tool-surface__header) {
+  min-height: 0;
+  padding-bottom: 18px;
+}
+.mod-manager-modal :deep(.workshop-modal .tool-surface__heading h2) {
+  font-size: 16px;
 }
 .mod-restart-notice {
   display: flex;
