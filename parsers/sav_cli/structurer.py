@@ -365,6 +365,12 @@ def _parse_character_container_slots(slots):
 
 
 def _parse_worker_container(raw):
+    data = _prop_value(raw, raw)
+    if isinstance(data, dict):
+        for key in ("container_id", "ContainerId", "ContainerID"):
+            container_id = _guid_text(data.get(key))
+            if container_id:
+                return container_id
     reader = _read_binary(raw)
     reader.guid()
     reader.ftransform()
@@ -486,6 +492,11 @@ def _worker_diseases(params):
     return list(dict.fromkeys(diseases))
 
 
+def _worker_sanity(params):
+    value = _prop_value(params.get("SanityValue"), None)
+    return 100.0 if value is None else float(value)
+
+
 def _worker_activity(params, assignment):
     event = _enum_token(params.get("BaseCampWorkerEventType"))
     if event and event != "None":
@@ -521,7 +532,7 @@ def _worker_pal(instance_id, params, base, guild, assignment, real_date_time_tic
     pal = Pal(params, real_date_time_ticks, filetime, instance_id=instance_id).to_dict()
     conditions = _worker_diseases(params)
     full_stomach = float(_prop_value(params.get("FullStomach"), 0) or 0)
-    sanity = float(_prop_value(params.get("SanityValue"), 100) or 0)
+    sanity = _worker_sanity(params)
     if full_stomach < 20:
         conditions.append("饱食度偏低")
     if sanity < 50:
