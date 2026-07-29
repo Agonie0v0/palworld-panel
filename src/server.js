@@ -24,6 +24,9 @@ const deployScriptPath = path.join(rootDir, "scripts", "deploy-palworld-server.s
 const agentRuntime = process.env.AGENT_MODE === "1";
 const authTokenTtlSeconds = 24 * 60 * 60;
 const offlineProductionHistoryLimit = 30;
+const palworldServerAppId = "2394010";
+const palworldLinuxDepotId = "2394012";
+const steamAppInfoUrl = `https://api.steamcmd.net/v1/info/${palworldServerAppId}`;
 
 function buildIdentity() {
   let recorded = {};
@@ -56,12 +59,14 @@ function buildIdentity() {
 
 let previousOnlinePlayers = null;
 let schedulerRunning = false;
+let serverUpdateCheckPromise = null;
 const schedulerState = {
   playerSync: 0,
   saveSync: 0,
   backup: 0,
   broadcast: 0,
   rconTasks: 0,
+  serverUpdate: 0,
   watchdog: 0,
   watchdogFailures: 0,
   memoryBreaches: 0,
@@ -136,6 +141,7 @@ const defaultConfig = {
     watchdogMemoryBreachChecks: 2,
     watchdogRestartCooldownMinutes: 15,
     scheduledRestartIntervalHours: 0,
+    serverUpdateCheckIntervalHours: 24,
     maintenanceWarningSeconds: 60,
     maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds.",
     backupBeforeManagedRestart: true
@@ -2001,6 +2007,11 @@ async function executeAgentOperation(operation, payload, config) {
     saveData: () => querySaveData(config),
     saveEntity: () => findSaveEntity(config, payload.type, payload.id),
     mapMarkers: async () => extractMapMarkers(await querySaveData(config)),
+    serverUpdateStatus: () => getServerUpdateStatus(config, {
+      intervalHours: payload.intervalHours,
+      force: Boolean(payload.force),
+    }),
+    serverUpdateCheck: () => checkServerUpdate(config, { intervalHours: payload.intervalHours }),
     settings: async () => (await applySettings(config, payload.settings || {})).settings
   };
   const handler = operations[operation];
@@ -2084,6 +2095,210 @@ async function loadServerVersionCache() {
 
 async function saveServerVersionCache(data) {
   return saveJsonFile("server-version.json", data);
+}
+
+function normalizeServerUpdateCheckIntervalHours(value) {
+  const hours = Number(value);
+  if (!Number.isFinite(hours)) return 24;
+  if (hours <= 0) return 0;
+  return Math.min(24 * 30, Math.max(1, Math.round(hours)));
+}
+
+function parseSteamPublicBuild(payload) {
+  const app = payload?.data?.[palworldServerAppId];
+  const branch = app?.depots?.branches?.public;
+  const manifest = app?.depots?.[palworldLinuxDepotId]?.manifests?.public;
+  const buildId = String(branch?.buildid || "").trim();
+  const manifestId = String(manifest?.gid || "").trim();
+  if (!buildId && !manifestId) throw new Error("Steam did not return the Palworld public build.");
+  const updatedSeconds = Number(branch?.timeupdated || branch?.timebuildupdated || 0);
+  return {
+    buildId,
+    manifestId,
+    publishedAt: updatedSeconds > 0 ? new Date(updatedSeconds * 1000).toISOString() : "",
+  };
+}
+
+function requestJson(url, timeout = 15000) {
+  const endpoint = new URL(url);
+  const transport = endpoint.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = transport.get(endpoint, {
+      headers: { "user-agent": `palworld-panel/${packageInfo.version}` },
+      timeout,
+    }, (response) => {
+      let raw = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        raw += chunk;
+        if (raw.length > 2 * 1024 * 1024) request.destroy(new Error("Steam response was too large."));
+      });
+      response.on("end", () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`Steam version check failed (${response.statusCode}).`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          reject(new Error("Steam returned invalid version data."));
+        }
+      });
+    });
+    request.on("timeout", () => request.destroy(new Error("Steam version check timed out.")));
+    request.on("error", reject);
+  });
+}
+
+async function readInstalledServerBuild(config) {
+  const installDir = path.resolve(config.server.installDir);
+  const manifestName = `appmanifest_${palworldServerAppId}.acf`;
+  const appManifestCandidates = [
+    path.join(installDir, "steamapps", manifestName),
+    path.join(path.dirname(installDir), manifestName),
+    path.join(path.dirname(installDir), "steamapps", manifestName),
+  ];
+  for (const candidate of appManifestCandidates) {
+    try {
+      const content = await fsp.readFile(candidate, "utf8");
+      const buildId = content.match(/"buildid"\s+"(\d+)"/i)?.[1] || "";
+      if (buildId) return { buildId, manifestId: "", source: "steamcmd", path: candidate };
+    } catch {}
+  }
+
+  const depotDirectory = path.join(installDir, ".DepotDownloader");
+  try {
+    const entries = await fsp.readdir(depotDirectory, { withFileTypes: true });
+    const manifests = await Promise.all(entries
+      .filter((entry) => entry.isFile() && entry.name.startsWith(`${palworldLinuxDepotId}_`) && entry.name.endsWith(".manifest"))
+      .map(async (entry) => {
+        const file = path.join(depotDirectory, entry.name);
+        const stat = await fsp.stat(file);
+        return {
+          file,
+          modifiedAt: stat.mtimeMs,
+          manifestId: entry.name.match(new RegExp(`^${palworldLinuxDepotId}_(\\d+)\\.manifest$`))?.[1] || "",
+        };
+      }));
+    manifests.sort((left, right) => right.modifiedAt - left.modifiedAt);
+    if (manifests[0]?.manifestId) {
+      return { buildId: "", manifestId: manifests[0].manifestId, source: "depotdownloader", path: manifests[0].file };
+    }
+  } catch {}
+  return { buildId: "", manifestId: "", source: "unknown", path: "" };
+}
+
+async function loadServerUpdateState() {
+  return loadJsonFile("server-update.json", {});
+}
+
+async function currentPalworldVersion(config) {
+  try {
+    const live = await liveServerData(config);
+    const info = responseData(live.info);
+    const version = String(info.version || info.Version || "").trim();
+    if (version && !/^(unknown|develop)$/i.test(version)) return version;
+  } catch {}
+  const cached = await loadServerVersionCache();
+  return String(cached.version || "").trim();
+}
+
+function publicServerUpdateState(state, config, intervalOverride) {
+  const intervalHours = normalizeServerUpdateCheckIntervalHours(
+    intervalOverride ?? config.automation.serverUpdateCheckIntervalHours,
+  );
+  const checkedAt = String(state.checkedAt || "");
+  const checkedTime = Date.parse(checkedAt);
+  return {
+    app_id: palworldServerAppId,
+    current_version: String(state.currentVersion || ""),
+    installed_build: String(state.installedBuild || ""),
+    installed_manifest: String(state.installedManifest || ""),
+    official_latest_version: String(state.latestVersion || ""),
+    latest_build: String(state.latestBuild || ""),
+    latest_manifest: String(state.latestManifest || ""),
+    update_available: typeof state.updateAvailable === "boolean" ? state.updateAvailable : null,
+    checked_at: checkedAt,
+    next_check_at: intervalHours > 0 && Number.isFinite(checkedTime)
+      ? new Date(checkedTime + intervalHours * 60 * 60 * 1000).toISOString()
+      : "",
+    published_at: String(state.publishedAt || ""),
+    source: String(state.source || "steam-public-branch"),
+    installed_source: String(state.installedSource || "unknown"),
+    check_interval_hours: intervalHours,
+    error: String(state.error || ""),
+  };
+}
+
+async function checkServerUpdate(config, options = {}) {
+  if (serverUpdateCheckPromise) return serverUpdateCheckPromise;
+  const intervalHours = normalizeServerUpdateCheckIntervalHours(
+    options.intervalHours ?? config.automation.serverUpdateCheckIntervalHours,
+  );
+  serverUpdateCheckPromise = (async () => {
+    const previous = await loadServerUpdateState();
+    const checkedAt = new Date().toISOString();
+    try {
+      const [payload, installed, currentVersion] = await Promise.all([
+        requestJson(steamAppInfoUrl),
+        readInstalledServerBuild(config),
+        currentPalworldVersion(config),
+      ]);
+      const latest = parseSteamPublicBuild(payload);
+      let installedBuild = installed.buildId || String(previous.installedBuild || "");
+      if (!installedBuild && installed.manifestId && installed.manifestId === latest.manifestId) {
+        installedBuild = latest.buildId;
+      }
+      let updateAvailable = null;
+      if (installedBuild && latest.buildId && /^\d+$/.test(installedBuild) && /^\d+$/.test(latest.buildId)) {
+        updateAvailable = Number(latest.buildId) > Number(installedBuild);
+      } else if (installed.manifestId && latest.manifestId) {
+        updateAvailable = installed.manifestId !== latest.manifestId;
+      }
+      const latestVersion = updateAvailable === false && currentVersion
+        ? currentVersion
+        : (String(previous.latestBuild || "") === latest.buildId ? String(previous.latestVersion || "") : "");
+      const state = {
+        appId: palworldServerAppId,
+        currentVersion: currentVersion || String(previous.currentVersion || ""),
+        installedBuild,
+        installedManifest: installed.manifestId,
+        installedSource: installed.source,
+        latestVersion,
+        latestBuild: latest.buildId,
+        latestManifest: latest.manifestId,
+        updateAvailable,
+        checkedAt,
+        publishedAt: latest.publishedAt,
+        source: "steam-public-branch",
+        error: "",
+      };
+      await saveJsonFile("server-update.json", state);
+      return publicServerUpdateState(state, config, intervalHours);
+    } catch (error) {
+      const state = { ...previous, checkedAt, error: error.message };
+      await saveJsonFile("server-update.json", state);
+      return publicServerUpdateState(state, config, intervalHours);
+    }
+  })();
+  try {
+    return await serverUpdateCheckPromise;
+  } finally {
+    serverUpdateCheckPromise = null;
+  }
+}
+
+async function getServerUpdateStatus(config, options = {}) {
+  const intervalHours = normalizeServerUpdateCheckIntervalHours(
+    options.intervalHours ?? config.automation.serverUpdateCheckIntervalHours,
+  );
+  if (options.force) return checkServerUpdate(config, { intervalHours });
+  const state = await loadServerUpdateState();
+  const checkedTime = Date.parse(state.checkedAt || "");
+  const due = intervalHours > 0 && (!Number.isFinite(checkedTime)
+    || Date.now() - checkedTime >= intervalHours * 60 * 60 * 1000);
+  if (due) return checkServerUpdate(config, { intervalHours });
+  return publicServerUpdateState(state, config, intervalHours);
 }
 
 async function downloadCompatibleBackup(req, res, config, name) {
@@ -2218,6 +2433,35 @@ async function handleApi(req, res, config) {
 
   if (req.method === "GET" && req.url === "/api/auth/me") {
     return sendJson(res, 200, { ok: true, user: principal });
+  }
+
+  if (req.method === "GET" && req.url === "/api/server/update-status") {
+    const update = await managedCall("serverUpdateStatus", {
+      intervalHours: config.automation.serverUpdateCheckIntervalHours,
+    }, () => getServerUpdateStatus(config));
+    return sendJson(res, 200, { ok: true, update });
+  }
+
+  if (req.method === "POST" && req.url === "/api/server/update-check") {
+    const update = await managedCall("serverUpdateCheck", {
+      intervalHours: config.automation.serverUpdateCheckIntervalHours,
+      force: true,
+    }, () => checkServerUpdate(config, { force: true }));
+    return sendJson(res, 200, { ok: true, update });
+  }
+
+  if (req.method === "PUT" && req.url === "/api/server/update-check") {
+    const body = await readBody(req);
+    const intervalHours = normalizeServerUpdateCheckIntervalHours(body.interval_hours);
+    const next = await saveConfig({
+      ...config,
+      automation: { ...config.automation, serverUpdateCheckIntervalHours: intervalHours },
+    });
+    const state = await loadServerUpdateState();
+    return sendJson(res, 200, {
+      ok: true,
+      update: publicServerUpdateState(state, next, intervalHours),
+    });
   }
 
   if (req.method === "GET" && req.url === "/api/access/users") {
@@ -2628,6 +2872,16 @@ async function handleApi(req, res, config) {
             error.result = result;
             throw error;
           }
+          if (action === "update") {
+            try {
+              await managedCall("serverUpdateCheck", {
+                intervalHours: config.automation.serverUpdateCheckIntervalHours,
+                force: true,
+              }, () => checkServerUpdate(config, { force: true }));
+            } catch (error) {
+              logs.push(`[version-check] ${error.message}`);
+            }
+          }
           logs.push(`[panel] Server ${action} completed successfully`);
           await onJobProgress(98, `Server ${action} completed`, { logs: logs.slice(-500) });
           return { ...result, logs: logs.slice(-500), message: `Server ${action} completed` };
@@ -2884,6 +3138,13 @@ async function schedulerTick() {
       });
     }
 
+    if (isDue(schedulerState.serverUpdate, 60, now)) {
+      schedulerState.serverUpdate = now;
+      await runSchedulerJob("Server update check", () => managedCall("serverUpdateStatus", {
+        intervalHours: config.automation.serverUpdateCheckIntervalHours,
+      }, () => getServerUpdateStatus(config)));
+    }
+
     const rconTaskInterval = Math.max(1, Number(config.automation.rconTaskCheckSeconds || 30));
     if (isDue(schedulerState.rconTasks, rconTaskInterval, now)) {
       schedulerState.rconTasks = now;
@@ -2994,6 +3255,7 @@ module.exports = {
   encodeRconCommand,
   exec,
   formatPlayerMessage,
+  getServerUpdateStatus,
   isDue,
   isWhitelisted,
   issueAuthToken,
@@ -3001,6 +3263,7 @@ module.exports = {
   nativeServerExecutablePaths,
   parseRconInfo,
   parseShowPlayers,
+  parseSteamPublicBuild,
   permissionsForRole,
   principalCan,
   parseDfOutput,
@@ -3009,8 +3272,10 @@ module.exports = {
   productionInventoryDiff,
   productionInventorySnapshot,
   publicOfflineProductionState,
+  readInstalledServerBuild,
   staticCacheControl,
   systemdUpdaterInvocation,
+  normalizeServerUpdateCheckIntervalHours,
   testRestConnection,
   testSaveSource,
   trimBackups,

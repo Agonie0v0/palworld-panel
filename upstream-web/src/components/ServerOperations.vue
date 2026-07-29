@@ -26,6 +26,9 @@ const loading = ref(false);
 const busy = ref("");
 const status = ref({});
 const serverInfo = ref({});
+const updateStatus = ref({});
+const updateChecking = ref(false);
+const updateIntervalSaving = ref(false);
 const plan = ref({});
 const agent = ref({ enabled: false, mode: "local", endpoint: "", token: "" });
 const hostMetrics = ref({});
@@ -62,9 +65,39 @@ const deploy = ref({
 const running = computed(() => Boolean(status.value?.status?.running));
 const host = computed(() => status.value?.host || {});
 const manager = computed(() => status.value?.status?.manager || "-");
-const officialVersion = computed(() => serverInfo.value?.official_version || serverInfo.value?.version || "-");
-const officialVersionLabel = computed(() => locale.value === "zh" ? "\u5b98\u65b9\u670d\u52a1\u7aef\u7248\u672c" : "Official server version");
-const cachedVersionLabel = computed(() => locale.value === "zh" ? "\u6700\u8fd1\u786e\u8ba4" : "Last confirmed");
+const currentVersion = computed(() => serverInfo.value?.current_version || serverInfo.value?.version || "-");
+const officialLatestVersion = computed(() =>
+  updateStatus.value?.official_latest_version
+  || (updateStatus.value?.latest_build ? `Build ${updateStatus.value.latest_build}` : "-"),
+);
+const updateAvailable = computed(() => updateStatus.value?.update_available === true);
+const updateStateType = computed(() => {
+  if (updateStatus.value?.error) return "error";
+  if (updateAvailable.value) return "warning";
+  if (updateStatus.value?.update_available === false) return "success";
+  return "default";
+});
+const updateStateText = computed(() => {
+  if (updateChecking.value) return t("operations.updateChecking");
+  if (updateStatus.value?.error) return t("operations.updateCheckFailed");
+  if (updateAvailable.value) return t("operations.updateAvailable");
+  if (updateStatus.value?.update_available === false) return t("operations.upToDate");
+  return t("operations.updateUnknown");
+});
+const updateIntervalOptions = computed(() => [
+  { label: t("operations.checkDisabled"), value: 0 },
+  { label: t("operations.every6Hours"), value: 6 },
+  { label: t("operations.every12Hours"), value: 12 },
+  { label: t("operations.everyDay"), value: 24 },
+  { label: t("operations.every3Days"), value: 72 },
+  { label: t("operations.every7Days"), value: 168 },
+]);
+const formatCheckTime = (value) => {
+  const timestamp = Date.parse(value || "");
+  if (!Number.isFinite(timestamp)) return t("operations.neverChecked");
+  const language = locale.value === "zh" ? "zh-CN" : locale.value === "ja" ? "ja-JP" : "en-US";
+  return new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
+};
 const memoryPercent = computed(() => Number(hostMetrics.value?.memory?.usedPercent || 0));
 const diskPercent = computed(() => Number(hostMetrics.value?.disk?.usedPercent || 0));
 const cpuPercent = computed(() => Number(hostMetrics.value?.cpu?.usedPercent || 0));
@@ -122,33 +155,68 @@ const metricTone = (value) => {
 
 const refresh = async () => {
   loading.value = true;
-  const [statusResponse, serverInfoResponse, planResponse, agentResponse, metricsResponse, watchdogResponse] = await Promise.all([
-    api.getPanelStatus(),
-    api.getServerInfo(),
-    api.getDeployPlan(),
-    api.getAgentConfig(),
-    api.getHostMetrics(),
-    api.getWatchdog(),
-  ]);
-  status.value = statusResponse.data.value || {};
-  serverInfo.value = serverInfoResponse.data.value || {};
-  plan.value = planResponse.data.value || {};
-  agent.value = agentResponse.data.value?.agent || agent.value;
-  hostMetrics.value = metricsResponse.data.value?.metrics || {};
-  watchdog.value = { ...watchdog.value, ...(watchdogResponse.data.value?.settings || {}) };
-  watchdogState.value = watchdogResponse.data.value?.state || {};
-  const defaults = plan.value?.defaults || {};
-  deploy.value = {
-    ...deploy.value,
-    installDir: defaults.installDir || deploy.value.installDir,
-    serviceName: defaults.serviceName || deploy.value.serviceName,
-    publicPort: defaults.publicPort || deploy.value.publicPort,
-    rconPort: defaults.rconPort || deploy.value.rconPort,
-    restPort: defaults.restPort || deploy.value.restPort,
-    serverName: defaults.serverName || deploy.value.serverName,
-    adminPassword: defaults.adminPassword || deploy.value.adminPassword,
-  };
-  loading.value = false;
+  try {
+    const [statusResponse, serverInfoResponse, updateResponse, planResponse, agentResponse, metricsResponse, watchdogResponse] = await Promise.all([
+      api.getPanelStatus(),
+      api.getServerInfo(),
+      api.getServerUpdateStatus(),
+      api.getDeployPlan(),
+      api.getAgentConfig(),
+      api.getHostMetrics(),
+      api.getWatchdog(),
+    ]);
+    status.value = statusResponse.data.value || {};
+    serverInfo.value = serverInfoResponse.data.value || {};
+    updateStatus.value = updateResponse.data.value?.update || {};
+    plan.value = planResponse.data.value || {};
+    agent.value = agentResponse.data.value?.agent || agent.value;
+    hostMetrics.value = metricsResponse.data.value?.metrics || {};
+    watchdog.value = { ...watchdog.value, ...(watchdogResponse.data.value?.settings || {}) };
+    watchdogState.value = watchdogResponse.data.value?.state || {};
+    const defaults = plan.value?.defaults || {};
+    deploy.value = {
+      ...deploy.value,
+      installDir: defaults.installDir || deploy.value.installDir,
+      serviceName: defaults.serviceName || deploy.value.serviceName,
+      publicPort: defaults.publicPort || deploy.value.publicPort,
+      rconPort: defaults.rconPort || deploy.value.rconPort,
+      restPort: defaults.restPort || deploy.value.restPort,
+      serverName: defaults.serverName || deploy.value.serverName,
+      adminPassword: defaults.adminPassword || deploy.value.adminPassword,
+    };
+  } finally {
+    loading.value = false;
+  }
+};
+
+const checkForUpdate = async () => {
+  updateChecking.value = true;
+  try {
+    const { data, statusCode } = await api.checkServerUpdate();
+    if (statusCode.value === 200 && data.value?.ok) {
+      updateStatus.value = data.value.update || {};
+      message.success(t("operations.checkCompleted"));
+    } else {
+      message.error(data.value?.error || t("operations.checkFailed"));
+    }
+  } finally {
+    updateChecking.value = false;
+  }
+};
+
+const saveUpdateCheckInterval = async (intervalHours) => {
+  updateIntervalSaving.value = true;
+  try {
+    const { data, statusCode } = await api.updateServerCheckInterval(intervalHours);
+    if (statusCode.value === 200 && data.value?.ok) {
+      updateStatus.value = data.value.update || { ...updateStatus.value, check_interval_hours: intervalHours };
+      message.success(t("operations.intervalSaved"));
+    } else {
+      message.error(data.value?.error || t("operations.actionFailed"));
+    }
+  } finally {
+    updateIntervalSaving.value = false;
+  }
 };
 
 watch(
@@ -340,18 +408,55 @@ const maintenance = (operation) => {
       <n-tabs type="line" animated>
         <n-tab-pane name="service" :tab="$t('operations.service')">
           <section class="ops-bento-section service-overview">
-          <n-descriptions label-placement="top" :column="4" :bordered="false" class="service-facts">
-            <n-descriptions-item :label="$t('operations.state')">
-              <n-tag :type="running ? 'success' : 'warning'">{{ running ? $t('operations.running') : $t('operations.stopped') }}</n-tag>
-            </n-descriptions-item>
-            <n-descriptions-item :label="officialVersionLabel">
-              <span class="official-version-value">{{ officialVersion }}</span>
-              <small v-if="serverInfo?.version_cached" class="official-version-cache">{{ cachedVersionLabel }}</small>
-            </n-descriptions-item>
-            <n-descriptions-item :label="$t('operations.manager')">{{ manager }}</n-descriptions-item>
-            <n-descriptions-item :label="$t('operations.architecture')">{{ host.arch || '-' }}</n-descriptions-item>
-            <n-descriptions-item :label="$t('operations.runner')">{{ host.profile?.runner || '-' }}</n-descriptions-item>
-          </n-descriptions>
+          <div class="service-facts">
+            <div class="service-fact">
+              <span>{{ $t('operations.state') }}</span>
+              <n-tag size="small" :type="running ? 'success' : 'warning'">{{ running ? $t('operations.running') : $t('operations.stopped') }}</n-tag>
+            </div>
+            <div class="service-fact service-fact--version">
+              <span>{{ $t('operations.currentVersion') }}</span>
+              <strong>{{ currentVersion }}</strong>
+              <small v-if="serverInfo?.version_cached">{{ $t('operations.currentVersionCached') }}</small>
+            </div>
+            <div class="service-fact service-fact--version">
+              <span>{{ $t('operations.officialLatestVersion') }}</span>
+              <strong>{{ officialLatestVersion }}</strong>
+              <small v-if="updateStatus?.latest_build && updateStatus?.official_latest_version">Build {{ updateStatus.latest_build }}</small>
+            </div>
+            <div class="service-fact">
+              <span>{{ $t('operations.updateStatus') }}</span>
+              <n-tag size="small" :type="updateStateType">{{ updateStateText }}</n-tag>
+            </div>
+            <div class="service-fact">
+              <span>{{ $t('operations.environment') }}</span>
+              <strong class="service-runtime">{{ manager }} · {{ host.arch || '-' }} · {{ host.profile?.runner || '-' }}</strong>
+            </div>
+          </div>
+
+          <n-alert v-if="updateAvailable" type="warning" :bordered="false" :title="$t('operations.updateAvailableTitle')">
+            {{ $t('operations.updateAvailableMessage', { current: currentVersion, latest: officialLatestVersion }) }}
+          </n-alert>
+
+          <div class="version-check-row">
+            <div class="version-check-copy">
+              <strong>{{ $t('operations.versionCheck') }}</strong>
+              <span>{{ $t('operations.lastChecked') }}: {{ formatCheckTime(updateStatus?.checked_at) }}</span>
+              <span v-if="updateStatus?.next_check_at">{{ $t('operations.nextCheck') }}: {{ formatCheckTime(updateStatus.next_check_at) }}</span>
+              <span v-if="updateStatus?.error" class="version-check-error">{{ updateStatus.error }}</span>
+            </div>
+            <div class="version-check-controls">
+              <n-select
+                :value="Number(updateStatus?.check_interval_hours ?? 24)"
+                :options="updateIntervalOptions"
+                :loading="updateIntervalSaving"
+                :aria-label="$t('operations.checkInterval')"
+                @update:value="saveUpdateCheckInterval"
+              />
+              <n-button secondary :loading="updateChecking" @click="checkForUpdate">
+                <template #icon><n-icon><RefreshOutlined /></n-icon></template>{{ $t('operations.checkNow') }}
+              </n-button>
+            </div>
+          </div>
 
           <n-flex class="service-actions" wrap>
             <n-button type="success" secondary :loading="busy === 'start'" @click="runAction('start')">
@@ -363,8 +468,8 @@ const maintenance = (operation) => {
             <n-button type="error" secondary :loading="busy === 'stop'" @click="runAction('stop')">
               <template #icon><n-icon><StopRound /></n-icon></template>{{ $t('operations.stop') }}
             </n-button>
-            <n-button secondary :loading="busy === 'update'" @click="runAction('update')">
-              <template #icon><n-icon><SystemUpdateAltRound /></n-icon></template>{{ $t('operations.update') }}
+            <n-button :type="updateAvailable ? 'warning' : 'default'" secondary :loading="busy === 'update'" @click="runAction('update')">
+              <template #icon><n-icon><SystemUpdateAltRound /></n-icon></template>{{ updateAvailable ? $t('operations.updateToLatest') : $t('operations.update') }}
             </n-button>
             <n-button secondary :loading="busy === 'backup'" @click="runAction('backup')">
               <template #icon><n-icon><SaveOutlined /></n-icon></template>{{ $t('operations.createBackup') }}
@@ -610,8 +715,6 @@ const maintenance = (operation) => {
 <style scoped>
 .w-full { width: 100%; }
 .operations-modal-body { padding: 2px 8px 8px 0; }
-.official-version-value { color: var(--app-info); font-family: var(--app-font-data); font-size: 13px; font-weight: 800; }
-.official-version-cache { display: block; margin-top: 3px; color: var(--app-ink-muted); font-size: 10px; }
 .ops-bento-section {
   margin-bottom: 18px;
   padding: 24px;
@@ -623,7 +726,56 @@ const maintenance = (operation) => {
   display: grid;
   gap: 20px;
 }
-.service-facts { box-shadow: none !important; }
+.service-facts {
+  display: grid;
+  grid-template-columns: 0.8fr 1.1fr 1.1fr 1fr 1.35fr;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+}
+.service-fact {
+  min-width: 0;
+  min-height: 86px;
+  padding: 16px;
+  border-right: 1px solid var(--app-border);
+}
+.service-fact:last-child { border-right: 0; }
+.service-fact > span {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--app-ink-muted);
+  font-size: 12px;
+}
+.service-fact strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--app-ink);
+  font-family: var(--app-font-data);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.service-fact--version strong { color: var(--app-info); }
+.service-fact small {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-ink-muted);
+  font-size: 10px;
+}
+.service-runtime { font-family: var(--app-font-body) !important; font-size: 12px !important; }
+.version-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--app-border);
+}
+.version-check-copy { display: grid; gap: 3px; min-width: 0; }
+.version-check-copy strong { color: var(--app-ink); font-size: 13px; }
+.version-check-copy span { color: var(--app-ink-muted); font-size: 11px; }
+.version-check-error { color: var(--app-danger) !important; overflow-wrap: anywhere; }
+.version-check-controls { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.version-check-controls :deep(.n-select) { width: 150px; }
 .service-actions { gap: 10px; }
 .deploy-port-hint { margin-bottom: 16px; }
 .section-heading {
@@ -729,8 +881,14 @@ const maintenance = (operation) => {
 }
 @media (max-width: 640px) {
   .operations-modal-body { padding-right: 4px; }
-  :deep(.n-descriptions-table-content) { min-width: 560px; }
   :deep(.n-list-item__suffix) { margin-left: 8px; }
+  .service-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .service-fact { min-height: 82px; border-right: 0; border-bottom: 1px solid var(--app-border); }
+  .service-fact:nth-child(odd) { border-right: 1px solid var(--app-border); }
+  .service-fact:last-child { grid-column: 1 / -1; border-bottom: 0; }
+  .version-check-row { align-items: stretch; flex-direction: column; }
+  .version-check-controls { align-items: stretch; flex-direction: column; }
+  .version-check-controls :deep(.n-select) { width: 100%; }
   .monitor-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .monitor-details { overflow-x: auto; }
   .watchdog-heading,
