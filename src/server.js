@@ -1120,6 +1120,25 @@ async function liveServerData(config) {
   return { info, players, metrics, settings };
 }
 
+function nativeServerExecutablePaths(config) {
+  const installDir = path.resolve(config.server.installDir);
+  return [
+    path.join(installDir, "Pal", "Binaries", "Linux", "PalServer-Linux-Shipping"),
+    path.join(installDir, "PalServer.sh")
+  ];
+}
+
+function systemdUpdaterInvocation(config, updateArgs, serviceUser = "") {
+  const user = String(serviceUser || "").trim();
+  if (!user || user === "root") {
+    return { command: config.server.steamcmdPath, args: updateArgs };
+  }
+  return {
+    command: "runuser",
+    args: ["-u", user, "--", config.server.steamcmdPath, ...updateArgs]
+  };
+}
+
 async function runAction(action, config, onProgress = async () => {}) {
   const service = config.server.serviceName;
   const report = (progress, message, line = "", force = true) =>
@@ -1189,9 +1208,12 @@ async function runAction(action, config, onProgress = async () => {}) {
         "validate",
         "+quit"
       ];
-    await report(30, "Updating Palworld server files", `[updater] ${config.server.steamcmdPath} ${updateArgs.join(" ")}`);
+    const serviceUserResult = await exec("systemctl", ["show", service, "--property=User", "--value"]);
+    const serviceUser = serviceUserResult.ok ? serviceUserResult.stdout.trim() : "";
+    const updater = systemdUpdaterInvocation(config, updateArgs, serviceUser);
+    await report(30, "Updating Palworld server files", `[updater] ${updater.command} ${updater.args.join(" ")}`);
     let updateLines = 0;
-    const update = await spawnWithLogs(config.server.steamcmdPath, updateArgs, { timeout: 30 * 60 * 1000 }, (line, stream) => {
+    const update = await spawnWithLogs(updater.command, updater.args, { timeout: 30 * 60 * 1000 }, (line, stream) => {
       updateLines += 1;
       return report(Math.min(82, 30 + Math.floor(updateLines / 8)), "Updating Palworld server files", stream === "stderr" ? `[stderr] ${line}` : line, false);
     });
@@ -1200,9 +1222,38 @@ async function runAction(action, config, onProgress = async () => {}) {
       await spawnWithLogs("systemctl", ["start", service]);
       return update;
     }
+    const executables = nativeServerExecutablePaths(config);
+    await report(86, "Repairing updated file permissions", `[permissions] chmod 755 ${executables.join(" ")}`);
+    const chmod = await spawnWithLogs("chmod", ["755", ...executables], {}, (line, stream) =>
+      report(88, "Repairing updated file permissions", stream === "stderr" ? `[stderr] ${line}` : line, false));
+    if (!chmod.ok) {
+      await report(89, "Permission repair failed; restoring the service", `[systemd] Starting ${service} after permission repair failure`);
+      await spawnWithLogs("systemctl", ["start", service]);
+      return chmod;
+    }
+    if (serviceUser && serviceUser !== "root") {
+      const ownership = await spawnWithLogs("chown", [`${serviceUser}:${serviceUser}`, ...executables], {}, (line, stream) =>
+        report(89, "Restoring game service ownership", stream === "stderr" ? `[stderr] ${line}` : line, false));
+      if (!ownership.ok) {
+        await report(89, "Ownership repair failed; restoring the service", `[systemd] Starting ${service} after ownership repair failure`);
+        await spawnWithLogs("systemctl", ["start", service]);
+        return ownership;
+      }
+    }
     await report(90, "Starting the updated service", `[systemd] Starting ${service}`);
-    return spawnWithLogs("systemctl", ["start", service], {}, (line, stream) =>
+    const start = await spawnWithLogs("systemctl", ["start", service], {}, (line, stream) =>
       report(95, "Starting the updated service", stream === "stderr" ? `[stderr] ${line}` : line, false));
+    if (!start.ok) return start;
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    const active = await exec("systemctl", ["is-active", service]);
+    if (active.stdout.trim() !== "active") {
+      const status = await exec("systemctl", ["status", service, "--no-pager", "--lines=20"]);
+      const detail = status.stdout || status.stderr || active.stdout || active.stderr || "Service did not remain active.";
+      await report(100, "Updated service failed its startup check", detail, false);
+      return { ok: false, stdout: start.stdout, stderr: detail };
+    }
+    await report(100, "Updated service is running", `[systemd] ${service} is active`);
+    return start;
   }
   const actionMessage = { start: "Starting", stop: "Stopping", restart: "Restarting" }[action] || "Running";
   await report(35, `${actionMessage} the game service`, `[systemd] systemctl ${systemdActions[action].join(" ")}`);
@@ -2027,6 +2078,14 @@ async function saveSyncedSaveData(data) {
   return saveJsonFile("upstream-save-sync.json", data);
 }
 
+async function loadServerVersionCache() {
+  return loadJsonFile("server-version.json", {});
+}
+
+async function saveServerVersionCache(data) {
+  return saveJsonFile("server-version.json", data);
+}
+
 async function downloadCompatibleBackup(req, res, config, name) {
   const agent = await loadAgentConfig();
   if (agentIsEnabled(agent)) return proxyAgentBackup(res, agent, name);
@@ -2053,6 +2112,8 @@ const upstreamCompat = createUpstreamCompatibility({
   saveWhitelist,
   loadSyncedSaveData,
   saveSyncedSaveData,
+  loadServerVersionCache,
+  saveServerVersionCache,
   listRconTemplates,
   saveRconTemplates,
   listRconTasks,
@@ -2937,6 +2998,7 @@ module.exports = {
   isWhitelisted,
   issueAuthToken,
   normalizeLivePlayers,
+  nativeServerExecutablePaths,
   parseRconInfo,
   parseShowPlayers,
   permissionsForRole,
@@ -2948,6 +3010,7 @@ module.exports = {
   productionInventorySnapshot,
   publicOfflineProductionState,
   staticCacheControl,
+  systemdUpdaterInvocation,
   testRestConnection,
   testSaveSource,
   trimBackups,

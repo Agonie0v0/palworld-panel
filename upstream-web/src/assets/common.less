@@ -515,6 +515,30 @@ a {
   font-size: 11px;
 }
 
+.ops-official-version {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.ops-official-version__label {
+  color: var(--app-ink-muted);
+}
+
+.ops-official-version strong {
+  color: var(--app-info);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ops-official-version small {
+  color: var(--app-warning);
+  font-size: 9px;
+  font-weight: 700;
+}
+
 .ops-header-actions {
   display: flex;
   flex: 0 0 auto;
@@ -1818,7 +1842,8 @@ pre {
   .ops-header-telemetry { min-width: 294px; gap: 6px; }
   .ops-telemetry-item { min-height: 50px; padding: 6px 10px; }
   .ops-telemetry-item strong { font-size: 16px; }
-  .ops-workspace-context span:last-child { display: none; }
+  .ops-workspace-context > span:last-child { display: none; }
+  .ops-official-version__label { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

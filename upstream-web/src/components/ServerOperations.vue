@@ -17,7 +17,7 @@ import ToolSurface from "@/components/ToolSurface.vue";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show", "server-changed"]);
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const message = useMessage();
 const dialog = useDialog();
 const api = new ApiService();
@@ -25,6 +25,7 @@ const api = new ApiService();
 const loading = ref(false);
 const busy = ref("");
 const status = ref({});
+const serverInfo = ref({});
 const plan = ref({});
 const agent = ref({ enabled: false, mode: "local", endpoint: "", token: "" });
 const hostMetrics = ref({});
@@ -61,6 +62,9 @@ const deploy = ref({
 const running = computed(() => Boolean(status.value?.status?.running));
 const host = computed(() => status.value?.host || {});
 const manager = computed(() => status.value?.status?.manager || "-");
+const officialVersion = computed(() => serverInfo.value?.official_version || serverInfo.value?.version || "-");
+const officialVersionLabel = computed(() => locale.value === "zh" ? "\u5b98\u65b9\u670d\u52a1\u7aef\u7248\u672c" : "Official server version");
+const cachedVersionLabel = computed(() => locale.value === "zh" ? "\u6700\u8fd1\u786e\u8ba4" : "Last confirmed");
 const memoryPercent = computed(() => Number(hostMetrics.value?.memory?.usedPercent || 0));
 const diskPercent = computed(() => Number(hostMetrics.value?.disk?.usedPercent || 0));
 const cpuPercent = computed(() => Number(hostMetrics.value?.cpu?.usedPercent || 0));
@@ -118,14 +122,16 @@ const metricTone = (value) => {
 
 const refresh = async () => {
   loading.value = true;
-  const [statusResponse, planResponse, agentResponse, metricsResponse, watchdogResponse] = await Promise.all([
+  const [statusResponse, serverInfoResponse, planResponse, agentResponse, metricsResponse, watchdogResponse] = await Promise.all([
     api.getPanelStatus(),
+    api.getServerInfo(),
     api.getDeployPlan(),
     api.getAgentConfig(),
     api.getHostMetrics(),
     api.getWatchdog(),
   ]);
   status.value = statusResponse.data.value || {};
+  serverInfo.value = serverInfoResponse.data.value || {};
   plan.value = planResponse.data.value || {};
   agent.value = agentResponse.data.value?.agent || agent.value;
   hostMetrics.value = metricsResponse.data.value?.metrics || {};
@@ -337,6 +343,10 @@ const maintenance = (operation) => {
           <n-descriptions label-placement="top" :column="4" :bordered="false" class="service-facts">
             <n-descriptions-item :label="$t('operations.state')">
               <n-tag :type="running ? 'success' : 'warning'">{{ running ? $t('operations.running') : $t('operations.stopped') }}</n-tag>
+            </n-descriptions-item>
+            <n-descriptions-item :label="officialVersionLabel">
+              <span class="official-version-value">{{ officialVersion }}</span>
+              <small v-if="serverInfo?.version_cached" class="official-version-cache">{{ cachedVersionLabel }}</small>
             </n-descriptions-item>
             <n-descriptions-item :label="$t('operations.manager')">{{ manager }}</n-descriptions-item>
             <n-descriptions-item :label="$t('operations.architecture')">{{ host.arch || '-' }}</n-descriptions-item>
@@ -600,6 +610,8 @@ const maintenance = (operation) => {
 <style scoped>
 .w-full { width: 100%; }
 .operations-modal-body { padding: 2px 8px 8px 0; }
+.official-version-value { color: var(--app-info); font-family: var(--app-font-data); font-size: 13px; font-weight: 800; }
+.official-version-cache { display: block; margin-top: 3px; color: var(--app-ink-muted); font-size: 10px; }
 .ops-bento-section {
   margin-bottom: 18px;
   padding: 24px;
