@@ -1145,6 +1145,25 @@ function systemdUpdaterInvocation(config, updateArgs, serviceUser = "") {
   };
 }
 
+async function writeSettingsFile(config) {
+  const settingsPath = config.server.settingsPath;
+  await fsp.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fsp.writeFile(settingsPath, renderSettings(config.settings), "utf8");
+  return settingsPath;
+}
+
+async function syncSettingsAfterStop(config, service, report, progress) {
+  try {
+    const settingsPath = await writeSettingsFile(config);
+    await report(progress, "Applying server settings", `[settings] Wrote ${settingsPath}`);
+    return { ok: true };
+  } catch (error) {
+    await report(progress, "Applying server settings failed", `[settings] ${error.message}`, false);
+    await spawnWithLogs("systemctl", ["start", service]);
+    return { ok: false, stdout: "", stderr: `Failed to apply server settings: ${error.message}` };
+  }
+}
+
 async function runAction(action, config, onProgress = async () => {}) {
   const service = config.server.serviceName;
   const report = (progress, message, line = "", force = true) =>
@@ -1201,6 +1220,8 @@ async function runAction(action, config, onProgress = async () => {}) {
     const stop = await spawnWithLogs("systemctl", ["stop", service], {}, (line, stream) =>
       report(24, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
     if (!stop.ok) return stop;
+    const settingsSync = await syncSettingsAfterStop(config, service, report, 27);
+    if (!settingsSync.ok) return settingsSync;
     const depotDownloader = path.basename(config.server.steamcmdPath).toLowerCase().includes("depotdownloader");
     const updateArgs = depotDownloader
       ? ["-app", "2394010", "-dir", config.server.installDir, "-validate"]
@@ -1260,6 +1281,27 @@ async function runAction(action, config, onProgress = async () => {}) {
     }
     await report(100, "Updated service is running", `[systemd] ${service} is active`);
     return start;
+  }
+
+  if (action === "restart") {
+    await report(28, "Stopping the game service", `[systemd] Stopping ${service}`);
+    const stop = await spawnWithLogs("systemctl", ["stop", service], {}, (line, stream) =>
+      report(42, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
+    if (!stop.ok) return stop;
+    const settingsSync = await syncSettingsAfterStop(config, service, report, 58);
+    if (!settingsSync.ok) return settingsSync;
+    await report(70, "Starting the game service", `[systemd] Starting ${service}`);
+    return spawnWithLogs("systemctl", ["start", service], {}, (line, stream) =>
+      report(88, "Starting the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
+  }
+
+  if (action === "start") {
+    try {
+      const settingsPath = await writeSettingsFile(config);
+      await report(28, "Applying server settings", `[settings] Wrote ${settingsPath}`);
+    } catch (error) {
+      return { ok: false, stdout: "", stderr: `Failed to apply server settings: ${error.message}` };
+    }
   }
   const actionMessage = { start: "Starting", stop: "Stopping", restart: "Restarting" }[action] || "Running";
   await report(35, `${actionMessage} the game service`, `[systemd] systemctl ${systemdActions[action].join(" ")}`);
@@ -1899,8 +1941,7 @@ function upsertById(rows, row) {
 
 async function applySettings(config, settings) {
   const next = await saveConfig({ ...config, settings });
-  await fsp.mkdir(path.dirname(config.server.settingsPath), { recursive: true });
-  await fsp.writeFile(config.server.settingsPath, renderSettings(next.settings), "utf8");
+  await writeSettingsFile(next);
   return next;
 }
 
@@ -3280,5 +3321,6 @@ module.exports = {
   testSaveSource,
   trimBackups,
   verifyAuthToken,
-  watchdogSettings
+  watchdogSettings,
+  writeSettingsFile
 };
