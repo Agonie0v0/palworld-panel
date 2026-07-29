@@ -90,6 +90,15 @@ class ApiService extends Service {
   async getServerInfo() {
     return this.fetch(`/api/server`).get().json();
   }
+  async getServerUpdateStatus() {
+    return this.fetch(`/api/server/update-status`).get().json();
+  }
+  async checkServerUpdate() {
+    return this.fetch(`/api/server/update-check`).post({}).json();
+  }
+  async updateServerCheckInterval(intervalHours) {
+    return this.fetch(`/api/server/update-check`).put({ interval_hours: intervalHours }).json();
+  }
   async getServerMetrics() {
     return this.fetch(`/api/server/metrics`).get().json();
   }

@@ -161,14 +161,8 @@ const panelVersionTitle = computed(() => {
   }
   return parts.join("\n");
 });
-const officialServerVersion = computed(() =>
-  String(serverInfo.value?.official_version || serverInfo.value?.version || "Unknown"),
-);
-const officialServerVersionLabel = computed(() =>
-  locale.value === "zh" ? "\u5b98\u65b9\u670d\u52a1\u7aef\u7248\u672c" : "Official server version",
-);
-const cachedVersionLabel = computed(() =>
-  locale.value === "zh" ? "\u6700\u8fd1\u786e\u8ba4" : "Last confirmed",
+const currentServerVersion = computed(() =>
+  String(serverInfo.value?.current_version || serverInfo.value?.version || "Unknown"),
 );
 const getServerToolInfo = async () => {
   const { data } = await new ApiService().getServerToolInfo();
@@ -594,12 +588,9 @@ onBeforeUnmount(() =>
             {{ serverInfo?.name || $t("status.serverUnavailable") }}
           </h1>
           <div class="ops-workspace-context">
-            <div class="ops-official-version">
-              <span class="ops-official-version__label">{{ officialServerVersionLabel }}</span>
-              <strong>{{ officialServerVersion }}</strong>
-              <small v-if="serverInfo?.version_cached">{{ cachedVersionLabel }}</small>
-            </div>
-            <span>Palworld Dedicated Server</span>
+            <strong :title="serverInfo?.version_cached ? $t('operations.currentVersionCached') : ''">
+              {{ currentServerVersion }}
+            </strong>
           </div>
         </div>
         <div class="ops-header-telemetry" :aria-label="$t('overview.pulse')">

@@ -15,15 +15,18 @@ const {
   issueAuthToken,
   decodeAuthToken,
   normalizeLivePlayers,
+  normalizeServerUpdateCheckIntervalHours,
   nativeServerExecutablePaths,
   parseDfOutput,
   parsePsOutput,
   parseRconInfo,
   parseShowPlayers,
+  parseSteamPublicBuild,
   playerUidFromId,
   productionInventoryDiff,
   productionInventorySnapshot,
   publicOfflineProductionState,
+  readInstalledServerBuild,
   staticCacheControl,
   systemdUpdaterInvocation,
   testSaveSource,
@@ -34,6 +37,53 @@ const {
   principalCan,
   watchdogSettings
 } = require("../src/server");
+
+test("Steam public branch metadata exposes the latest build and Linux manifest", () => {
+  assert.deepEqual(parseSteamPublicBuild({
+    data: {
+      "2394010": {
+        depots: {
+          branches: { public: { buildid: "24370498", timeupdated: "1785294122" } },
+          "2394012": { manifests: { public: { gid: "1078324976643066553" } } },
+        },
+      },
+    },
+  }), {
+    buildId: "24370498",
+    manifestId: "1078324976643066553",
+    publishedAt: "2026-07-29T03:02:02.000Z",
+  });
+});
+
+test("server update check intervals support disabling and clamp unsafe values", () => {
+  assert.equal(normalizeServerUpdateCheckIntervalHours(undefined), 24);
+  assert.equal(normalizeServerUpdateCheckIntervalHours(0), 0);
+  assert.equal(normalizeServerUpdateCheckIntervalHours(6.4), 6);
+  assert.equal(normalizeServerUpdateCheckIntervalHours(10000), 720);
+});
+
+test("DepotDownloader installs use the newest Linux depot manifest", async () => {
+  const installDir = await fs.mkdtemp(path.join(os.tmpdir(), "palworld-update-manifest-"));
+  try {
+    const depotDir = path.join(installDir, ".DepotDownloader");
+    await fs.mkdir(depotDir);
+    const oldManifest = path.join(depotDir, "2394012_111.manifest");
+    const currentManifest = path.join(depotDir, "2394012_222.manifest");
+    await fs.writeFile(oldManifest, "old");
+    await fs.writeFile(currentManifest, "current");
+    const now = Date.now();
+    await fs.utimes(oldManifest, new Date(now - 5000), new Date(now - 5000));
+    await fs.utimes(currentManifest, new Date(now), new Date(now));
+    assert.deepEqual(await readInstalledServerBuild({ server: { installDir } }), {
+      buildId: "",
+      manifestId: "222",
+      source: "depotdownloader",
+      path: currentManifest,
+    });
+  } finally {
+    await fs.rm(installDir, { recursive: true, force: true });
+  }
+});
 
 test("native updates run as the systemd service user and repair launchers", () => {
   const config = {

@@ -60,6 +60,7 @@
     "watchdogMemoryBreachChecks": 2,
     "watchdogRestartCooldownMinutes": 15,
     "scheduledRestartIntervalHours": 0,
+    "serverUpdateCheckIntervalHours": 24,
     "maintenanceWarningSeconds": 60,
     "maintenanceWarningMessage": "Server maintenance restart in {seconds} seconds.",
     "backupBeforeManagedRestart": true

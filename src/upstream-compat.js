@@ -502,6 +502,7 @@ function createUpstreamCompatibility(deps) {
       const identity = await resolveServerIdentity(config, live);
       deps.sendJson(res, 200, {
         version: identity.version,
+        current_version: identity.version,
         official_version: identity.version,
         version_cached: identity.cached,
         version_observed_at: identity.observedAt,
@@ -753,6 +754,7 @@ function createUpstreamCompatibility(deps) {
       const identity = await resolveServerIdentity(config, live);
       deps.sendJson(res, 200, {
         version: identity.version,
+        current_version: identity.version,
         official_version: identity.version,
         version_cached: identity.cached,
         version_observed_at: identity.observedAt,
