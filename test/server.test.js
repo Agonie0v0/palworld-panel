@@ -35,8 +35,28 @@ const {
   verifyAuthToken,
   permissionsForRole,
   principalCan,
-  watchdogSettings
+  watchdogSettings,
+  writeSettingsFile
 } = require("../src/server");
+
+test("server settings can be rewritten after the game process has stopped", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "palworld-settings-sync-"));
+  const settingsPath = path.join(root, "Pal", "Saved", "Config", "LinuxServer", "PalWorldSettings.ini");
+  try {
+    await writeSettingsFile({
+      server: { settingsPath },
+      settings: {
+        BaseCampMaxNumInGuild: 50,
+        MaxBuildingLimitNum: 0,
+      },
+    });
+    const ini = await fs.readFile(settingsPath, "utf8");
+    assert.match(ini, /BaseCampMaxNumInGuild=50/);
+    assert.match(ini, /MaxBuildingLimitNum=0/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 test("Steam public branch metadata exposes the latest build and Linux manifest", () => {
   assert.deepEqual(parseSteamPublicBuild({
