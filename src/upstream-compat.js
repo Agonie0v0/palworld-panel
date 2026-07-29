@@ -52,6 +52,12 @@ function liveFailure(result) {
   }).join("; ");
 }
 
+function normalizeServerVersion(value) {
+  const version = String(value || "").trim();
+  if (!version || /^(unknown|develop)$/i.test(version)) return "";
+  return version;
+}
+
 function playerUidFromId(playerId) {
   const value = String(playerId || "");
   if (value.length < 8) return "";
@@ -368,6 +374,33 @@ function createUpstreamCompatibility(deps) {
     return deps.managedCall("live", {}, () => deps.liveServerData(config));
   }
 
+  async function resolveServerIdentity(config, live) {
+    const info = responsePayload(live.info);
+    const liveVersion = normalizeServerVersion(stringFrom(info, ["version"]));
+    const liveName = stringFrom(info, ["name", "servername", "server_name"], config.settings.ServerName);
+    const cached = deps.loadServerVersionCache ? await deps.loadServerVersionCache() : {};
+    if (live.info?.ok && liveVersion) {
+      const next = {
+        version: liveVersion,
+        name: liveName,
+        source: live.info?.source || "rest",
+        observedAt: new Date().toISOString()
+      };
+      if (deps.saveServerVersionCache && cached.version !== next.version) {
+        await deps.saveServerVersionCache(next);
+      }
+      return { ...next, cached: false };
+    }
+    const cachedVersion = normalizeServerVersion(cached.version);
+    return {
+      version: cachedVersion || "Unknown",
+      name: liveName || cached.name || config.settings.ServerName,
+      source: cachedVersion ? "cache" : (live.info?.source || "rest"),
+      observedAt: cached.observedAt || "",
+      cached: Boolean(cachedVersion)
+    };
+  }
+
   async function getPlayers(config) {
     const [saveData, live] = await Promise.all([getSaveData(config), getLive(config)]);
     const online = extractOnlinePlayers(live);
@@ -466,12 +499,16 @@ function createUpstreamCompatibility(deps) {
     }
     if (pathname === "/api/server") {
       const live = await getLive(config);
-      const info = responsePayload(live.info);
+      const identity = await resolveServerIdentity(config, live);
       deps.sendJson(res, 200, {
-        version: stringFrom(info, ["version"], "Unknown"),
-        name: stringFrom(info, ["name", "servername", "server_name"], config.settings.ServerName),
+        version: identity.version,
+        official_version: identity.version,
+        version_cached: identity.cached,
+        version_observed_at: identity.observedAt,
+        app_id: "2394010",
+        name: identity.name,
         available: Boolean(live.info?.ok),
-        source: live.info?.source || "rest",
+        source: identity.source,
         error: liveFailure(live.info)
       });
       return true;
@@ -713,10 +750,14 @@ function createUpstreamCompatibility(deps) {
     }
     if (req.method === "GET" && pathname === "/api/server") {
       const live = await getLive(config);
-      const info = responsePayload(live.info);
+      const identity = await resolveServerIdentity(config, live);
       deps.sendJson(res, 200, {
-        version: stringFrom(info, ["version"], "Unknown"),
-        name: stringFrom(info, ["name", "servername", "server_name"], config.settings.ServerName)
+        version: identity.version,
+        official_version: identity.version,
+        version_cached: identity.cached,
+        version_observed_at: identity.observedAt,
+        app_id: "2394010",
+        name: identity.name
       });
       return true;
     }
@@ -1022,13 +1063,14 @@ function createUpstreamCompatibility(deps) {
     handleOptional,
     handleAuthorized,
     runScheduledTasks,
-    __test: { getPlayers, getSaveData }
+    __test: { getPlayers, getSaveData, resolveServerIdentity }
   };
 }
 
 module.exports = {
   createUpstreamCompatibility,
   DEFAULT_COMMANDS,
+  normalizeServerVersion,
   normalizePlayer,
   sameStablePlayer,
   steamIdFromUserId

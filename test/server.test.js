@@ -15,6 +15,7 @@ const {
   issueAuthToken,
   decodeAuthToken,
   normalizeLivePlayers,
+  nativeServerExecutablePaths,
   parseDfOutput,
   parsePsOutput,
   parseRconInfo,
@@ -24,6 +25,7 @@ const {
   productionInventorySnapshot,
   publicOfflineProductionState,
   staticCacheControl,
+  systemdUpdaterInvocation,
   testSaveSource,
   testRestConnection,
   trimBackups,
@@ -32,6 +34,26 @@ const {
   principalCan,
   watchdogSettings
 } = require("../src/server");
+
+test("native updates run as the systemd service user and repair launchers", () => {
+  const config = {
+    server: {
+      installDir: "/opt/palworld/server",
+      steamcmdPath: "/opt/depotdownloader/DepotDownloader",
+    },
+  };
+  assert.deepEqual(
+    systemdUpdaterInvocation(config, ["-app", "2394010"], "palworld"),
+    {
+      command: "runuser",
+      args: ["-u", "palworld", "--", "/opt/depotdownloader/DepotDownloader", "-app", "2394010"],
+    },
+  );
+  assert.deepEqual(nativeServerExecutablePaths(config), [
+    path.resolve("/opt/palworld/server/Pal/Binaries/Linux/PalServer-Linux-Shipping"),
+    path.resolve("/opt/palworld/server/PalServer.sh"),
+  ]);
+});
 
 test("offline production snapshots only include base and guild inventory", () => {
   const snapshot = productionInventorySnapshot({

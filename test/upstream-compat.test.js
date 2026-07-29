@@ -4,9 +4,36 @@ const test = require("node:test");
 const {
   createUpstreamCompatibility,
   normalizePlayer,
+  normalizeServerVersion,
   sameStablePlayer,
   steamIdFromUserId,
 } = require("../src/upstream-compat");
+
+test("official server version falls back to the last confirmed live value", async () => {
+  let cached = { version: "v1.0.1.100619", observedAt: "2026-07-20T00:00:00.000Z" };
+  const compatibility = createUpstreamCompatibility({
+    loadServerVersionCache: async () => cached,
+    saveServerVersionCache: async (value) => {
+      cached = value;
+      return value;
+    },
+  });
+  const config = { settings: { ServerName: "Test server" } };
+  const live = await compatibility.__test.resolveServerIdentity(config, {
+    info: { ok: true, source: "rest", data: { version: "v1.0.2.100933", servername: "Live server" } },
+  });
+  assert.equal(live.version, "v1.0.2.100933");
+  assert.equal(live.cached, false);
+  assert.equal(cached.version, "v1.0.2.100933");
+
+  const offline = await compatibility.__test.resolveServerIdentity(config, {
+    info: { ok: false, source: "rest", error: "connection refused" },
+  });
+  assert.equal(offline.version, "v1.0.2.100933");
+  assert.equal(offline.cached, true);
+  assert.equal(offline.source, "cache");
+  assert.equal(normalizeServerVersion("Unknown"), "");
+});
 
 test("Steam64 is derived from Palworld 1.0 REST userId values", () => {
   assert.equal(steamIdFromUserId("steam_76561198841027010"), "76561198841027010");
