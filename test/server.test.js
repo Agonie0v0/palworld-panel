@@ -374,8 +374,7 @@ test("watchdog settings stay disabled by default and clamp unsafe values", () =>
     watchdogRestartCooldownMinutes: 15,
     scheduledRestartIntervalHours: 0,
     maintenanceWarningSeconds: 60,
-    maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds.",
-    backupBeforeManagedRestart: true
+    maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds."
   });
   const settings = watchdogSettings({
     watchdogEnabled: true,

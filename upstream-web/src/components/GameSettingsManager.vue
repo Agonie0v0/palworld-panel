@@ -70,6 +70,31 @@ const requestGeneratedIni = () => new Promise((resolve, reject) => {
   postToGenerator({ type: "PALWORLD_PANEL_REQUEST_INI" });
 });
 
+const offerRestart = () => {
+  dialog.warning({
+    title: t("gameSettings.restartAfterSaveTitle"),
+    content: t("gameSettings.restartAfterSaveContent"),
+    positiveText: t("gameSettings.restartNow"),
+    negativeText: t("gameSettings.restartLater"),
+    maskClosable: false,
+    onPositiveClick: async () => {
+      try {
+        const { data, statusCode } = await api.runServerAction("restart", true);
+        if (![200, 202].includes(statusCode.value) || data.value?.ok === false) {
+          message.error(data.value?.error || t("gameSettings.restartFailed"));
+          return false;
+        }
+        message.success(t("gameSettings.restartQueued"));
+        return true;
+      } catch (error) {
+        message.error(`${t("gameSettings.restartFailed")} ${error.message}`);
+        return false;
+      }
+    },
+    onNegativeClick: () => message.info(t("gameSettings.restartDeferred")),
+  });
+};
+
 const persistGeneratedSettings = async () => {
   saving.value = true;
   try {
@@ -99,6 +124,7 @@ const persistGeneratedSettings = async () => {
           currentSettings.value = { ...data.value.settings };
           emit("saved", currentSettings.value);
           message.success(t("gameSettings.generatorSaved"));
+          window.setTimeout(offerRestart, 0);
         } catch (error) {
           message.error(`${t("gameSettings.saveFailed")} ${error.message}`);
           return false;

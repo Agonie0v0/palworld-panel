@@ -143,8 +143,7 @@ const defaultConfig = {
     scheduledRestartIntervalHours: 0,
     serverUpdateCheckIntervalHours: 24,
     maintenanceWarningSeconds: 60,
-    maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds.",
-    backupBeforeManagedRestart: true
+    maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds."
   },
   settings: {
     ServerName: "Palworld 1.0 Oracle ARM",
@@ -1169,6 +1168,17 @@ async function runAction(action, config, onProgress = async () => {}) {
   const report = (progress, message, line = "", force = true) =>
     Promise.resolve(onProgress(progress, message, line, force)).catch(() => {});
   await report(8, `Preparing ${action}`, `[panel] Preparing server action: ${action}`);
+  if (["restart", "update"].includes(action)) {
+    const backup = await createBackup(config, (progress, message, line, force) =>
+      report(Math.min(14, 8 + Math.round(progress * 0.06)), message, line, force));
+    if (!backup.ok) return backup;
+    try {
+      await trimBackups(config);
+    } catch (error) {
+      await report(14, "Backup retention cleanup failed", `[backup] ${error.message}`, false);
+    }
+    await report(14, "Backup completed before server action", `[backup] Protected save: ${backup.backup}`);
+  }
   if (config.server.mode === "docker") {
     if (config.server.containerName) {
       const dockerActions = {
@@ -3018,8 +3028,7 @@ function watchdogSettings(automation = {}) {
     maintenanceWarningSeconds: Math.round(numberInRange(automation.maintenanceWarningSeconds, 60, 0, 600)),
     maintenanceWarningMessage: automation.maintenanceWarningMessage === undefined
       ? "Server maintenance restart in {seconds} seconds."
-      : String(automation.maintenanceWarningMessage),
-    backupBeforeManagedRestart: automation.backupBeforeManagedRestart !== false
+      : String(automation.maintenanceWarningMessage)
   };
 }
 
@@ -3050,12 +3059,6 @@ async function managedRestart(config, reason) {
   schedulerState.lastWatchdogAction = reason;
   schedulerState.lastWatchdogError = "";
   try {
-    if (settings.backupBeforeManagedRestart) {
-      const backup = await managedCall("action", { action: "backup" }, () => createBackup(config));
-      if (!backup.ok) throw new Error(backup.stderr || backup.stdout || "Backup before restart failed.");
-      const agent = await loadAgentConfig();
-      if (!agentIsEnabled(agent)) await trimBackups(config);
-    }
     if (settings.maintenanceWarningSeconds > 0 && settings.maintenanceWarningMessage.trim()) {
       const warning = settings.maintenanceWarningMessage.replaceAll("{seconds}", String(settings.maintenanceWarningSeconds));
       await broadcastLines(config, warning);

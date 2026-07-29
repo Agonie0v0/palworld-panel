@@ -47,7 +47,6 @@ const watchdog = ref({
   scheduledRestartIntervalHours: 0,
   maintenanceWarningSeconds: 60,
   maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds.",
-  backupBeforeManagedRestart: true,
 });
 const deploy = ref({
   installDir: "/opt/palworld/server",
@@ -603,9 +602,6 @@ const maintenance = (operation) => {
               </n-form-item-gi>
               <n-form-item-gi :label="$t('operations.warningSeconds')">
                 <n-input-number v-model:value="watchdog.maintenanceWarningSeconds" :min="0" :max="600" class="w-full" />
-              </n-form-item-gi>
-              <n-form-item-gi :label="$t('operations.backupBeforeRestart')">
-                <n-switch v-model:value="watchdog.backupBeforeManagedRestart" />
               </n-form-item-gi>
               <n-form-item-gi span="1 700:2" :label="$t('operations.warningMessage')">
                 <n-input v-model:value="watchdog.maintenanceWarningMessage" :placeholder="$t('operations.warningMessagePlaceholder')" />
