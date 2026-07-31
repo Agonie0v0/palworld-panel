@@ -17,7 +17,9 @@ const {
   normalizeLivePlayers,
   normalizeServerUpdateCheckIntervalHours,
   nativeServerExecutablePaths,
+  normalizeNetServerMaxTickRate,
   parseDfOutput,
+  parseEngineNetServerMaxTickRate,
   parsePsOutput,
   parseRconInfo,
   parseShowPlayers,
@@ -36,6 +38,7 @@ const {
   permissionsForRole,
   principalCan,
   watchdogSettings,
+  updateEngineNetServerMaxTickRate,
   writeSettingsFile
 } = require("../src/server");
 
@@ -55,6 +58,46 @@ test("server settings can be rewritten after the game process has stopped", asyn
     assert.match(ini, /MaxBuildingLimitNum=0/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Engine.ini tick rate parsing only reads the IpNetDriver section", () => {
+  assert.equal(parseEngineNetServerMaxTickRate("[Core.System]\nNetServerMaxTickRate=120\n"), null);
+  assert.equal(parseEngineNetServerMaxTickRate([
+    "[Core.System]",
+    "Paths=../../../Engine/Content",
+    "",
+    "[/Script/OnlineSubsystemUtils.IpNetDriver]",
+    "NetServerMaxTickRate=90",
+  ].join("\n")), 90);
+});
+
+test("Engine.ini tick rate updates preserve unrelated sections", () => {
+  const source = "[Core.System]\r\nPaths=../../../Engine/Content\r\n";
+  const updated = updateEngineNetServerMaxTickRate(source, 60);
+  assert.match(updated, /\[Core\.System\]\r\nPaths=\.\.\/\.\.\/\.\.\/Engine\/Content/);
+  assert.match(updated, /\[\/Script\/OnlineSubsystemUtils\.IpNetDriver\]\r\nNetServerMaxTickRate=60/);
+});
+
+test("Engine.ini tick rate updates replace existing values without duplicates", () => {
+  const updated = updateEngineNetServerMaxTickRate([
+    "[/Script/OnlineSubsystemUtils.IpNetDriver]",
+    "NetServerMaxTickRate = 30",
+    "NetServerMaxTickRate=45",
+    "",
+    "[Other.Section]",
+    "Enabled=True",
+  ].join("\n"), 120);
+  assert.equal((updated.match(/NetServerMaxTickRate/gi) || []).length, 1);
+  assert.match(updated, /NetServerMaxTickRate\s*=\s*120/);
+  assert.match(updated, /\[Other\.Section\]\nEnabled=True/);
+});
+
+test("server tick rate validation accepts only integer values from 30 through 120", () => {
+  assert.equal(normalizeNetServerMaxTickRate(30), 30);
+  assert.equal(normalizeNetServerMaxTickRate("120"), 120);
+  for (const value of [29, 121, 59.5, "fast", null]) {
+    assert.throws(() => normalizeNetServerMaxTickRate(value), /integer between 30 and 120/);
   }
 });
 

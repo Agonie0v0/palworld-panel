@@ -108,6 +108,7 @@ const defaultConfig = {
     restUser: "admin",
     restPassword: "",
     publicPort: 8211,
+    netServerMaxTickRate: 60,
     saveParserCommand: process.env.SAVE_PARSER_COMMAND || ""
   },
   automation: {
@@ -1151,10 +1152,129 @@ async function writeSettingsFile(config) {
   return settingsPath;
 }
 
-async function syncSettingsAfterStop(config, service, report, progress) {
+function engineSettingsPath(config) {
+  return path.join(path.dirname(config.server.settingsPath), "Engine.ini");
+}
+
+function normalizeNetServerMaxTickRate(value) {
+  const rate = Number(value);
+  if (!Number.isInteger(rate) || rate < 30 || rate > 120) {
+    throw new RangeError("NetServerMaxTickRate must be an integer between 30 and 120.");
+  }
+  return rate;
+}
+
+function parseEngineNetServerMaxTickRate(content) {
+  let inIpNetDriver = false;
+  for (const line of String(content || "").split(/\r?\n/)) {
+    const section = line.trim().match(/^\[([^\]]+)\]$/);
+    if (section) {
+      inIpNetDriver = section[1].toLowerCase() === "/script/onlinesubsystemutils.ipnetdriver";
+      continue;
+    }
+    if (!inIpNetDriver) continue;
+    const setting = line.match(/^\s*NetServerMaxTickRate\s*=\s*([^;#\s]+).*$/i);
+    if (!setting) continue;
+    const rate = Number(setting[1]);
+    return Number.isInteger(rate) && rate >= 30 && rate <= 120 ? rate : null;
+  }
+  return null;
+}
+
+function updateEngineNetServerMaxTickRate(content, value) {
+  const rate = normalizeNetServerMaxTickRate(value);
+  const source = String(content || "");
+  const eol = source.includes("\r\n") ? "\r\n" : "\n";
+  const hadTrailingEol = /\r?\n$/.test(source);
+  const lines = source ? source.split(/\r?\n/) : [];
+  if (hadTrailingEol) lines.pop();
+
+  let sectionStart = -1;
+  let sectionEnd = lines.length;
+  for (let index = 0; index < lines.length; index += 1) {
+    const section = lines[index].trim().match(/^\[([^\]]+)\]$/);
+    if (!section) continue;
+    if (sectionStart >= 0) {
+      sectionEnd = index;
+      break;
+    }
+    if (section[1].toLowerCase() === "/script/onlinesubsystemutils.ipnetdriver") {
+      sectionStart = index;
+    }
+  }
+
+  if (sectionStart < 0) {
+    if (lines.length && lines[lines.length - 1].trim()) lines.push("");
+    lines.push("[/Script/OnlineSubsystemUtils.IpNetDriver]", `NetServerMaxTickRate=${rate}`);
+  } else {
+    let replaced = false;
+    for (let index = sectionStart + 1; index < sectionEnd; index += 1) {
+      const setting = lines[index].match(/^(\s*NetServerMaxTickRate\s*=\s*).*$/i);
+      if (!setting) continue;
+      if (!replaced) {
+        lines[index] = `${setting[1]}${rate}`;
+        replaced = true;
+      } else {
+        lines.splice(index, 1);
+        index -= 1;
+        sectionEnd -= 1;
+      }
+    }
+    if (!replaced) lines.splice(sectionEnd, 0, `NetServerMaxTickRate=${rate}`);
+  }
+
+  return `${lines.join(eol)}${hadTrailingEol || !source ? eol : ""}`;
+}
+
+async function readEngineSettings(config) {
+  const enginePath = engineSettingsPath(config);
+  let content = "";
   try {
-    const settingsPath = await writeSettingsFile(config);
-    await report(progress, "Applying server settings", `[settings] Wrote ${settingsPath}`);
+    content = await fsp.readFile(enginePath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const fileRate = parseEngineNetServerMaxTickRate(content);
+  const configuredRate = normalizeNetServerMaxTickRate(config.server.netServerMaxTickRate || 60);
+  return {
+    path: enginePath,
+    netServerMaxTickRate: fileRate ?? configuredRate,
+    fileNetServerMaxTickRate: fileRate,
+    source: fileRate === null ? "panel-config" : "engine.ini"
+  };
+}
+
+async function writeEngineSettingsFile(config) {
+  const enginePath = engineSettingsPath(config);
+  let content = "";
+  try {
+    content = await fsp.readFile(enginePath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  await fsp.mkdir(path.dirname(enginePath), { recursive: true });
+  await fsp.writeFile(
+    enginePath,
+    updateEngineNetServerMaxTickRate(content, config.server.netServerMaxTickRate || 60),
+    "utf8"
+  );
+  return enginePath;
+}
+
+async function writeServerConfigFiles(config) {
+  const settingsPath = await writeSettingsFile(config);
+  const enginePath = await writeEngineSettingsFile(config);
+  return { settingsPath, enginePath };
+}
+
+async function syncServerConfigAfterStop(config, service, report, progress) {
+  try {
+    const files = await writeServerConfigFiles(config);
+    await report(
+      progress,
+      "Applying server settings",
+      `[settings] Wrote ${files.settingsPath}\n[engine] Wrote ${files.enginePath}`
+    );
     return { ok: true };
   } catch (error) {
     await report(progress, "Applying server settings failed", `[settings] ${error.message}`, false);
@@ -1230,7 +1350,7 @@ async function runAction(action, config, onProgress = async () => {}) {
     const stop = await spawnWithLogs("systemctl", ["stop", service], {}, (line, stream) =>
       report(24, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
     if (!stop.ok) return stop;
-    const settingsSync = await syncSettingsAfterStop(config, service, report, 27);
+    const settingsSync = await syncServerConfigAfterStop(config, service, report, 27);
     if (!settingsSync.ok) return settingsSync;
     const depotDownloader = path.basename(config.server.steamcmdPath).toLowerCase().includes("depotdownloader");
     const updateArgs = depotDownloader
@@ -1298,7 +1418,7 @@ async function runAction(action, config, onProgress = async () => {}) {
     const stop = await spawnWithLogs("systemctl", ["stop", service], {}, (line, stream) =>
       report(42, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
     if (!stop.ok) return stop;
-    const settingsSync = await syncSettingsAfterStop(config, service, report, 58);
+    const settingsSync = await syncServerConfigAfterStop(config, service, report, 58);
     if (!settingsSync.ok) return settingsSync;
     await report(70, "Starting the game service", `[systemd] Starting ${service}`);
     return spawnWithLogs("systemctl", ["start", service], {}, (line, stream) =>
@@ -1307,8 +1427,12 @@ async function runAction(action, config, onProgress = async () => {}) {
 
   if (action === "start") {
     try {
-      const settingsPath = await writeSettingsFile(config);
-      await report(28, "Applying server settings", `[settings] Wrote ${settingsPath}`);
+      const files = await writeServerConfigFiles(config);
+      await report(
+        28,
+        "Applying server settings",
+        `[settings] Wrote ${files.settingsPath}\n[engine] Wrote ${files.enginePath}`
+      );
     } catch (error) {
       return { ok: false, stdout: "", stderr: `Failed to apply server settings: ${error.message}` };
     }
@@ -2493,6 +2617,31 @@ async function handleApi(req, res, config) {
     return sendJson(res, 200, { ok: true, update });
   }
 
+  if (req.method === "GET" && req.url === "/api/server/engine-settings") {
+    const settings = await managedCall("engineSettings", {}, () => readEngineSettings(config));
+    return sendJson(res, 200, { ok: true, settings });
+  }
+
+  if (req.method === "PUT" && req.url === "/api/server/engine-settings") {
+    const body = await readBody(req);
+    let netServerMaxTickRate;
+    try {
+      netServerMaxTickRate = normalizeNetServerMaxTickRate(body.netServerMaxTickRate);
+    } catch (error) {
+      return sendError(res, 400, error.message);
+    }
+    const next = mergeConfig(defaultConfig, {
+      ...config,
+      server: { ...config.server, netServerMaxTickRate }
+    });
+    await managedCall("engineSettings", { netServerMaxTickRate }, () => writeEngineSettingsFile(next));
+    await saveConfig(next);
+    return sendJson(res, 200, {
+      ok: true,
+      settings: await readEngineSettings(next)
+    });
+  }
+
   if (req.method === "POST" && req.url === "/api/server/update-check") {
     const update = await managedCall("serverUpdateCheck", {
       intervalHours: config.automation.serverUpdateCheckIntervalHours,
@@ -3311,6 +3460,7 @@ module.exports = {
   permissionsForRole,
   principalCan,
   parseDfOutput,
+  parseEngineNetServerMaxTickRate,
   parsePsOutput,
   playerUidFromId,
   productionInventoryDiff,
@@ -3320,10 +3470,13 @@ module.exports = {
   staticCacheControl,
   systemdUpdaterInvocation,
   normalizeServerUpdateCheckIntervalHours,
+  normalizeNetServerMaxTickRate,
   testRestConnection,
   testSaveSource,
   trimBackups,
   verifyAuthToken,
   watchdogSettings,
+  updateEngineNetServerMaxTickRate,
+  writeEngineSettingsFile,
   writeSettingsFile
 };
