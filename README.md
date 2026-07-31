@@ -1,29 +1,74 @@
 # Palworld Panel
 
-面向《幻兽帕鲁》专用服务器服主的一体化 Web 管理面板。它把服务器部署、实时监控、玩家管理、完整参数配置、存档解析、备份恢复、RCON、模组和自动化集中到同一个界面中。
+[![Release](https://img.shields.io/github/v/release/Agonie0v0/palworld-panel?include_prereleases&label=release)](https://github.com/Agonie0v0/palworld-panel/releases)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#致谢与许可证)
+![Platform](https://img.shields.io/badge/platform-AMD64%20%7C%20ARM64-16a085)
+![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)
+
+面向《幻兽帕鲁》专用服务器服主的一体化 Web 管理面板。部署服务器、查看运行状态、管理玩家与据点帕鲁、解析存档、追踪全服物资、调整完整参数、备份恢复、RCON、模组和自动化，都可以在同一个界面中完成。
 
 项目支持 AMD64 与 ARM64，可在面板与游戏同机、Docker 面板配合远程 Agent、Oracle Cloud Ampere A1 等环境中使用。桌面端和移动端均提供简体中文、English、亮色与深色主题。
 
-> 当前功能已经可以正常使用。修改游戏参数不会自动重启 Palworld，是否重启始终由管理员决定。
+> 参数保存后可选择立即重启或稍后重启。所有由面板执行的重启都会先备份存档；备份失败时，重启会被终止。
+
+## 核心能力
+
+- **看得见服务器在做什么**：自动读取在线状态、官方版本、FPS、玩家、主机负载和实时操作日志。
+- **看得懂存档里有什么**：将玩家、公会、地图、据点帕鲁、帕鲁仓库和全服库存解析成带游戏图标的可检索界面。
+- **管得住日常运维**：支持部署、更新、启停、备份恢复、WebDAV、RCON、白名单、广播、定时任务和守护策略。
+- **配得全服务器参数**：内置 `pal-conf` 完整配置器，并独立支持 `30/60/90/120` FPS 与 Tick Rate 设置。
+- **适配多种部署方式**：支持本机 systemd、Docker + Agent、远程存档 ZIP，以及 Oracle Cloud 免费 ARM 主机。
 
 ## 界面预览
 
 ### 桌面端
 
-![Palworld Panel 桌面端服务器概览](docs/screenshots/panel-overview-desktop.png)
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>服务器概览</strong></td>
+    <td width="50%" align="center"><strong>服务器运维与版本检测</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/desktop-overview.png" alt="Palworld Panel 桌面端服务器概览"></td>
+    <td><img src="docs/screenshots/desktop-operations.png" alt="Palworld Panel 桌面端服务器运维与版本检测"></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><strong>服务器参数与 FPS</strong></td>
+    <td width="50%" align="center"><strong>据点帕鲁工作状态</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/desktop-settings.png" alt="Palworld Panel 桌面端服务器参数与 FPS 设置"></td>
+    <td><img src="docs/screenshots/desktop-pal-status.png" alt="Palworld Panel 桌面端据点帕鲁工作状态"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>全服库存与容器定位</strong></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/desktop-inventory.png" alt="Palworld Panel 桌面端全服库存与容器定位"></td>
+  </tr>
+</table>
 
 ### 移动端
 
-<p align="center">
-  <img src="docs/screenshots/panel-overview-mobile.png" width="390" alt="Palworld Panel 移动端服务器概览">
-</p>
+<table>
+  <tr>
+    <td width="33.33%" align="center"><strong>概览</strong></td>
+    <td width="33.33%" align="center"><strong>帕鲁状态</strong></td>
+    <td width="33.33%" align="center"><strong>全服库存</strong></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/screenshots/mobile-overview.png" alt="Palworld Panel 移动端服务器概览"></td>
+    <td valign="top"><img src="docs/screenshots/mobile-pal-status.png" alt="Palworld Panel 移动端据点帕鲁状态"></td>
+    <td valign="top"><img src="docs/screenshots/mobile-inventory.png" alt="Palworld Panel 移动端全服库存"></td>
+  </tr>
+</table>
 
 ## 功能概览
 
 | 模块 | 已实现功能 |
 | --- | --- |
-| 服务器概览 | 在线状态、版本、FPS、在线人数、运行时长、CPU、内存、磁盘、进程状态与备份摘要 |
-| 服务器运维 | 部署、启动、停止、重启、更新、手动备份、实时操作日志、守护策略、计划重启、内存阈值、重置世界和卸载 |
+| 服务器概览 | 在线状态、当前官方版本、FPS、在线人数、运行时长、CPU、内存、磁盘、进程状态与备份摘要 |
+| 服务器运维 | 部署、启动、停止、重启、更新、手动备份、实时操作日志、官方最新版本检测、守护策略、计划重启、内存阈值、重置世界和卸载 |
 | 完整配置生成器 | 内置 `pal-conf`，提供 119 个带类型、范围和枚举校验的参数，支持 INI 与 `WorldOption.sav` |
 | 玩家管理 | 实时在线状态、UID、Steam64、平台 ID、IP、角色和帕鲁详情、踢出、封禁、解封、白名单 |
 | 帕鲁状态 | 按据点查看工作帕鲁头像、当前任务与设施、工作能力和等级、禁用工作、被动词条、已装备/已掌握主动技能、伙伴技能、个体值、饱食度与 SAN；并估算无人在线时段的据点物资增量 |
@@ -125,7 +170,7 @@ docker compose up -d --build
 2. 在“服务器运维”中部署新服务器，或接管现有 Palworld 服务。
 3. 在“PST 配置”中确认存档路径，并分别测试 REST API 与 RCON。
 4. 打开“服务器参数”，载入当前配置，调整参数后保存到服务器。
-5. 确认没有玩家在线后，再由管理员手动重启 Palworld 使参数生效。
+5. 保存时选择立即重启或稍后重启；建议确认没有玩家在线后再重启使参数生效。
 6. 创建一次手动备份，并确认备份可以下载和校验。
 
 面板涉及四种不同凭据，请勿混用：
@@ -150,7 +195,9 @@ docker compose up -d --build
 - 上传、生成和下载 `WorldOption.sav`
 - 在 INI 与 SAV 模式之间转换配置
 
-面板顶部的“保存到服务器”始终写入 `PalWorldSettings.ini`，不会自动重启游戏服务。`WorldOption.sav` 由生成器下载后放入对应世界存档目录；若 INI 与 SAV 同时存在，游戏会优先使用 `WorldOption.sav`。
+面板顶部的“保存到服务器”会写入 `PalWorldSettings.ini`，随后询问“立即重启”或“稍后重启”。选择立即重启时，面板会先备份当前存档；备份失败则不会继续重启。`WorldOption.sav` 由生成器下载后放入对应世界存档目录；若 INI 与 SAV 同时存在，游戏会优先使用 `WorldOption.sav`。
+
+FPS / Tick Rate 设置会写入 `Engine.ini`。面板提供 `30/60/90/120` 四档选择；较高数值会增加 CPU 负载，ARM64 + Box64 环境建议根据实际帧率和 CPU 占用逐步测试。
 
 ## 数据来源
 
@@ -203,9 +250,13 @@ Agent Token 等同于远程管理权限。请通过安全组或主机防火墙�
 
 自动重启、计划重启和内存守护默认关闭。启用前请先确认备份策略；恢复备份、重置世界和卸载属于破坏性操作，面板会要求二次确认。
 
+所有由面板管理的重启操作都会先创建存档备份。启动、重启和更新游戏服务时，面板也会重新同步 `PalWorldSettings.ini` 与 `Engine.ini`，避免服务更新后继续使用旧参数。
+
 ## 更新
 
 左上角显示 `版本号 · 构建短哈希`；悬停可查看完整提交和安装时间。版本号以根目录 `package.json` 为唯一来源，每次发布用户可见功能时按语义化版本规则提升。
+
+“服务器运维”同时显示当前服务端版本与官方最新版本。面板默认按配置频率自动检测更新，也可以随时手动检测；发现新版本后会在界面中提示更新。自动检测只查询版本，不会在无人确认时更新或重启游戏服务。
 
 ### systemd
 
@@ -294,7 +345,7 @@ RCONPort=25575
 
 ### 保存参数后游戏没有变化
 
-面板只负责写入配置，不会自行中断在线玩家。请在合适时间通过“服务器运维”手动重启游戏服务。若世界目录中存在 `WorldOption.sav`，还应注意它的优先级高于 `PalWorldSettings.ini`。
+参数保存后需要重启游戏服务才能生效。保存弹窗中可以选择立即重启，也可以稍后在“服务器运维”中手动重启。若世界目录中存在 `WorldOption.sav`，还应注意它的优先级高于 `PalWorldSettings.ini`；其中的同名参数会覆盖 INI 配置。
 
 ### ARM64 部署失败
 
