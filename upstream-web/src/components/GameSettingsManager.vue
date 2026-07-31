@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Launch, Renew } from "@vicons/carbon";
+import { Launch, Renew, Save } from "@vicons/carbon";
 import { useDialog, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
@@ -21,8 +21,12 @@ const api = new ApiService();
 const frame = ref(null);
 const loading = ref(false);
 const saving = ref(false);
+const fpsSaving = ref(false);
 const ready = ref(false);
 const currentSettings = ref({});
+const fpsRate = ref(60);
+const loadedFpsRate = ref(60);
+const fpsOptions = [30, 60, 90, 120];
 let pendingIniResolver = null;
 
 const language = computed(() => {
@@ -32,6 +36,7 @@ const language = computed(() => {
   return "en_US";
 });
 const frameSource = computed(() => `./pal-conf/index.html?embedded=1&lng=${language.value}`);
+const fpsDirty = computed(() => fpsRate.value !== loadedFpsRate.value);
 
 const postToGenerator = (payload) => {
   frame.value?.contentWindow?.postMessage(payload, window.location.origin);
@@ -43,6 +48,13 @@ const loadCurrentSettings = async ({ notify = false } = {}) => {
     const { data, statusCode } = await api.getPanelStatus();
     if (statusCode.value !== 200) throw new Error(data.value?.error || "Request failed");
     currentSettings.value = { ...(data.value?.config?.settings || {}) };
+    const engineResponse = await api.getServerEngineSettings();
+    if (engineResponse.statusCode.value !== 200) {
+      throw new Error(engineResponse.data.value?.error || "Request failed");
+    }
+    const currentFps = Number(engineResponse.data.value?.settings?.netServerMaxTickRate || 60);
+    fpsRate.value = currentFps;
+    loadedFpsRate.value = currentFps;
     if (ready.value) {
       postToGenerator({
         type: "PALWORLD_PANEL_LOAD_INI",
@@ -54,6 +66,28 @@ const loadCurrentSettings = async ({ notify = false } = {}) => {
     message.error(`${t("gameSettings.loadFailed")} ${error.message}`);
   } finally {
     loading.value = false;
+  }
+};
+
+const persistFpsSettings = async () => {
+  const value = Number(fpsRate.value);
+  if (!Number.isInteger(value) || value < 30 || value > 120) {
+    message.error(t("gameSettings.fpsInvalid"));
+    return;
+  }
+  fpsSaving.value = true;
+  try {
+    const { data, statusCode } = await api.updateServerEngineSettings(value);
+    if (statusCode.value !== 200) throw new Error(data.value?.error || "Request failed");
+    const savedValue = Number(data.value?.settings?.netServerMaxTickRate || value);
+    fpsRate.value = savedValue;
+    loadedFpsRate.value = savedValue;
+    message.success(t("gameSettings.fpsSaved", { value: savedValue }));
+    window.setTimeout(offerRestart, 0);
+  } catch (error) {
+    message.error(`${t("gameSettings.fpsSaveFailed")} ${error.message}`);
+  } finally {
+    fpsSaving.value = false;
   }
 };
 
@@ -176,13 +210,42 @@ onBeforeUnmount(() => window.removeEventListener("message", handleMessage));
     <template #header-extra>
       <n-button secondary :loading="loading" @click="loadCurrentSettings({ notify: true })">
         <template #icon><n-icon><Renew /></n-icon></template>
-        {{ $t("gameSettings.generatorReload") }}
+        <span class="generator-header-action-label">{{ $t("gameSettings.generatorReload") }}</span>
       </n-button>
       <n-button type="primary" :loading="saving" :disabled="!ready" @click="persistGeneratedSettings">
         <template #icon><n-icon><Launch /></n-icon></template>
-        {{ $t("gameSettings.generatorSave") }}
+        <span class="generator-header-action-label">{{ $t("gameSettings.generatorSave") }}</span>
       </n-button>
     </template>
+
+    <section class="performance-settings" aria-labelledby="server-fps-title">
+      <div class="performance-copy">
+        <div class="performance-heading">
+          <h3 id="server-fps-title">{{ $t("gameSettings.fpsTitle") }}</h3>
+          <n-tag size="small" :bordered="false" type="info">
+            {{ $t("gameSettings.fpsCurrent", { value: loadedFpsRate }) }}
+          </n-tag>
+        </div>
+        <p>{{ $t("gameSettings.fpsDescription") }}</p>
+        <small>{{ $t("gameSettings.fpsArmHint") }}</small>
+      </div>
+      <div class="performance-controls">
+        <n-radio-group v-model:value="fpsRate" class="fps-presets" size="small">
+          <n-radio-button v-for="option in fpsOptions" :key="option" :value="option">
+            {{ option }} FPS
+          </n-radio-button>
+        </n-radio-group>
+        <n-button
+          type="primary"
+          :loading="fpsSaving"
+          :disabled="!fpsDirty || loading"
+          @click="persistFpsSettings"
+        >
+          <template #icon><n-icon><Save /></n-icon></template>
+          {{ $t("gameSettings.fpsSave") }}
+        </n-button>
+      </div>
+    </section>
 
     <n-alert type="warning" :bordered="false" class="generator-notice">
       {{ $t("gameSettings.restartHint") }}
@@ -210,6 +273,59 @@ onBeforeUnmount(() => window.removeEventListener("message", handleMessage));
 
 <style scoped>
 .generator-notice { margin-bottom: 16px; }
+
+.performance-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.performance-copy { min-width: 0; }
+
+.performance-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.performance-heading h3 {
+  margin: 0;
+  color: var(--app-ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.performance-copy p {
+  max-width: 65ch;
+  margin: 5px 0 0;
+  color: var(--app-ink-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.performance-copy small {
+  display: block;
+  margin-top: 5px;
+  color: var(--app-ink);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.performance-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.fps-presets { display: flex; }
 
 .generator-frame-shell {
   position: relative;
@@ -250,6 +366,31 @@ onBeforeUnmount(() => window.removeEventListener("message", handleMessage));
 .generator-credit a { color: var(--app-primary); }
 
 @media (max-width: 700px) {
+  .performance-settings {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .performance-controls {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  :deep(.fps-presets.n-radio-group) {
+    display: grid !important;
+    width: 100%;
+    height: auto !important;
+    overflow: hidden;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :deep(.fps-presets .n-radio-button) {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  :deep(.fps-presets .n-radio-group__splitor) { display: none; }
+  :deep(.fps-presets .n-radio-button__state-border) { border-radius: 0; }
+  .generator-header-action-label { display: none; }
   .generator-frame-shell { min-height: 820px; }
   .generator-frame { height: 980px; }
   .generator-credit { justify-content: flex-start; }

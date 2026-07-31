@@ -93,6 +93,12 @@ class ApiService extends Service {
   async getServerUpdateStatus() {
     return this.fetch(`/api/server/update-status`).get().json();
   }
+  async getServerEngineSettings() {
+    return this.fetch(`/api/server/engine-settings`).get().json();
+  }
+  async updateServerEngineSettings(netServerMaxTickRate) {
+    return this.fetch(`/api/server/engine-settings`).put({ netServerMaxTickRate }).json();
+  }
   async checkServerUpdate() {
     return this.fetch(`/api/server/update-check`).post({}).json();
   }
