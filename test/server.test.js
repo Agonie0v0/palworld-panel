@@ -30,6 +30,7 @@ const {
   productionInventorySnapshot,
   publicOfflineProductionState,
   readInstalledServerBuild,
+  resolveInstalledServerBuild,
   staticCacheControl,
   systemdUpdaterInvocation,
   testSaveSource,
@@ -173,6 +174,28 @@ test("DepotDownloader installs use the newest Linux depot manifest", async () =>
   } finally {
     await fs.rm(installDir, { recursive: true, force: true });
   }
+});
+
+test("matching DepotDownloader manifests override a stale cached Build ID", () => {
+  assert.deepEqual(resolveInstalledServerBuild(
+    { buildId: "", manifestId: "1480973772525600530", source: "depotdownloader" },
+    { buildId: "24466863", manifestId: "1480973772525600530" },
+    { installedBuild: "24370498" },
+  ), {
+    installedBuild: "24466863",
+    updateAvailable: false,
+  });
+});
+
+test("different DepotDownloader manifests remain updateable even with a cached Build ID", () => {
+  assert.deepEqual(resolveInstalledServerBuild(
+    { buildId: "", manifestId: "old-manifest", source: "depotdownloader" },
+    { buildId: "24466863", manifestId: "new-manifest" },
+    { installedBuild: "24466863" },
+  ), {
+    installedBuild: "",
+    updateAvailable: true,
+  });
 });
 
 test("native updates run as the systemd service user and repair launchers", () => {

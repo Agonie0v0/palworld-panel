@@ -2414,6 +2414,28 @@ async function loadServerUpdateState() {
   return loadJsonFile("server-update.json", {});
 }
 
+function resolveInstalledServerBuild(installed = {}, latest = {}, previous = {}) {
+  const installedManifest = String(installed.manifestId || "");
+  const latestManifest = String(latest.manifestId || "");
+  const latestBuild = String(latest.buildId || "");
+  let installedBuild = String(installed.buildId || "");
+  let updateAvailable = null;
+
+  // DepotDownloader does not write SteamCMD's appmanifest file. Its depot
+  // manifest is authoritative and must take precedence over a cached Build ID.
+  if (installedManifest && latestManifest) {
+    updateAvailable = installedManifest !== latestManifest;
+    if (!updateAvailable && latestBuild) installedBuild = latestBuild;
+    return { installedBuild, updateAvailable };
+  }
+
+  if (!installedBuild) installedBuild = String(previous.installedBuild || "");
+  if (installedBuild && latestBuild && /^\d+$/.test(installedBuild) && /^\d+$/.test(latestBuild)) {
+    updateAvailable = Number(latestBuild) > Number(installedBuild);
+  }
+  return { installedBuild, updateAvailable };
+}
+
 async function currentPalworldVersion(config) {
   try {
     const live = await liveServerData(config);
@@ -2467,16 +2489,7 @@ async function checkServerUpdate(config, options = {}) {
         currentPalworldVersion(config),
       ]);
       const latest = parseSteamPublicBuild(payload);
-      let installedBuild = installed.buildId || String(previous.installedBuild || "");
-      if (!installedBuild && installed.manifestId && installed.manifestId === latest.manifestId) {
-        installedBuild = latest.buildId;
-      }
-      let updateAvailable = null;
-      if (installedBuild && latest.buildId && /^\d+$/.test(installedBuild) && /^\d+$/.test(latest.buildId)) {
-        updateAvailable = Number(latest.buildId) > Number(installedBuild);
-      } else if (installed.manifestId && latest.manifestId) {
-        updateAvailable = installed.manifestId !== latest.manifestId;
-      }
+      const { installedBuild, updateAvailable } = resolveInstalledServerBuild(installed, latest, previous);
       const latestVersion = updateAvailable === false && currentVersion
         ? currentVersion
         : (String(previous.latestBuild || "") === latest.buildId ? String(previous.latestVersion || "") : "");
@@ -3515,6 +3528,7 @@ module.exports = {
   productionInventorySnapshot,
   publicOfflineProductionState,
   readInstalledServerBuild,
+  resolveInstalledServerBuild,
   staticCacheControl,
   systemdUpdaterInvocation,
   normalizeServerUpdateCheckIntervalHours,
