@@ -554,17 +554,17 @@ defineExpose({ toggleEditing, editing });
   margin: 0 4px 10px;
 }
 .workspace-nav__group + .workspace-nav__group {
-  margin-top: 10px;
+  margin-top: 7px;
 }
 .workspace-nav__heading {
   display: flex;
-  min-height: 22px;
+  min-height: 26px;
   align-items: center;
   gap: 4px;
-  padding: 0 8px 3px;
+  padding: 0 7px 2px;
   color: var(--app-sidebar-muted);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 680;
 }
 .workspace-nav__heading span {
   min-width: 0;
@@ -598,7 +598,7 @@ defineExpose({ toggleEditing, editing });
 }
 .workspace-nav__list {
   display: grid;
-  gap: 2px;
+  gap: 1px;
 }
 .workspace-nav__item {
   position: relative;

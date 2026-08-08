@@ -1853,3 +1853,237 @@ pre {
     transform: none !important;
   }
 }
+
+/* World operations shell -------------------------------------------------- */
+:root {
+  --app-sidebar-width: 264px;
+  --app-header-height: 64px;
+  --app-radius-sm: 6px;
+  --app-radius-md: 10px;
+  --app-radius-lg: 12px;
+  --app-z-sticky: 20;
+  --app-z-dropdown: 40;
+  --app-z-modal-backdrop: 60;
+  --app-z-modal: 70;
+  --app-z-toast: 80;
+  --app-z-tooltip: 90;
+}
+
+.ops-shell--desktop {
+  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+  background: var(--app-bg);
+}
+
+.ops-sidebar {
+  padding: 12px 10px 10px;
+  background: color-mix(in srgb, var(--app-sidebar) 88%, var(--app-bg));
+  border-right: 1px solid var(--app-border);
+  box-shadow: none;
+  scrollbar-gutter: stable;
+}
+
+.ops-brand {
+  min-height: 52px;
+  gap: 10px;
+  margin: 0 2px 10px;
+  padding: 6px 8px 12px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--app-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ops-brand-mark {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.ops-brand-title {
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.ops-brand-version {
+  font-size: 10px;
+}
+
+.ops-menu-button {
+  min-height: 38px;
+  gap: 9px;
+  padding: 5px 8px;
+  color: var(--app-sidebar-muted);
+  border: 0;
+  border-radius: 8px;
+}
+
+.ops-menu-button:hover {
+  color: var(--app-sidebar-ink);
+  background: var(--app-sidebar-hover);
+  transform: none;
+}
+
+.ops-menu-button.is-active {
+  color: color-mix(in srgb, var(--app-accent) 78%, var(--app-sidebar-ink));
+  background: var(--app-sidebar-active);
+  box-shadow: none;
+}
+
+.ops-menu-button .n-icon {
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+  color: currentColor;
+  background: transparent;
+  border-radius: 7px;
+  font-size: 16px;
+}
+
+.ops-menu-button.is-active .n-icon {
+  color: #ffffff;
+  background: var(--app-accent);
+}
+
+.ops-menu-button span {
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.ops-sidebar-footer {
+  margin: 8px 2px 0;
+  padding: 10px 4px 0;
+}
+
+.ops-preference-button.n-button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+}
+
+.ops-workspace-header,
+.ops-workspace-header.is-tool-view {
+  position: relative;
+  z-index: var(--app-z-sticky);
+  min-height: var(--app-header-height);
+  padding: 0 24px;
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+  border-bottom: 1px solid var(--app-border);
+  box-shadow: none;
+}
+
+.ops-workspace-title {
+  font-size: 17px;
+  font-weight: 760;
+}
+
+.ops-workspace-context {
+  margin-top: 1px;
+  font-size: 10px;
+}
+
+.ops-header-telemetry {
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(96px, auto));
+  gap: 0;
+  overflow: hidden;
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+}
+
+.ops-telemetry-item,
+.ops-telemetry-item--state,
+.ops-telemetry-item:nth-child(2),
+.ops-telemetry-item--players {
+  min-height: 42px;
+  padding: 5px 11px;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ops-telemetry-item + .ops-telemetry-item {
+  border-left: 1px solid var(--app-border);
+}
+
+.ops-telemetry-item > span:not(.ops-status-dot),
+.ops-telemetry-item--state div > span {
+  font-size: 9px;
+}
+
+.ops-telemetry-item strong,
+.ops-telemetry-item--state strong,
+.ops-telemetry-item:nth-child(2) strong,
+.ops-telemetry-item--players strong {
+  color: var(--app-ink);
+  font-size: 12px;
+}
+
+.ops-telemetry-item--state strong {
+  color: var(--app-success);
+}
+
+.ops-workspace-content,
+.ops-workspace-content.is-overview {
+  padding: 0;
+  background: var(--app-bg);
+}
+
+.ops-workspace-content:not(.is-overview) {
+  padding: 20px 24px 32px;
+}
+
+.tool-surface,
+.settings-footer,
+.watchdog-footer,
+.backup-toolbar,
+.advanced-tab-toolbar,
+.log-toolbar,
+.webdav-form,
+.monitor-reading,
+.history-metric,
+.criteria-panel,
+.result-panel,
+.backup-row,
+.advanced-list-row,
+.status-card,
+.guild-stat-card,
+.member-card,
+.base-card,
+.map-info-card {
+  border-radius: var(--app-radius-lg) !important;
+  box-shadow: none !important;
+}
+
+.monitor-reading:hover,
+.history-metric:hover,
+.backup-row:hover,
+.advanced-list-row.is-clickable:hover,
+.status-card:hover,
+.member-card:hover,
+.base-card:hover,
+.ops-header-actions .n-button:hover:not(.n-button--disabled) {
+  box-shadow: none;
+  transform: none;
+}
+
+.app-theme.is-dark .ops-workspace-header,
+.app-theme.is-dark .ops-sidebar {
+  box-shadow: none;
+}
+
+@media (min-width: 1600px) {
+  :root { --app-sidebar-width: 268px; }
+  .ops-workspace-content:not(.is-overview) { padding: 24px 28px 36px; }
+}
+
+@media (max-width: 1120px) {
+  :root { --app-sidebar-width: 228px; }
+  .ops-workspace-header { padding-inline: 18px; }
+  .ops-header-telemetry { grid-template-columns: repeat(3, minmax(84px, auto)); }
+  .ops-workspace-content:not(.is-overview) { padding: 18px; }
+}
