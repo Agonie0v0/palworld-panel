@@ -2087,3 +2087,190 @@ pre {
   .ops-header-telemetry { grid-template-columns: repeat(3, minmax(84px, auto)); }
   .ops-workspace-content:not(.is-overview) { padding: 18px; }
 }
+
+/* Command deck shell v2 -------------------------------------------------- */
+:root {
+  --app-sidebar-width: clamp(292px, 16vw, 336px);
+  --app-header-height: 88px;
+}
+
+.ops-shell--desktop {
+  background:
+    radial-gradient(circle at 78% -10%, color-mix(in srgb, var(--app-accent) 8%, transparent), transparent 34%),
+    var(--app-bg);
+}
+
+.ops-sidebar {
+  padding: 18px 14px 14px;
+  background: linear-gradient(178deg, #11211e 0%, #0c1715 58%, #09110f 100%);
+  border-right: 0;
+  box-shadow: 18px 0 60px rgb(3 18 15 / 9%);
+}
+
+.ops-brand {
+  min-height: 76px;
+  gap: 14px;
+  margin: 0 4px 18px;
+  padding: 9px 10px 18px;
+  border-bottom-color: rgb(255 255 255 / 9%);
+}
+
+.ops-brand-mark {
+  width: 46px;
+  height: 46px;
+  flex-basis: 46px;
+  background: linear-gradient(145deg, #28d7ac, #0a8e78);
+  border-radius: 15px 15px 15px 6px;
+  box-shadow: 0 12px 28px rgb(11 171 139 / 24%);
+}
+
+.ops-brand-title {
+  color: #f3fbf8;
+  font-size: 16px;
+  font-weight: 760;
+  letter-spacing: -.01em;
+}
+
+.ops-brand-version {
+  margin-top: 4px;
+  color: rgb(220 239 234 / 52%);
+  font-size: 11px;
+}
+
+.ops-menu-button {
+  min-height: 48px;
+  gap: 12px;
+  padding: 7px 10px;
+  color: rgb(224 238 234 / 70%);
+  border-radius: 13px;
+}
+
+.ops-menu-button:hover {
+  color: #f5fffc;
+  background: rgb(255 255 255 / 7%);
+}
+
+.ops-menu-button.is-active {
+  color: #ffffff;
+  background: linear-gradient(100deg, rgb(27 182 145 / 30%), rgb(23 142 119 / 12%));
+  border: 1px solid rgb(60 226 185 / 18%);
+}
+
+.ops-menu-button .n-icon {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+  color: rgb(202 228 221 / 66%);
+  background: rgb(255 255 255 / 6%);
+  border-radius: 10px;
+  font-size: 18px;
+}
+
+.ops-menu-button.is-active .n-icon {
+  color: #07241d;
+  background: #42ddb7;
+  box-shadow: 0 8px 18px rgb(38 202 162 / 24%);
+}
+
+.ops-menu-button span {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ops-sidebar-footer {
+  margin: 16px 4px 0;
+  padding: 14px 5px 0;
+  border-top-color: rgb(255 255 255 / 9%);
+}
+
+.ops-preference-button.n-button {
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  color: rgb(229 243 239 / 76%);
+  background: rgb(255 255 255 / 6%);
+  border-radius: 12px;
+}
+
+.ops-workspace-header,
+.ops-workspace-header.is-tool-view {
+  min-height: var(--app-header-height);
+  padding: 0 clamp(26px, 2.4vw, 48px);
+  background: color-mix(in srgb, var(--app-bg) 86%, transparent);
+  border-bottom: 0;
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.ops-workspace-title {
+  font-size: clamp(21px, 1.35vw, 28px);
+  font-weight: 760;
+  letter-spacing: -.02em;
+}
+
+.ops-workspace-context {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.ops-header-telemetry {
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(118px, auto));
+  gap: 9px;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.ops-telemetry-item,
+.ops-telemetry-item--state,
+.ops-telemetry-item:nth-child(2),
+.ops-telemetry-item--players {
+  min-height: 56px;
+  padding: 8px 15px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 15px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--app-ink) 5%, transparent);
+}
+
+.ops-telemetry-item + .ops-telemetry-item {
+  border-left: 1px solid var(--app-border);
+}
+
+.ops-telemetry-item > span:not(.ops-status-dot),
+.ops-telemetry-item--state div > span {
+  font-size: 10px;
+}
+
+.ops-telemetry-item strong,
+.ops-telemetry-item--state strong,
+.ops-telemetry-item:nth-child(2) strong,
+.ops-telemetry-item--players strong {
+  font-size: 14px;
+}
+
+.ops-workspace-content:not(.is-overview) {
+  padding: clamp(26px, 2.4vw, 48px);
+}
+
+.app-theme.is-dark .ops-sidebar {
+  background: linear-gradient(178deg, #101c1a, #07110f);
+}
+
+@media (min-width: 1800px) {
+  :root { --app-sidebar-width: 336px; --app-header-height: 96px; }
+  .ops-sidebar { padding-inline: 18px; }
+  .ops-brand { min-height: 84px; }
+  .ops-menu-button { min-height: 52px; }
+  .ops-menu-button span { font-size: 14px; }
+}
+
+@media (max-width: 1180px) {
+  :root { --app-sidebar-width: 252px; --app-header-height: 76px; }
+  .ops-sidebar { padding-inline: 10px; }
+  .ops-brand-title { font-size: 14px; }
+  .ops-menu-button { min-height: 44px; }
+  .ops-header-telemetry { grid-template-columns: repeat(3, minmax(92px, auto)); }
+  .ops-telemetry-item,.ops-telemetry-item--state,.ops-telemetry-item:nth-child(2),.ops-telemetry-item--players { padding-inline: 10px; }
+}
