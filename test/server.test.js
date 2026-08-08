@@ -6,6 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const {
+  createBackup,
   decodeRconResponse,
   encodeRconCommand,
   exec,
@@ -41,6 +42,32 @@ const {
   updateEngineNetServerMaxTickRate,
   writeSettingsFile
 } = require("../src/server");
+
+test("backup publication is atomic and failed archives are removed", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "palworld-backup-atomic-"));
+  const source = path.join(root, "save");
+  const backupDir = path.join(root, "backups");
+  const config = {
+    server: { saveDir: source, backupDir },
+    automation: { saveSourceMode: "directory" }
+  };
+  try {
+    await fs.mkdir(source, { recursive: true });
+    await fs.writeFile(path.join(source, "Level.sav"), "save-data");
+    const created = await createBackup(config);
+    assert.equal(created.ok, true, created.stderr);
+    assert.match(path.basename(created.backup), /^palworld-save-.*\.tar\.gz$/);
+    assert.deepEqual((await fs.readdir(backupDir)).filter((name) => name.endsWith(".partial")), []);
+
+    await fs.rm(source, { recursive: true, force: true });
+    const failed = await createBackup(config);
+    assert.equal(failed.ok, false);
+    assert.equal(failed.backup, undefined);
+    assert.deepEqual((await fs.readdir(backupDir)).filter((name) => name.endsWith(".partial")), []);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 test("server settings can be rewritten after the game process has stopped", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "palworld-settings-sync-"));

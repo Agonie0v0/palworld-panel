@@ -1283,12 +1283,42 @@ async function syncServerConfigAfterStop(config, service, report, progress) {
   }
 }
 
+async function backupStoppedService(config, service, report, options) {
+  let backup;
+  try {
+    backup = await createBackup(config, (progress, message, line, force) =>
+      report(options.mapProgress(progress), message, line, force));
+  } catch (error) {
+    backup = { ok: false, stdout: "", stderr: error.message || "Save backup failed." };
+  }
+  if (!backup.ok) {
+    await report(
+      options.failureProgress,
+      "Backup failed; restoring the service",
+      `[systemd] Starting ${service} after backup failure`
+    );
+    await spawnWithLogs("systemctl", ["start", service]);
+    return backup;
+  }
+  try {
+    await trimBackups(config);
+  } catch (error) {
+    await report(options.successProgress, "Backup retention cleanup failed", `[backup] ${error.message}`, false);
+  }
+  await report(
+    options.successProgress,
+    `Backup completed before server ${options.action}`,
+    `[backup] Protected save: ${backup.backup}`
+  );
+  return backup;
+}
+
 async function runAction(action, config, onProgress = async () => {}) {
   const service = config.server.serviceName;
   const report = (progress, message, line = "", force = true) =>
     Promise.resolve(onProgress(progress, message, line, force)).catch(() => {});
   await report(8, `Preparing ${action}`, `[panel] Preparing server action: ${action}`);
-  if (["restart", "update"].includes(action)) {
+  if (["restart", "update"].includes(action) && config.server.mode === "docker") {
     const backup = await createBackup(config, (progress, message, line, force) =>
       report(Math.min(14, 8 + Math.round(progress * 0.06)), message, line, force));
     if (!backup.ok) return backup;
@@ -1350,7 +1380,14 @@ async function runAction(action, config, onProgress = async () => {}) {
     const stop = await spawnWithLogs("systemctl", ["stop", service], {}, (line, stream) =>
       report(24, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
     if (!stop.ok) return stop;
-    const settingsSync = await syncServerConfigAfterStop(config, service, report, 27);
+    const backup = await backupStoppedService(config, service, report, {
+      action: "update",
+      mapProgress: (progress) => Math.min(29, 24 + Math.round(progress * 0.05)),
+      successProgress: 29,
+      failureProgress: 30
+    });
+    if (!backup.ok) return backup;
+    const settingsSync = await syncServerConfigAfterStop(config, service, report, 30);
     if (!settingsSync.ok) return settingsSync;
     const depotDownloader = path.basename(config.server.steamcmdPath).toLowerCase().includes("depotdownloader");
     const updateArgs = depotDownloader
@@ -1414,10 +1451,17 @@ async function runAction(action, config, onProgress = async () => {}) {
   }
 
   if (action === "restart") {
-    await report(28, "Stopping the game service", `[systemd] Stopping ${service}`);
+    await report(18, "Stopping the game service", `[systemd] Stopping ${service}`);
     const stop = await spawnWithLogs("systemctl", ["stop", service], {}, (line, stream) =>
-      report(42, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
+      report(30, "Stopping the game service", stream === "stderr" ? `[stderr] ${line}` : line, false));
     if (!stop.ok) return stop;
+    const backup = await backupStoppedService(config, service, report, {
+      action: "restart",
+      mapProgress: (progress) => Math.min(55, 30 + Math.round(progress * 0.25)),
+      successProgress: 55,
+      failureProgress: 58
+    });
+    if (!backup.ok) return backup;
     const settingsSync = await syncServerConfigAfterStop(config, service, report, 58);
     if (!settingsSync.ok) return settingsSync;
     await report(70, "Starting the game service", `[systemd] Starting ${service}`);
@@ -1534,16 +1578,19 @@ async function createBackup(config, onProgress = async () => {}) {
   await report(8, "Preparing save backup", `[backup] Creating backup ${stamp}`);
   await fsp.mkdir(config.server.backupDir, { recursive: true });
   const target = path.join(config.server.backupDir, `palworld-save-${stamp}.tar.gz`);
+  const partialTarget = `${target}.partial`;
   const source = config.automation.saveSourceMode === "agent"
     ? await prepareSaveSource(config, "backup")
     : { directory: config.server.saveDir, cleanup: async () => {} };
   try {
     await report(30, "Archiving save data", `[backup] Source: ${source.directory}\n[backup] Target: ${target}`);
-    const result = await spawnWithLogs("tar", ["-czf", target, "-C", source.directory, "."], {}, (line, stream) =>
+    const result = await spawnWithLogs("tar", ["-czf", partialTarget, "-C", source.directory, "."], {}, (line, stream) =>
       report(70, "Archiving save data", stream === "stderr" ? `[stderr] ${line}` : line, false));
+    if (result.ok) await fsp.rename(partialTarget, target);
     await report(result.ok ? 95 : 100, result.ok ? "Save backup created" : "Save backup failed", result.ok ? `[backup] Completed: ${target}` : (result.stderr || result.stdout));
-    return { ...result, backup: target };
+    return { ...result, backup: result.ok ? target : undefined };
   } finally {
+    await fsp.rm(partialTarget, { force: true }).catch(() => {});
     await source.cleanup();
   }
 }
@@ -3443,6 +3490,7 @@ if (require.main === module) {
 
 module.exports = {
   authSigningKey,
+  createBackup,
   decodeAuthToken,
   decodeRconResponse,
   encodeRconCommand,
