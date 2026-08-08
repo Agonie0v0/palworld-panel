@@ -1,11 +1,11 @@
 # Palworld Command Deck Design System
 
-**Version:** 0.7.0
-**Design dials:** variance 9/10 · motion 7/10 · density 5/10
+**Version:** 0.7.1
+**Design dials:** variance 8/10 · motion 7/10 · density 7/10
 
 ## Direction
 
-The panel is a persistent world-operations cockpit, not a conventional admin template. Its visual language combines a dark navigation hull, spacious operational canvases, asymmetric telemetry, and Pal-focused imagery. The interface should feel alive while remaining calm enough for long-running server administration.
+The panel is a persistent world-operations cockpit, not a conventional admin template. Its visual language combines a theme-aware navigation deck, spacious operational canvases, asymmetric telemetry, and Pal-focused imagery. The interface should feel alive while remaining calm enough for long-running server administration.
 
 ## Foundations
 
@@ -13,13 +13,14 @@ The panel is a persistent world-operations cockpit, not a conventional admin tem
 - Surfaces: `--app-surface`, `--app-surface-muted`, and `--app-border`; never introduce page-local theme palettes.
 - Status: semantic success, warning, error, and info tokens paired with text or icons so color is never the only signal.
 - Typography: the existing system UI stack for Chinese and Latin text; `--app-font-data` for telemetry and tabular figures. No remote font dependency.
-- Spacing: 4/8px rhythm, with `clamp()` for desktop gutters, hero padding, and display type.
-- Shape: 12–18px controls, 18–30px operational surfaces, and asymmetric hero corners used sparingly for identity.
+- Spacing: 4/8px rhythm, with `clamp()` for desktop gutters, card padding, and display type.
+- Shape: 8–18px controls and operational surfaces; asymmetric corners are used sparingly for identity.
 
 ## Layout
 
-- Desktop shell: 336px navigation at 2K and above, scaling down to 292px and 252px at intermediate breakpoints.
-- Desktop top bar: 96px with telemetry separated into readable status cards.
+- Desktop shell: compact 224–252px navigation with its own vertical overflow only when the available height is unusually short.
+- Navigation theme: a soft accent/info gradient in light mode and a distinct deep teal gradient in dark mode; both retain semantic contrast.
+- Desktop top bar: 68–76px with telemetry separated into readable status cards.
 - Main canvas: fluid gutters and full-width operational sections; avoid a narrow fixed dashboard column on large displays.
 - Mobile: compact top identity bar and five-item bottom navigation; core world state appears before secondary intelligence.
 - Breakpoints verified at 375, 812 landscape, 1024, 1440, and 2048px.
@@ -27,9 +28,9 @@ The panel is a persistent world-operations cockpit, not a conventional admin tem
 ## Components
 
 - Interactive Pal cards use a large portrait, activity label, level, hunger, and SAN. They are never rendered as table rows on the overview.
-- Base selectors reveal one habitat at a time and preserve a clear active state.
+- Base selectors reveal one habitat at a time or aggregate every habitat through an explicit “All bases” option.
 - Pal details use centered, scrollable archive modals with a strong portrait hero and two-column information layout; mobile collapses to one column.
-- Icon-only controls are at least 44×44px and use Tabler vector icons with accessible labels.
+- Primary icon-only controls are at least 44×44px and use vector icons with accessible labels; compact persistent navigation utilities may use 34×34px targets with tooltips.
 - Hover and pressed feedback may change elevation, border, opacity, or transform without changing layout bounds.
 
 ## Motion and accessibility

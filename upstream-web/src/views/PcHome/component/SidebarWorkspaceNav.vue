@@ -554,16 +554,16 @@ defineExpose({ toggleEditing, editing });
   margin: 0 4px 10px;
 }
 .workspace-nav__group + .workspace-nav__group {
-  margin-top: 14px;
+  margin-top: 4px;
 }
 .workspace-nav__heading {
   display: flex;
-  min-height: 30px;
+  min-height: 20px;
   align-items: center;
   gap: 4px;
-  padding: 0 10px 4px;
-  color: rgb(224 238 234 / 58%);
-  font-size: 11px;
+  padding: 0 8px 1px;
+  color: var(--app-sidebar-muted);
+  font-size: 9px;
   font-weight: 720;
   letter-spacing: .04em;
 }
@@ -590,7 +590,7 @@ defineExpose({ toggleEditing, editing });
 }
 .workspace-nav__collapse .n-icon {
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 11px;
 }
 .workspace-nav__heading :deep(.n-input),
 .workspace-nav__item :deep(.n-input) {
@@ -599,7 +599,7 @@ defineExpose({ toggleEditing, editing });
 }
 .workspace-nav__list {
   display: grid;
-  gap: 4px;
+  gap: 1px;
 }
 .workspace-nav__item {
   position: relative;
@@ -632,5 +632,18 @@ defineExpose({ toggleEditing, editing });
   border: 1px dashed var(--app-border-strong);
   border-radius: 6px;
   font-size: 11px;
+}
+
+@media (min-width: 721px) and (max-height: 960px) {
+  .workspace-nav__group + .workspace-nav__group {
+    margin-top: 2px;
+  }
+  .workspace-nav__heading {
+    min-height: 18px;
+    padding-bottom: 0;
+  }
+  .workspace-nav__list {
+    gap: 0;
+  }
 }
 </style>

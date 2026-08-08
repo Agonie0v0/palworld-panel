@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 - 2026-08-09
+
+- Compact the desktop navigation so standard high-resolution viewports can show the complete tool set without unnecessary scrolling.
+- Give light and dark sidebars distinct theme-aware gradients and reduce the dashboard intro to a restrained command header.
+- Move host, automation, and shift intelligence to the top of the overview for faster scanning.
+- Add an explicit all-bases view and remove the twelve-Pal truncation from base habitats.
+- Prevent long Pal trait descriptions from causing horizontal overflow in overview, status, and archive detail modals.
+
 ## 0.7.0 - 2026-08-09
 
 - 全局界面重构为高分辨率友好的世界指挥中心：桌面侧栏、顶栏、页面留白、字号和交互热区会随屏幕尺寸扩展，2K/4K 下不再紧凑微小。

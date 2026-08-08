@@ -63,7 +63,9 @@ const copy = computed(() => zh.value ? {
   attention: "需要照看",
   uptime: "连续运行",
   bases: "据点生态",
-  basesHint: "选择一个据点，进入它此刻的工作场景",
+  basesHint: "选择单个据点，或查看世界中全部据点帕鲁",
+  allBases: "全部据点",
+  allBasesHint: "汇总所有据点帕鲁",
   allPals: "打开帕鲁状态中心",
   worldActive: "无人值守，世界仍在运转",
   emptyWorldMessage: (count) => `当前没有玩家在线，${count} 只据点帕鲁仍在生产、运输与维持设施。`,
@@ -117,7 +119,9 @@ const copy = computed(() => zh.value ? {
   attention: "Need care",
   uptime: "Continuous uptime",
   bases: "Base habitats",
-  basesHint: "Choose a base and step into its current shift",
+  basesHint: "Choose one base or see every base Pal in the world",
+  allBases: "All bases",
+  allBasesHint: "Every base Pal together",
   allPals: "Open Pal status center",
   worldActive: "Unattended, still running",
   emptyWorldMessage: (count) => `No players are online. ${count} base Pals are still producing, transporting, and maintaining facilities.`,
@@ -210,13 +214,23 @@ const baseSummaries = computed(() => enrichedBases.value
     };
   })
   .filter((base) => base.total));
-const activeBase = computed(() => baseSummaries.value.find((base) => base.id === activeBaseId.value) || baseSummaries.value[0] || null);
+const allBaseSummary = computed(() => ({
+  id: "all",
+  name: copy.value.allBases,
+  total: workers.value.length,
+  working: workingCount.value,
+  attention: attentionCount.value,
+}));
+const activeBase = computed(() => activeBaseId.value === "all"
+  ? allBaseSummary.value
+  : baseSummaries.value.find((base) => base.id === activeBaseId.value) || baseSummaries.value[0] || null);
 const activeBaseWorkers = computed(() => {
   if (!activeBase.value) return [];
-  return workers.value
-    .filter((row) => row.baseId === activeBase.value.id)
-    .sort((a, b) => Number(b.attention) - Number(a.attention) || Number(["working", "assigned"].includes(b.activityKind)) - Number(["working", "assigned"].includes(a.activityKind)))
-    .slice(0, 12);
+  const rows = activeBase.value.id === "all"
+    ? workers.value
+    : workers.value.filter((row) => row.baseId === activeBase.value.id);
+  return [...rows].sort((a, b) => Number(b.attention) - Number(a.attention)
+    || Number(["working", "assigned"].includes(b.activityKind)) - Number(["working", "assigned"].includes(a.activityKind)));
 });
 const worldMessage = computed(() => currentPlayers.value
   ? copy.value.onlineWorldMessage(currentPlayers.value, workers.value.length)
@@ -228,7 +242,7 @@ const resourceRows = computed(() => [
 ]);
 
 watch(baseSummaries, (items) => {
-  if (items.length && !items.some((base) => base.id === activeBaseId.value)) activeBaseId.value = items[0].id;
+  if (items.length && activeBaseId.value !== "all" && !items.some((base) => base.id === activeBaseId.value)) activeBaseId.value = items[0].id;
 }, { immediate: true });
 
 function formatBytes(bytes) {
@@ -302,36 +316,48 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 
 <template>
   <div class="command-deck">
-    <section class="world-stage">
-      <div class="world-stage__copy">
-        <div class="world-stage__eyebrow"><span :class="{ online: serverOnline }" />{{ copy.eyebrow }}</div>
+    <header class="command-deck__intro">
+      <div>
+        <div class="command-deck__eyebrow"><span :class="{ online: serverOnline }" />{{ copy.eyebrow }}</div>
         <h2>{{ copy.title }}</h2>
         <p>{{ copy.subtitle }}</p>
-        <div class="world-stage__message">
-          <n-icon><Activity /></n-icon>
-          <div><strong>{{ copy.worldActive }}</strong><span>{{ worldMessage }}</span></div>
-        </div>
-        <div class="world-stage__actions">
-          <n-button type="primary" size="large" :loading="loading" @click="refresh">
-            <template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}
-          </n-button>
-          <button type="button" class="deck-link" @click="emit('navigate', 'pal-status')">{{ copy.allPals }}<n-icon><ArrowRight /></n-icon></button>
-        </div>
+        <div class="command-deck__world-state"><n-icon><Activity /></n-icon><strong>{{ copy.worldActive }}</strong><span>{{ worldMessage }}</span></div>
       </div>
+      <div class="command-deck__actions">
+        <n-button type="primary" :loading="loading" @click="refresh"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
+        <button type="button" class="deck-link" @click="emit('navigate', 'pal-status')">{{ copy.allPals }}<n-icon><ArrowRight /></n-icon></button>
+      </div>
+    </header>
 
-      <div class="world-orbit" :class="{ offline: !serverOnline }" :aria-label="copy.online">
-        <div class="world-orbit__ring ring-one" />
-        <div class="world-orbit__ring ring-two" />
-        <div class="world-orbit__core">
-          <n-icon><Paw /></n-icon>
-          <strong>{{ workers.length }}</strong>
-          <span>{{ copy.pals }}</span>
+    <section class="world-intelligence world-intelligence--primary">
+      <article class="intelligence-card host-card">
+        <header><span><n-icon><Server /></n-icon></span><div><small>SYSTEM LIFELINE</small><h3>{{ copy.host }}</h3><p>{{ hostMetrics.hostname || copy.hostHint }}</p></div></header>
+        <div v-if="!hostMetrics.unavailable" class="resource-radar">
+          <div v-for="resource in resourceRows" :key="resource.key" class="resource-radar__item">
+            <div class="resource-dial" :style="{ '--value': `${Math.min(100, resource.value) * 3.6}deg` }"><span><n-icon><component :is="resource.icon" /></n-icon><strong>{{ resource.value.toFixed(0) }}%</strong></span></div>
+            <div><strong>{{ resource.label }}</strong><small>{{ resource.detail }}</small></div>
+          </div>
         </div>
-        <div class="orbit-signal orbit-signal--fps"><small>{{ copy.fps }}</small><strong>{{ fps.toFixed(1) }}</strong></div>
-        <div class="orbit-signal orbit-signal--players"><small>{{ copy.players }}</small><strong>{{ currentPlayers }}<i v-if="maxPlayers">/{{ maxPlayers }}</i></strong></div>
-        <div class="orbit-signal orbit-signal--attention" :class="{ alert: attentionCount }"><small>{{ copy.attention }}</small><strong>{{ attentionCount }}</strong></div>
-        <div class="orbit-signal orbit-signal--uptime"><small>{{ copy.uptime }}</small><strong>{{ formatUptime(serverMetrics?.uptime) }}</strong></div>
-      </div>
+        <div v-else class="intelligence-empty">{{ copy.unavailable }}</div>
+      </article>
+
+      <article class="intelligence-card protection-card">
+        <header><span><n-icon><ShieldCheck /></n-icon></span><div><small>AUTOMATION CORE</small><h3>{{ copy.protection }}</h3><p>{{ zh ? '持续守护每一次世界变更' : 'Protecting every world change' }}</p></div></header>
+        <div class="protection-flow">
+          <div><n-icon><Tools /></n-icon><span>{{ copy.activeTasks }}</span><strong>{{ activeTasks.length }}</strong></div>
+          <i />
+          <div><n-icon><Archive /></n-icon><span>{{ copy.latestBackup }}</span><strong>{{ formatDate(latestBackup?.save_time) }}</strong></div>
+          <i />
+          <div><n-icon><Database /></n-icon><span>{{ copy.backupCount }}</span><strong>{{ backups.length }}</strong></div>
+        </div>
+      </article>
+
+      <article class="intelligence-card coverage-card">
+        <header><span><n-icon><Stars /></n-icon></span><div><small>SHIFT SIGNAL</small><h3>{{ copy.coverage }}</h3><p>{{ copy.coverageHint }}</p></div></header>
+        <div class="coverage-card__number"><strong>{{ workingCount }}</strong><span>/ {{ workers.length }}</span></div>
+        <div class="coverage-card__track"><i :style="{ width: `${coveragePercent}%` }" /></div>
+        <footer><span>{{ serverOnline ? copy.online : copy.offline }}</span><strong>{{ coveragePercent }}%</strong></footer>
+      </article>
     </section>
 
     <n-alert v-if="liveDataIncomplete" type="warning" class="command-deck__alert">
@@ -347,6 +373,11 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 
       <div class="habitat-layout">
         <nav class="base-switcher" :aria-label="copy.selectBase">
+          <button type="button" :class="{ active: activeBase?.id === 'all' }" @click="activeBaseId = 'all'">
+            <span class="base-switcher__index">ALL</span>
+            <span class="base-switcher__copy"><strong>{{ copy.allBases }}</strong><small>{{ copy.allBasesHint }} · {{ workers.length }} {{ copy.pals }}</small></span>
+            <span class="base-switcher__state" :class="{ alert: attentionCount }">{{ attentionCount || '●' }}</span>
+          </button>
           <button
             v-for="(base, index) in baseSummaries"
             :key="base.id"
@@ -400,37 +431,6 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
       </div>
     </section>
 
-    <section class="world-intelligence">
-      <article class="intelligence-card host-card">
-        <header><span><n-icon><Server /></n-icon></span><div><small>SYSTEM LIFELINE</small><h3>{{ copy.host }}</h3><p>{{ hostMetrics.hostname || copy.hostHint }}</p></div></header>
-        <div v-if="!hostMetrics.unavailable" class="resource-radar">
-          <div v-for="resource in resourceRows" :key="resource.key" class="resource-radar__item">
-            <div class="resource-dial" :style="{ '--value': `${Math.min(100, resource.value) * 3.6}deg` }"><span><n-icon><component :is="resource.icon" /></n-icon><strong>{{ resource.value.toFixed(0) }}%</strong></span></div>
-            <div><strong>{{ resource.label }}</strong><small>{{ resource.detail }}</small></div>
-          </div>
-        </div>
-        <div v-else class="intelligence-empty">{{ copy.unavailable }}</div>
-      </article>
-
-      <article class="intelligence-card protection-card">
-        <header><span><n-icon><ShieldCheck /></n-icon></span><div><small>AUTOMATION CORE</small><h3>{{ copy.protection }}</h3><p>{{ zh ? '持续守护每一次世界变更' : 'Protecting every world change' }}</p></div></header>
-        <div class="protection-flow">
-          <div><n-icon><Tools /></n-icon><span>{{ copy.activeTasks }}</span><strong>{{ activeTasks.length }}</strong></div>
-          <i />
-          <div><n-icon><Archive /></n-icon><span>{{ copy.latestBackup }}</span><strong>{{ formatDate(latestBackup?.save_time) }}</strong></div>
-          <i />
-          <div><n-icon><Database /></n-icon><span>{{ copy.backupCount }}</span><strong>{{ backups.length }}</strong></div>
-        </div>
-      </article>
-
-      <article class="intelligence-card coverage-card">
-        <header><span><n-icon><Stars /></n-icon></span><div><small>SHIFT SIGNAL</small><h3>{{ copy.coverage }}</h3><p>{{ copy.coverageHint }}</p></div></header>
-        <div class="coverage-card__number"><strong>{{ workingCount }}</strong><span>/ {{ workers.length }}</span></div>
-        <div class="coverage-card__track"><i :style="{ width: `${coveragePercent}%` }" /></div>
-        <footer><span>{{ serverOnline ? copy.online : copy.offline }}</span><strong>{{ coveragePercent }}%</strong></footer>
-      </article>
-    </section>
-
     <n-modal v-if="selectedWorker" :show="true" :mask-closable="true" @update:show="$event || (selectedWorker = null)">
       <article class="pal-focus" role="dialog" aria-modal="true" :aria-label="copy.focusTitle">
         <button type="button" class="pal-focus__close" :aria-label="copy.close" @click="selectedWorker = null"><n-icon><X /></n-icon></button>
@@ -469,8 +469,9 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 </template>
 
 <style scoped>
-.command-deck { position: relative; width: 100%; max-width: 1940px; margin: 0 auto; padding: clamp(28px, 2.4vw, 52px); color: var(--app-ink); }
+.command-deck { position: relative; width: 100%; max-width: 1940px; margin: 0 auto; padding: clamp(22px, 1.8vw, 36px); color: var(--app-ink); }
 .command-deck::before { position: absolute; z-index: 0; top: 0; right: 2%; width: 34%; height: 320px; background: radial-gradient(circle at 70% 20%, color-mix(in srgb, var(--app-accent) 14%, transparent), transparent 68%); content: ""; pointer-events: none; }
+.command-deck__intro { position: relative; z-index: 1; display: flex; align-items: end; justify-content: space-between; gap: 28px; padding: 4px 6px 20px; }.command-deck__intro > div:first-child { min-width: 0; }.command-deck__eyebrow { display: flex; align-items: center; gap: 8px; color: var(--app-accent); font: 700 10px/1.4 var(--app-font-data); letter-spacing: .12em; }.command-deck__eyebrow > span { width: 8px; height: 8px; background: var(--app-danger); border-radius: 50%; }.command-deck__eyebrow > span.online { background: var(--app-success); }.command-deck__intro h2 { margin: 8px 0 5px; font-size: clamp(26px, 2vw, 38px); line-height: 1.08; letter-spacing: -.025em; }.command-deck__intro p { color: var(--app-ink-muted); font-size: 13px; line-height: 1.55; }.command-deck__world-state { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 10px; color: var(--app-ink-secondary); font-size: 11px; }.command-deck__world-state .n-icon { color: var(--app-accent); font-size: 16px; }.command-deck__world-state strong { font-size: 11px; }.command-deck__world-state span { color: var(--app-ink-muted); }.command-deck__actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }.command-deck__actions .n-button { min-height: 42px; border-radius: 10px; }
 .world-stage { position: relative; z-index: 1; display: grid; min-height: clamp(330px, 31vw, 470px); grid-template-columns: minmax(0, 1.05fr) minmax(410px, .95fr); align-items: center; gap: clamp(32px, 5vw, 92px); overflow: hidden; padding: clamp(32px, 4vw, 72px); background: linear-gradient(135deg, color-mix(in srgb, var(--app-accent-soft) 64%, var(--app-surface)) 0%, var(--app-surface) 48%, color-mix(in srgb, var(--app-info-soft) 42%, var(--app-surface)) 100%); border: 1px solid color-mix(in srgb, var(--app-accent) 18%, var(--app-border)); border-radius: 30px 30px 110px 30px; box-shadow: 0 24px 70px color-mix(in srgb, var(--app-ink) 9%, transparent); }
 .world-stage::after { position: absolute; right: -70px; bottom: -120px; width: 360px; height: 360px; background: repeating-radial-gradient(circle, transparent 0 21px, color-mix(in srgb, var(--app-accent) 9%, transparent) 22px 23px); border-radius: 50%; content: ""; pointer-events: none; }
 .world-stage__copy { position: relative; z-index: 2; max-width: 760px; }
@@ -490,7 +491,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 .orbit-signal { position: absolute; display: grid; min-width: 132px; gap: 4px; padding: 13px 16px; background: color-mix(in srgb, var(--app-surface) 92%, transparent); border: 1px solid var(--app-border); border-radius: 14px; box-shadow: 0 12px 32px color-mix(in srgb, var(--app-ink) 8%, transparent); }.orbit-signal small { color: var(--app-ink-muted); font-size: 11px; }.orbit-signal strong { font: 720 20px var(--app-font-data); }.orbit-signal strong i { color: var(--app-ink-muted); font-size: 12px; font-style: normal; }.orbit-signal.alert strong { color: var(--app-warning); }
 .orbit-signal--fps { top: 8%; left: 0; }.orbit-signal--players { top: 18%; right: -2%; }.orbit-signal--attention { right: 3%; bottom: 14%; }.orbit-signal--uptime { bottom: 7%; left: 0; }
 .command-deck__alert { margin-top: 20px; border-radius: 14px; }
-.habitat-deck { position: relative; z-index: 2; margin-top: clamp(28px, 3vw, 48px); }
+.habitat-deck { position: relative; z-index: 2; margin-top: clamp(24px, 2.4vw, 38px); }
 .deck-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; padding: 0 8px; }.deck-heading > div:first-child > span { color: var(--app-accent); font: 700 11px var(--app-font-data); letter-spacing: .14em; }.deck-heading h3 { margin-top: 7px; font-size: clamp(28px, 2vw, 42px); line-height: 1.1; letter-spacing: -.025em; }.deck-heading p { margin-top: 7px; color: var(--app-ink-muted); font-size: 14px; }
 .coverage-orb { display: flex; align-items: baseline; gap: 10px; }.coverage-orb strong { color: var(--app-accent); font: 760 30px var(--app-font-data); }.coverage-orb span { color: var(--app-ink-muted); font-size: 12px; }
 .habitat-layout { display: grid; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); gap: 18px; }
@@ -501,20 +502,20 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 .pal-node__visual { position: relative; display: grid; width: 96px; height: 112px; place-items: center; }.pal-node__halo { position: absolute; inset: 12px 2px 0; background: color-mix(in srgb, var(--app-accent) 12%, var(--app-surface-muted)); border-radius: 48% 48% 22px 22px; }.pal-node__visual img { position: relative; z-index: 1; width: 92px; height: 92px; object-fit: contain; filter: drop-shadow(0 12px 12px rgb(0 0 0 / 14%)); }.pal-node__visual > i { position: absolute; z-index: 2; right: 0; bottom: 0; display: grid; width: 30px; height: 30px; place-items: center; color: white; background: var(--app-ink); border: 3px solid var(--app-surface); border-radius: 50%; font: 700 10px var(--app-font-data); font-style: normal; }
 .pal-node__body { display: grid; min-width: 0; }.pal-node__state { display: flex; align-items: center; gap: 6px; color: var(--app-success); font-size: 11px; font-weight: 700; }.pal-node__state > i { width: 7px; height: 7px; background: currentColor; border-radius: 50%; }.pal-node.attention .pal-node__state { color: var(--app-warning); }.pal-node__body > strong { overflow: hidden; margin-top: 9px; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }.pal-node__body > small { overflow: hidden; margin-top: 3px; color: var(--app-ink-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .pal-node__vitals { display: grid; gap: 8px; margin-top: 14px; }.pal-node__vitals > span { display: grid; grid-template-columns: 16px minmax(0, 1fr) 34px; align-items: center; gap: 7px; color: var(--app-ink-muted); }.pal-node__vitals .n-icon { font-size: 14px; }.pal-node__vitals i { height: 5px; overflow: hidden; background: var(--app-surface-muted); border-radius: 4px; }.pal-node__vitals b { display: block; height: 100%; background: var(--app-accent); border-radius: inherit; }.pal-node__vitals em { font: 600 9px var(--app-font-data); font-style: normal; text-align: right; }.pal-node__open { position: absolute; right: 14px; top: 14px; color: var(--app-ink-muted); font-size: 17px; }.pal-habitat__empty { display: grid; min-height: 360px; place-content: center; place-items: center; gap: 12px; color: var(--app-ink-muted); font-size: 14px; }.pal-habitat__empty .n-icon { font-size: 42px; }
-.world-intelligence { display: grid; grid-template-columns: 1.35fr 1.1fr .75fr; gap: 18px; margin-top: 18px; }.intelligence-card { min-width: 0; min-height: 270px; padding: 26px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 24px; }.intelligence-card > header { display: flex; align-items: flex-start; gap: 14px; }.intelligence-card > header > span { display: grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; color: var(--app-accent); background: var(--app-accent-soft); border-radius: 14px; font-size: 22px; }.intelligence-card header small { color: var(--app-accent); font: 700 9px var(--app-font-data); letter-spacing: .12em; }.intelligence-card header h3 { margin-top: 4px; font-size: 19px; }.intelligence-card header p { margin-top: 4px; color: var(--app-ink-muted); font-size: 11px; }
-.resource-radar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 26px; }.resource-radar__item { display: grid; justify-items: center; gap: 10px; text-align: center; }.resource-dial { display: grid; width: 82px; height: 82px; place-items: center; background: conic-gradient(var(--app-accent) var(--value), var(--app-surface-muted) 0); border-radius: 50%; }.resource-dial > span { display: grid; width: 66px; height: 66px; place-content: center; place-items: center; background: var(--app-surface); border-radius: 50%; }.resource-dial .n-icon { color: var(--app-accent); }.resource-dial strong { margin-top: 2px; font: 700 13px var(--app-font-data); }.resource-radar__item > div:last-child { display: grid; gap: 3px; }.resource-radar__item > div:last-child strong { font-size: 12px; }.resource-radar__item > div:last-child small { color: var(--app-ink-muted); font-size: 9px; }
-.protection-flow { display: grid; grid-template-columns: 1fr 18px 1fr 18px 1fr; align-items: center; margin-top: 35px; }.protection-flow > div { display: grid; justify-items: center; gap: 7px; text-align: center; }.protection-flow .n-icon { color: var(--app-accent); font-size: 23px; }.protection-flow span { color: var(--app-ink-muted); font-size: 10px; }.protection-flow strong { max-width: 120px; overflow: hidden; font: 700 12px var(--app-font-data); text-overflow: ellipsis; white-space: nowrap; }.protection-flow > i { height: 1px; background: var(--app-border); }
-.coverage-card { background: linear-gradient(145deg, var(--app-accent), color-mix(in srgb, var(--app-accent) 72%, var(--app-info))); color: white; border: 0; }.coverage-card > header > span { color: white; background: rgb(255 255 255 / 14%); }.coverage-card header small,.coverage-card header h3 { color: white; }.coverage-card header p { color: rgb(255 255 255 / 70%); }.coverage-card__number { display: flex; align-items: end; margin-top: 24px; }.coverage-card__number strong { font: 760 52px/1 var(--app-font-data); }.coverage-card__number span { padding-bottom: 6px; color: rgb(255 255 255 / 68%); font: 600 18px var(--app-font-data); }.coverage-card__track { height: 8px; margin-top: 18px; overflow: hidden; background: rgb(255 255 255 / 18%); border-radius: 8px; }.coverage-card__track i { display: block; height: 100%; background: white; border-radius: inherit; }.coverage-card footer { display: flex; justify-content: space-between; margin-top: 12px; color: rgb(255 255 255 / 76%); font-size: 10px; }.coverage-card footer strong { color: white; }
+.world-intelligence { display: grid; grid-template-columns: 1.35fr 1.1fr .75fr; gap: 14px; margin-top: 14px; }.world-intelligence--primary { position: relative; z-index: 1; margin-top: 0; }.intelligence-card { min-width: 0; min-height: 210px; padding: 20px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 20px; }.intelligence-card > header { display: flex; align-items: flex-start; gap: 12px; }.intelligence-card > header > span { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; color: var(--app-accent); background: var(--app-accent-soft); border-radius: 12px; font-size: 19px; }.intelligence-card header small { color: var(--app-accent); font: 700 8px var(--app-font-data); letter-spacing: .12em; }.intelligence-card header h3 { margin-top: 3px; font-size: 17px; }.intelligence-card header p { margin-top: 3px; color: var(--app-ink-muted); font-size: 10px; }
+.resource-radar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }.resource-radar__item { display: grid; justify-items: center; gap: 7px; text-align: center; }.resource-dial { display: grid; width: 68px; height: 68px; place-items: center; background: conic-gradient(var(--app-accent) var(--value), var(--app-surface-muted) 0); border-radius: 50%; }.resource-dial > span { display: grid; width: 54px; height: 54px; place-content: center; place-items: center; background: var(--app-surface); border-radius: 50%; }.resource-dial .n-icon { color: var(--app-accent); }.resource-dial strong { margin-top: 1px; font: 700 11px var(--app-font-data); }.resource-radar__item > div:last-child { display: grid; gap: 2px; }.resource-radar__item > div:last-child strong { font-size: 11px; }.resource-radar__item > div:last-child small { color: var(--app-ink-muted); font-size: 8px; }
+.protection-flow { display: grid; grid-template-columns: 1fr 14px 1fr 14px 1fr; align-items: center; margin-top: 25px; }.protection-flow > div { display: grid; justify-items: center; gap: 6px; text-align: center; }.protection-flow .n-icon { color: var(--app-accent); font-size: 20px; }.protection-flow span { color: var(--app-ink-muted); font-size: 9px; }.protection-flow strong { max-width: 120px; overflow: hidden; font: 700 11px var(--app-font-data); text-overflow: ellipsis; white-space: nowrap; }.protection-flow > i { height: 1px; background: var(--app-border); }
+.coverage-card { background: linear-gradient(145deg, var(--app-accent), color-mix(in srgb, var(--app-accent) 72%, var(--app-info))); color: white; border: 0; }.coverage-card > header > span { color: white; background: rgb(255 255 255 / 14%); }.coverage-card header small,.coverage-card header h3 { color: white; }.coverage-card header p { color: rgb(255 255 255 / 70%); }.coverage-card__number { display: flex; align-items: end; margin-top: 15px; }.coverage-card__number strong { font: 760 40px/1 var(--app-font-data); }.coverage-card__number span { padding-bottom: 4px; color: rgb(255 255 255 / 68%); font: 600 15px var(--app-font-data); }.coverage-card__track { height: 7px; margin-top: 13px; overflow: hidden; background: rgb(255 255 255 / 18%); border-radius: 8px; }.coverage-card__track i { display: block; height: 100%; background: white; border-radius: inherit; }.coverage-card footer { display: flex; justify-content: space-between; margin-top: 9px; color: rgb(255 255 255 / 76%); font-size: 9px; }.coverage-card footer strong { color: white; }
 .intelligence-empty { display: grid; min-height: 140px; place-items: center; color: var(--app-ink-muted); font-size: 13px; }
 :global(.n-modal-mask) { background-color: rgb(4 12 11 / 70%); backdrop-filter: blur(8px); }
-.pal-focus { position: relative; width: min(1040px, 92vw); max-height: 90dvh; overflow: auto; padding: clamp(26px, 3vw, 48px); color: var(--app-ink); background: var(--app-surface); border: 1px solid color-mix(in srgb, var(--app-accent) 25%, var(--app-border)); border-radius: 30px; box-shadow: 0 40px 120px rgb(0 0 0 / 28%); }
+.pal-focus { position: relative; width: min(1040px, 92vw); max-height: 90dvh; overflow-x: hidden; overflow-y: auto; padding: clamp(26px, 3vw, 48px); color: var(--app-ink); background: var(--app-surface); border: 1px solid color-mix(in srgb, var(--app-accent) 25%, var(--app-border)); border-radius: 30px; box-shadow: 0 40px 120px rgb(0 0 0 / 28%); }
 .pal-focus__close { position: absolute; z-index: 4; top: 22px; right: 22px; display: grid; width: 44px; height: 44px; place-items: center; color: var(--app-ink); background: var(--app-surface-muted); border: 0; border-radius: 50%; cursor: pointer; font-size: 20px; }
 .pal-focus__hero { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: center; gap: 34px; }.pal-focus__portrait { position: relative; display: grid; width: 220px; height: 220px; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 60%, var(--app-accent-soft), var(--app-surface-muted) 68%); border-radius: 36% 36% 26px 26px; }.pal-focus__portrait span { position: absolute; inset: 30px; border: 1px dashed color-mix(in srgb, var(--app-accent) 40%, transparent); border-radius: 50%; }.pal-focus__portrait img { position: relative; width: 190px; height: 190px; object-fit: contain; filter: drop-shadow(0 20px 18px rgb(0 0 0 / 18%)); }.pal-focus__identity > span,.pal-focus__grid section > span { color: var(--app-accent); font: 700 10px var(--app-font-data); letter-spacing: .12em; text-transform: uppercase; }.pal-focus__identity h2 { margin-top: 10px; font-size: clamp(34px, 3vw, 52px); line-height: 1; }.pal-focus__identity p { margin-top: 10px; color: var(--app-ink-muted); font-size: 14px; }.pal-focus__identity > div { display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; padding: 9px 13px; color: var(--app-success); background: var(--app-success-soft); border-radius: 20px; font-size: 12px; font-weight: 700; }.pal-focus__identity > div i { width: 8px; height: 8px; background: currentColor; border-radius: 50%; }.pal-focus__identity > div:has(i.is-attention) { color: var(--app-warning); background: var(--app-warning-soft); }
-.pal-focus__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 34px; }.pal-focus__grid section { min-width: 0; padding: 22px; background: var(--app-surface-muted); border-radius: 18px; }.pal-focus__assignment > strong { display: block; margin-top: 10px; font-size: 22px; }.pal-focus__assignment dl { display: grid; gap: 10px; margin-top: 18px; }.pal-focus__assignment dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.pal-focus__assignment dt { display: flex; align-items: center; gap: 7px; color: var(--app-ink-muted); font-size: 11px; }.pal-focus__assignment dd { max-width: 55%; overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }.pal-focus__wellbeing > div { display: grid; grid-template-columns: 20px minmax(64px, 1fr) auto; align-items: center; gap: 8px; margin-top: 17px; }.pal-focus__wellbeing .n-icon { color: var(--app-accent); }.pal-focus__wellbeing strong { min-width: 0; font-size: 11px; white-space: nowrap; }.pal-focus__wellbeing em { font: 700 11px var(--app-font-data); font-style: normal; }.pal-focus__wellbeing .pal-focus__meter { grid-column: 1 / -1; height: 7px; overflow: hidden; background: var(--app-surface); border-radius: 7px; }.pal-focus__wellbeing b { display: block; height: 100%; background: var(--app-accent); }.pal-focus__capabilities > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }.pal-focus__capabilities i { padding: 8px 10px; color: var(--app-ink-secondary); background: var(--app-surface); border-radius: 9px; font-size: 11px; font-style: normal; }.pal-focus__capabilities b { color: var(--app-accent); }.pal-focus__passives > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }.pal-focus__passives article { padding: 11px; background: var(--app-surface); border-radius: 10px; }.pal-focus__passives article strong,.pal-focus__passives article small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.pal-focus__passives article strong { font-size: 11px; }.pal-focus__passives article small { margin-top: 4px; color: var(--app-ink-muted); font-size: 9px; }.pal-focus__passives > em { display: block; margin-top: 18px; color: var(--app-ink-muted); font-size: 12px; font-style: normal; }
+.pal-focus__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 34px; }.pal-focus__grid section { min-width: 0; padding: 22px; background: var(--app-surface-muted); border-radius: 18px; }.pal-focus__assignment > strong { display: block; margin-top: 10px; font-size: 22px; }.pal-focus__assignment dl { display: grid; gap: 10px; margin-top: 18px; }.pal-focus__assignment dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.pal-focus__assignment dt { display: flex; align-items: center; gap: 7px; color: var(--app-ink-muted); font-size: 11px; }.pal-focus__assignment dd { max-width: 58%; min-width: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; text-align: right; }.pal-focus__wellbeing > div { display: grid; grid-template-columns: 20px minmax(64px, 1fr) auto; align-items: center; gap: 8px; margin-top: 17px; }.pal-focus__wellbeing .n-icon { color: var(--app-accent); }.pal-focus__wellbeing strong { min-width: 0; font-size: 11px; white-space: nowrap; }.pal-focus__wellbeing em { font: 700 11px var(--app-font-data); font-style: normal; }.pal-focus__wellbeing .pal-focus__meter { grid-column: 1 / -1; height: 7px; overflow: hidden; background: var(--app-surface); border-radius: 7px; }.pal-focus__wellbeing b { display: block; height: 100%; background: var(--app-accent); }.pal-focus__capabilities > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }.pal-focus__capabilities i { padding: 8px 10px; color: var(--app-ink-secondary); background: var(--app-surface); border-radius: 9px; font-size: 11px; font-style: normal; }.pal-focus__capabilities b { color: var(--app-accent); }.pal-focus__passives > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }.pal-focus__passives article { min-width: 0; padding: 11px; background: var(--app-surface); border-radius: 10px; }.pal-focus__passives article strong,.pal-focus__passives article small { display: block; min-width: 0; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }.pal-focus__passives article strong { font-size: 11px; line-height: 1.4; }.pal-focus__passives article small { margin-top: 4px; color: var(--app-ink-muted); font-size: 9px; line-height: 1.5; }.pal-focus__passives > em { display: block; margin-top: 18px; color: var(--app-ink-muted); font-size: 12px; font-style: normal; }
 .deck-link:focus-visible,.base-switcher button:focus-visible,.pal-node:focus-visible,.pal-focus__close:focus-visible { outline: 3px solid color-mix(in srgb, var(--app-accent) 60%, white); outline-offset: 3px; }
-@media (min-width: 1800px) { .pal-constellation { grid-template-columns: repeat(3, minmax(270px, 1fr)); }.pal-node { min-height: 205px; grid-template-columns: 110px minmax(0, 1fr); }.pal-node__visual { width: 110px; height: 126px; }.pal-node__visual img { width: 108px; height: 108px; }.base-switcher button { min-height: 106px; }.intelligence-card { min-height: 300px; padding: 30px; } }
+@media (min-width: 1800px) { .pal-constellation { grid-template-columns: repeat(3, minmax(270px, 1fr)); }.pal-node { min-height: 186px; grid-template-columns: 100px minmax(0, 1fr); }.pal-node__visual { width: 100px; height: 116px; }.pal-node__visual img { width: 98px; height: 98px; }.base-switcher button { min-height: 90px; }.intelligence-card { min-height: 210px; padding: 20px; } }
 @media (max-width: 1420px) { .world-stage { grid-template-columns: 1fr 420px; }.pal-constellation { grid-template-columns: repeat(2, minmax(230px, 1fr)); }.world-intelligence { grid-template-columns: 1fr 1fr; }.coverage-card { grid-column: 1 / -1; min-height: 230px; }.coverage-card__number { margin-top: 18px; } }
 @media (max-width: 1080px) { .world-stage { grid-template-columns: 1fr; }.world-orbit { width: 440px; height: 440px; }.habitat-layout { grid-template-columns: 1fr; }.base-switcher { grid-template-columns: repeat(2, 1fr); }.world-intelligence { grid-template-columns: 1fr; }.coverage-card { grid-column: auto; } }
-@media (max-width: 720px) { .command-deck { padding: 16px 12px 100px; }.world-stage { min-height: 0; padding: 26px 20px 34px; border-radius: 22px 22px 58px 22px; }.world-stage h2 { font-size: 38px; }.world-orbit { width: 320px; height: 320px; min-width: 320px; min-height: 320px; }.orbit-signal { min-width: 106px; padding: 9px 11px; }.orbit-signal strong { font-size: 15px; }.world-orbit__core { inset: 32%; }.base-switcher { display: flex; overflow-x: auto; margin-inline: -12px; padding: 0 12px 8px; }.base-switcher button { min-width: 240px; }.pal-habitat { padding: 18px 14px; border-radius: 20px; }.pal-constellation { grid-template-columns: 1fr; }.pal-node { min-height: 164px; grid-template-columns: 86px minmax(0, 1fr); }.pal-node__visual { width: 86px; }.pal-node__visual img { width: 84px; height: 84px; }.world-intelligence { grid-template-columns: 1fr; }.resource-radar { gap: 8px; }.resource-dial { width: 70px; height: 70px; }.resource-dial > span { width: 56px; height: 56px; }.pal-focus { width: 96vw; padding: 24px 18px; border-radius: 22px; }.pal-focus__hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }.pal-focus__portrait { width: 180px; height: 180px; }.pal-focus__portrait img { width: 160px; height: 160px; }.pal-focus__grid { grid-template-columns: 1fr; }.pal-focus__close { top: 14px; right: 14px; } }
+@media (max-width: 720px) { .command-deck { padding: 16px 12px 100px; }.command-deck__intro { display: grid; align-items: start; gap: 14px; padding-inline: 4px; }.command-deck__intro h2 { font-size: 30px; }.command-deck__actions { flex-wrap: wrap; }.world-stage { min-height: 0; padding: 26px 20px 34px; border-radius: 22px 22px 58px 22px; }.world-stage h2 { font-size: 38px; }.world-orbit { width: 320px; height: 320px; min-width: 320px; min-height: 320px; }.orbit-signal { min-width: 106px; padding: 9px 11px; }.orbit-signal strong { font-size: 15px; }.world-orbit__core { inset: 32%; }.base-switcher { display: flex; overflow-x: auto; margin-inline: -12px; padding: 0 12px 8px; }.base-switcher button { min-width: 240px; }.pal-habitat { padding: 18px 14px; border-radius: 20px; }.pal-constellation { grid-template-columns: 1fr; }.pal-node { min-height: 164px; grid-template-columns: 86px minmax(0, 1fr); }.pal-node__visual { width: 86px; }.pal-node__visual img { width: 84px; height: 84px; }.world-intelligence { grid-template-columns: 1fr; }.resource-radar { gap: 8px; }.resource-dial { width: 70px; height: 70px; }.resource-dial > span { width: 56px; height: 56px; }.pal-focus { width: 96vw; padding: 24px 18px; border-radius: 22px; }.pal-focus__hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }.pal-focus__portrait { width: 180px; height: 180px; }.pal-focus__portrait img { width: 160px; height: 160px; }.pal-focus__grid { grid-template-columns: 1fr; }.pal-focus__close { top: 14px; right: 14px; } }
 @media (prefers-reduced-motion: reduce) { .deck-link .n-icon,.base-switcher button,.pal-node { transition: none; }.deck-link:hover .n-icon,.base-switcher button:hover,.pal-node:hover { transform: none; } }
 </style>
