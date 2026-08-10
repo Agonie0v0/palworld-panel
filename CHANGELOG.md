@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 - 2026-08-10
+
+- Hide the desktop sidebar scrollbar at rest and reveal it only when the navigation can be scrolled and receives pointer or keyboard interaction.
+- Remove the ambiguous shift-coverage card and percentage, then rebalance the overview around host health, safeguards, Pal totals, and attention states.
+- Remove the decorative arrow from overview Pal cards while preserving the full-card detail interaction and keyboard focus behavior.
+- Add the game's work-suitability icons to both Pal detail views and render passive skills as negative, common, gold, or rainbow tiers from their game-data rank.
+
 ## 0.7.1 - 2026-08-09
 
 - Compact the desktop navigation so standard high-resolution viewports can show the complete tool set without unnecessary scrolling.

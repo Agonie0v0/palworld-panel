@@ -552,7 +552,7 @@ defineExpose({ toggleEditing, editing });
   overflow-y: auto;
   padding-right: 2px;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 .workspace-nav__editbar {
   display: grid;
@@ -657,7 +657,23 @@ defineExpose({ toggleEditing, editing });
 @media (min-width: 721px) {
   .workspace-nav {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--app-sidebar-muted) 36%, transparent) transparent;
+    scrollbar-color: transparent transparent;
+  }
+  .workspace-nav:hover,
+  .workspace-nav:focus-within {
+    scrollbar-color: color-mix(in srgb, var(--app-sidebar-muted) 42%, transparent) transparent;
+  }
+  .workspace-nav::-webkit-scrollbar {
+    width: 6px;
+  }
+  .workspace-nav::-webkit-scrollbar-track,
+  .workspace-nav::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  .workspace-nav:hover::-webkit-scrollbar-thumb,
+  .workspace-nav:focus-within::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--app-sidebar-muted) 42%, transparent);
+    border-radius: 999px;
   }
 }
 </style>

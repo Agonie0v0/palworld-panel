@@ -1,6 +1,6 @@
 # Palworld Command Deck Design System
 
-**Version:** 0.7.1
+**Version:** 0.8.0
 **Design dials:** variance 8/10 · motion 7/10 · density 7/10
 
 ## Direction
