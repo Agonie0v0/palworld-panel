@@ -10,6 +10,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY config.example.json ./
+COPY NOTICE.md ./
+COPY THIRD_PARTY_LICENSES ./THIRD_PARTY_LICENSES
 COPY src ./src
 COPY upstream-web/dist ./upstream-web/dist
 COPY upstream-web/public ./upstream-web/public

@@ -38,9 +38,21 @@ mkdir -p "$PANEL_DIR/data" "$PANEL_DIR/upstream-web"
 rm -rf \
   "$PANEL_DIR/public" \
   "$PANEL_DIR/resources" \
+  "$PANEL_DIR/THIRD_PARTY_LICENSES" \
   "$PANEL_DIR/upstream-web/dist" \
-  "$PANEL_DIR/upstream-web/public"
-cp -R package.json package-lock.json src config.example.json parsers scripts "$PANEL_DIR/"
+  "$PANEL_DIR/upstream-web/node_modules" \
+  "$PANEL_DIR/upstream-web/public" \
+  "$PANEL_DIR/upstream-web/src"
+rm -f \
+  "$PANEL_DIR/upstream-web/index.html" \
+  "$PANEL_DIR/upstream-web/jsconfig.json" \
+  "$PANEL_DIR/upstream-web/package.json" \
+  "$PANEL_DIR/upstream-web/package-lock.json" \
+  "$PANEL_DIR/upstream-web/pnpm-lock.yaml" \
+  "$PANEL_DIR/upstream-web/pnpm-workspace.yaml" \
+  "$PANEL_DIR/upstream-web/README.md" \
+  "$PANEL_DIR/upstream-web/vite.config.js"
+cp -R package.json package-lock.json NOTICE.md THIRD_PARTY_LICENSES src config.example.json parsers scripts "$PANEL_DIR/"
 cp -R upstream-web/dist "$PANEL_DIR/upstream-web/"
 cp -R upstream-web/public "$PANEL_DIR/upstream-web/"
 printf '{"commit":"%s","installedAt":"%s"}\n' "$SOURCE_COMMIT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$PANEL_DIR/data/build.json"

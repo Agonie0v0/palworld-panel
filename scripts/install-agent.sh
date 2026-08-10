@@ -30,8 +30,8 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 mkdir -p "$AGENT_DIR/data"
-rm -rf "$AGENT_DIR/public" "$AGENT_DIR/resources"
-cp -R package.json package-lock.json src config.example.json parsers scripts "$AGENT_DIR/"
+rm -rf "$AGENT_DIR/public" "$AGENT_DIR/resources" "$AGENT_DIR/THIRD_PARTY_LICENSES"
+cp -R package.json package-lock.json NOTICE.md THIRD_PARTY_LICENSES src config.example.json parsers scripts "$AGENT_DIR/"
 cd "$AGENT_DIR"
 npm ci --omit=dev
 chmod +x "$AGENT_DIR/scripts/"*.sh "$AGENT_DIR/parsers/sav_cli/run-save-parser"
