@@ -1,6 +1,6 @@
 # Palworld Command Deck Design System
 
-**Version:** 0.8.0
+**Version:** 0.8.1
 **Design dials:** variance 8/10 · motion 7/10 · density 7/10
 
 ## Direction
@@ -22,12 +22,14 @@ The panel is a persistent world-operations cockpit, not a conventional admin tem
 - Navigation theme: a soft accent/info gradient in light mode and a distinct deep teal gradient in dark mode; both retain semantic contrast.
 - Desktop top bar: 68–76px with telemetry separated into readable status cards.
 - Main canvas: fluid gutters and full-width operational sections; avoid a narrow fixed dashboard column on large displays.
+- Overview intelligence: host identity, resource dials, safeguard identity, and safeguard facts share compact horizontal telemetry bands on wide screens; cards must not gain artificial height just because the canvas is wide.
 - Mobile: compact top identity bar and five-item bottom navigation; core world state appears before secondary intelligence.
 - Breakpoints verified at 375, 812 landscape, 1024, 1440, and 2048px.
 
 ## Components
 
 - Interactive Pal cards use a large portrait, activity label, level, hunger, and SAN. They are never rendered as table rows on the overview.
+- Passive-skill tiers use their full card surface as the in-game cue: neutral gray, negative red, metallic gold, and rainbow gradient. Tier names remain available to assistive technology but are not repeated as visible pills.
 - Base selectors reveal one habitat at a time or aggregate every habitat through an explicit “All bases” option.
 - Pal details use centered, scrollable archive modals with a strong portrait hero and two-column information layout; mobile collapses to one column.
 - Primary icon-only controls are at least 44×44px and use vector icons with accessible labels; compact persistent navigation utilities may use 34×34px targets with tooltips.
