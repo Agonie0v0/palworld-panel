@@ -2439,3 +2439,48 @@ pre {
     min-height: 30px;
   }
 }
+
+/* Adaptive desktop rail: fill the available height first, scroll only when needed. */
+@media (min-width: 721px) {
+  :root {
+    --app-sidebar-width: clamp(236px, 12.8vw, 284px);
+    --sidebar-item-height: clamp(32px, calc((100dvh - 220px) / 22), 42px);
+  }
+
+  .ops-sidebar {
+    overflow: hidden;
+    padding-block: clamp(7px, 1vh, 12px);
+  }
+
+  .ops-brand {
+    min-height: clamp(46px, 5.2vh, 58px);
+    flex: 0 0 auto;
+    margin-bottom: clamp(4px, .6vh, 8px);
+  }
+
+  .ops-menu-button {
+    min-height: var(--sidebar-item-height);
+    padding-block: clamp(2px, .35vh, 5px);
+  }
+
+  .ops-menu-button .n-icon {
+    width: clamp(24px, 2.4vh, 29px);
+    height: clamp(24px, 2.4vh, 29px);
+    flex-basis: clamp(24px, 2.4vh, 29px);
+  }
+
+  .ops-menu-button span {
+    font-size: clamp(12px, calc(10px + .18vh), 14px);
+  }
+
+  .ops-sidebar-footer {
+    flex: 0 0 auto;
+  }
+}
+
+@media (min-width: 2560px) and (min-height: 1300px) {
+  :root {
+    --app-sidebar-width: 292px;
+    --sidebar-item-height: 44px;
+  }
+}

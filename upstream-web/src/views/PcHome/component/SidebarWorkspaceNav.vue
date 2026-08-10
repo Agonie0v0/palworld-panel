@@ -545,7 +545,14 @@ defineExpose({ toggleEditing, editing });
 
 <style scoped>
 .workspace-nav {
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .workspace-nav__editbar {
   display: grid;
@@ -554,7 +561,7 @@ defineExpose({ toggleEditing, editing });
   margin: 0 4px 10px;
 }
 .workspace-nav__group + .workspace-nav__group {
-  margin-top: 4px;
+  margin-top: clamp(2px, .45vh, 7px);
 }
 .workspace-nav__heading {
   display: flex;
@@ -563,7 +570,7 @@ defineExpose({ toggleEditing, editing });
   gap: 4px;
   padding: 0 8px 1px;
   color: var(--app-sidebar-muted);
-  font-size: 9px;
+  font-size: clamp(9px, calc(8px + .12vh), 11px);
   font-weight: 720;
   letter-spacing: .04em;
 }
@@ -599,7 +606,7 @@ defineExpose({ toggleEditing, editing });
 }
 .workspace-nav__list {
   display: grid;
-  gap: 1px;
+  gap: clamp(0px, .18vh, 2px);
 }
 .workspace-nav__item {
   position: relative;
@@ -644,6 +651,13 @@ defineExpose({ toggleEditing, editing });
   }
   .workspace-nav__list {
     gap: 0;
+  }
+}
+
+@media (min-width: 721px) {
+  .workspace-nav {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--app-sidebar-muted) 36%, transparent) transparent;
   }
 }
 </style>
