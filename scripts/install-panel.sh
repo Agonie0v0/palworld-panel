@@ -30,7 +30,7 @@ PANEL_BUILD_LABEL="${SOURCE_COMMIT:0:8}"
 PANEL_BUILD_LABEL="${PANEL_BUILD_LABEL:-unknown}"
 
 mkdir -p "$PANEL_DIR/data" "$PANEL_DIR/upstream-web"
-cp -R package.json package-lock.json src public config.example.json parsers scripts "$PANEL_DIR/"
+cp -R package.json package-lock.json src config.example.json parsers scripts "$PANEL_DIR/"
 cp -R upstream-web/dist "$PANEL_DIR/upstream-web/"
 cp -R upstream-web/public "$PANEL_DIR/upstream-web/"
 printf '{"commit":"%s","installedAt":"%s"}\n' "$SOURCE_COMMIT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$PANEL_DIR/data/build.json"
