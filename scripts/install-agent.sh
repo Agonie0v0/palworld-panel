@@ -6,6 +6,11 @@ AGENT_PORT="${AGENT_PORT:-8081}"
 AGENT_TOKEN="${AGENT_TOKEN:-$(openssl rand -hex 24)}"
 INSTALL_SAVE_PARSER="${INSTALL_SAVE_PARSER:-1}"
 
+if [[ "$AGENT_DIR" != /* || "$AGENT_DIR" == "/" ]]; then
+  echo "AGENT_DIR must be a non-root absolute path."
+  exit 1
+fi
+
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Please run as root: sudo bash scripts/install-agent.sh"
   exit 1
@@ -25,6 +30,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 mkdir -p "$AGENT_DIR/data"
+rm -rf "$AGENT_DIR/public" "$AGENT_DIR/resources"
 cp -R package.json package-lock.json src config.example.json parsers scripts "$AGENT_DIR/"
 cd "$AGENT_DIR"
 npm ci --omit=dev

@@ -7,6 +7,11 @@ PANEL_TOKEN="${PANEL_TOKEN:-$(openssl rand -hex 24)}"
 INSTALL_SAVE_PARSER="${INSTALL_SAVE_PARSER:-1}"
 SOURCE_COMMIT="${PANEL_BUILD_ID:-$(git rev-parse HEAD 2>/dev/null || true)}"
 
+if [[ "$PANEL_DIR" != /* || "$PANEL_DIR" == "/" ]]; then
+  echo "PANEL_DIR must be a non-root absolute path."
+  exit 1
+fi
+
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Please run as root: sudo bash scripts/install-panel.sh"
   exit 1
@@ -30,6 +35,11 @@ PANEL_BUILD_LABEL="${SOURCE_COMMIT:0:8}"
 PANEL_BUILD_LABEL="${PANEL_BUILD_LABEL:-unknown}"
 
 mkdir -p "$PANEL_DIR/data" "$PANEL_DIR/upstream-web"
+rm -rf \
+  "$PANEL_DIR/public" \
+  "$PANEL_DIR/resources" \
+  "$PANEL_DIR/upstream-web/dist" \
+  "$PANEL_DIR/upstream-web/public"
 cp -R package.json package-lock.json src config.example.json parsers scripts "$PANEL_DIR/"
 cp -R upstream-web/dist "$PANEL_DIR/upstream-web/"
 cp -R upstream-web/public "$PANEL_DIR/upstream-web/"
