@@ -1,5 +1,4 @@
 import { useFetch } from "@vueuse/core";
-import router from "@/router";
 
 class Service {
   /**

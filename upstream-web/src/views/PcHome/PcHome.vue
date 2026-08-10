@@ -356,15 +356,9 @@ const playerToGuildStatus = computed(() =>
   playerToGuildStore().getUpdateStatus(),
 );
 
-watch(
-  () => playerToGuildStatus.value,
-  (newVal) => {
-    currentDisplay.value = newVal;
-    if (newVal === "players") {
-    } else if (newVal === "guilds") {
-    }
-  },
-);
+watch(playerToGuildStatus, (newVal) => {
+  currentDisplay.value = newVal;
+});
 
 /**
  * 检测 token

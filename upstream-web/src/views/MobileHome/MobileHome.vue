@@ -31,6 +31,7 @@ import { useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
 import palMap from "@/assets/pal.json";
+import skillMap from "@/assets/skill.json";
 import PlayerList from "./component/PlayerList.vue";
 import GuildList from "./component/GuildList.vue";
 import PlayerDetail from "./component/PlayerDetail.vue";
@@ -132,7 +133,7 @@ const getServerMetrics = async () => {
   const { data } = await new ApiService().getServerMetrics();
   serverMetrics.value = data.value || {};
 };
-const getPlayerList = async (is_update_info = true) => {
+const getPlayerList = async () => {
   getOnlineList();
   const { data } = await new ApiService().getPlayerList({
     order_by: "last_online",
@@ -500,7 +501,7 @@ onMounted(async () => {
   if (isLogin.value) currentDisplay.value = "overview";
   loading.value = false;
   refreshTimer = setInterval(() => {
-    getPlayerList(false);
+    getPlayerList();
     getServerMetrics();
   }, 60000);
 });

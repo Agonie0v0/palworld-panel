@@ -6,10 +6,6 @@ class ApiService extends Service {
     return this.fetch(`/api/login`).post(data).json();
   }
 
-  async getCurrentUser() {
-    return this.fetch(`/api/auth/me`).get().json();
-  }
-
   async getAccessUsers() {
     return this.fetch(`/api/access/users`).get().json();
   }
@@ -284,10 +280,6 @@ class ApiService extends Service {
     return this.fetch(`/api/watchdog`).put({ settings }).json();
   }
 
-  async getAdvancedFeatures() {
-    return this.fetch(`/api/advanced/features`).get().json();
-  }
-
   async getServerLogs(lines = 300) {
     return this.fetch(`/api/advanced/logs?lines=${lines}`).get().json();
   }
@@ -448,83 +440,6 @@ class ApiService extends Service {
       .json();
   }
 
-  async getBreedingCatalog() {
-    return this.fetch(`/api/advanced/breeding/catalog`).get().json();
-  }
-
-  async getBreedingResult(payload) {
-    return this.fetch(`/api/advanced/breeding/direct`).post(payload).json();
-  }
-
-  async getBreedingParents(target) {
-    return this.fetch(
-      `/api/advanced/breeding/parents?target=${encodeURIComponent(target)}`,
-    )
-      .get()
-      .json();
-  }
-
-  async solveBreeding(target, maxSteps = 4) {
-    const payload = typeof target === "object" ? target : { target, maxSteps };
-    return this.fetch(`/api/advanced/breeding/solve`)
-      .post(payload)
-      .json();
-  }
-
-  async getBreedingJobs() {
-    return this.fetch(`/api/advanced/breeding/jobs`).get().json();
-  }
-
-  async createBreedingJob(payload) {
-    return this.fetch(`/api/advanced/breeding/jobs`).post(payload).json();
-  }
-
-  async controlBreedingJob(id, action) {
-    return this.fetch(
-      `/api/advanced/breeding/jobs/${encodeURIComponent(id)}/${action}`,
-    )
-      .post({})
-      .json();
-  }
-
-  async getBreedingHistory() {
-    return this.fetch(`/api/advanced/breeding/history`).get().json();
-  }
-
-  async getBreedingContainers() {
-    return this.fetch(`/api/advanced/breeding/containers`).get().json();
-  }
-
-  async saveBreedingContainer(container) {
-    return this.fetch(`/api/advanced/breeding/containers`)
-      .post(container)
-      .json();
-  }
-
-  async deleteBreedingContainer(id) {
-    return this.fetch(
-      `/api/advanced/breeding/containers/${encodeURIComponent(id)}`,
-    )
-      .delete()
-      .json();
-  }
-
-  async getBreedingPresets() {
-    return this.fetch(`/api/advanced/breeding/presets`).get().json();
-  }
-
-  async saveBreedingPreset(preset) {
-    return this.fetch(`/api/advanced/breeding/presets`).post(preset).json();
-  }
-
-  async deleteBreedingPreset(id) {
-    return this.fetch(
-      `/api/advanced/breeding/presets/${encodeURIComponent(id)}`,
-    )
-      .delete()
-      .json();
-  }
-
   async getWorkshopConfig() {
     return this.fetch(`/api/advanced/workshop/config`).get().json();
   }
@@ -536,14 +451,6 @@ class ApiService extends Service {
   async searchWorkshop(query, page = 1) {
     return this.fetch(
       `/api/advanced/workshop/search?q=${encodeURIComponent(query)}&page=${page}`,
-    )
-      .get()
-      .json();
-  }
-
-  async getWorkshopDetails(id) {
-    return this.fetch(
-      `/api/advanced/workshop/details?id=${encodeURIComponent(id)}`,
     )
       .get()
       .json();

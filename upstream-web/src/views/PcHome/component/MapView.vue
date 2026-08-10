@@ -1,5 +1,6 @@
 <script setup>
 import { useI18n } from "vue-i18n";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import "leaflet/dist/leaflet.css";
 import {
   LCircle,
@@ -61,19 +62,6 @@ const toMapPosition = (position) => {
   const y =
     (256 * (position[1] - LAND_SCAPE[3])) / (LAND_SCAPE[1] - LAND_SCAPE[3]);
   return [x, y];
-};
-
-const fromMapPosition = (mapPosition) => {
-  // 还原 x 坐标
-  const worldX =
-    ((mapPosition[0] + 256) * (LAND_SCAPE[0] - LAND_SCAPE[2])) / 256 +
-    LAND_SCAPE[2];
-  // 还原 y 坐标
-  const worldY =
-    (mapPosition[1] * (LAND_SCAPE[1] - LAND_SCAPE[3])) / 256 + LAND_SCAPE[3];
-
-  // 保留两位小数
-  return [worldX.toFixed(2), worldY.toFixed(2)];
 };
 
 const toMapDistance = (distance) => {
@@ -279,42 +267,44 @@ onUnmounted(() => {
           ],
         }"
       ></l-tile-layer>
-      <l-marker
-        v-if="showFastTravel"
-        v-for="i in points.fast_travel"
-        :key="`fast-${i[0]}-${i[1]}`"
-        :lat-lng="toMapPosition([i[0], i[1]])"
-        :options="{ title: $t('map.fastTravel'), alt: $t('map.fastTravel') }"
-        @ready="
-          (marker) => setMarkerAccessibility(marker, $t('map.fastTravel'))
-        "
-      >
-        <l-icon :icon-url="IconFastTravel" :icon-size="[48, 48]" />
-      </l-marker>
-      <l-marker
-        v-if="showBossTower"
-        v-for="i in points.boss_tower"
-        :key="`tower-${i[0]}-${i[1]}`"
-        :lat-lng="toMapPosition([i[0], i[1]])"
-        :options="{ title: $t('map.bossTower'), alt: $t('map.bossTower') }"
-        @ready="(marker) => setMarkerAccessibility(marker, $t('map.bossTower'))"
-      >
-        <l-icon :icon-url="IconBossTower" :icon-size="[48, 48]" />
-      </l-marker>
-      <l-marker
-        v-if="showPlayer"
-        v-for="i in visiblePlayerList"
-        :key="i.player_uid"
-        :lat-lng="toMapPosition([i.location_x, i.location_y])"
-        :options="{
-          title: `${$t('map.player')}: ${i.nickname}`,
-          alt: `${$t('map.player')}: ${i.nickname}`,
-        }"
-        @ready="
-          (marker) =>
-            setMarkerAccessibility(marker, `${$t('map.player')}: ${i.nickname}`)
-        "
-      >
+      <template v-if="showFastTravel">
+        <l-marker
+          v-for="i in points.fast_travel"
+          :key="`fast-${i[0]}-${i[1]}`"
+          :lat-lng="toMapPosition([i[0], i[1]])"
+          :options="{ title: $t('map.fastTravel'), alt: $t('map.fastTravel') }"
+          @ready="
+            (marker) => setMarkerAccessibility(marker, $t('map.fastTravel'))
+          "
+        >
+          <l-icon :icon-url="IconFastTravel" :icon-size="[48, 48]" />
+        </l-marker>
+      </template>
+      <template v-if="showBossTower">
+        <l-marker
+          v-for="i in points.boss_tower"
+          :key="`tower-${i[0]}-${i[1]}`"
+          :lat-lng="toMapPosition([i[0], i[1]])"
+          :options="{ title: $t('map.bossTower'), alt: $t('map.bossTower') }"
+          @ready="(marker) => setMarkerAccessibility(marker, $t('map.bossTower'))"
+        >
+          <l-icon :icon-url="IconBossTower" :icon-size="[48, 48]" />
+        </l-marker>
+      </template>
+      <template v-if="showPlayer">
+        <l-marker
+          v-for="i in visiblePlayerList"
+          :key="i.player_uid"
+          :lat-lng="toMapPosition([i.location_x, i.location_y])"
+          :options="{
+            title: `${$t('map.player')}: ${i.nickname}`,
+            alt: `${$t('map.player')}: ${i.nickname}`,
+          }"
+          @ready="
+            (marker) =>
+              setMarkerAccessibility(marker, `${$t('map.player')}: ${i.nickname}`)
+          "
+        >
         <l-icon
           :icon-url="IconPlayer"
           :icon-size="[45, 45]"
@@ -403,7 +393,8 @@ onUnmounted(() => {
             </footer>
           </article>
         </l-popup>
-      </l-marker>
+        </l-marker>
+      </template>
       <template v-if="showBaseCamp">
         <l-marker
           v-for="cluster in clusteredBaseMarkers"

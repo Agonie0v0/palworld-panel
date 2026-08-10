@@ -124,58 +124,6 @@ test("managed mod paths cannot escape the server installation", () => {
   );
 });
 
-test("bundled PalCalc data contains the complete pair matrix", async () => {
-  const file = path.join(__dirname, "..", "resources", "palcalc", "catalog.json");
-  const catalog = JSON.parse(await fs.readFile(file, "utf8"));
-  const matrix = Buffer.from(catalog.matrix, "base64");
-  const index = new Map(catalog.pals.map((pal, palIndex) => [pal.internal, palIndex]));
-  const anubis = index.get("Anubis");
-  const child = matrix.readUInt16LE((anubis * catalog.pals.length + anubis) * 2) - 1;
-  assert.equal(catalog.source, "PalCalc v1.17.6");
-  assert.equal(catalog.pals.length, 299);
-  assert.equal(catalog.pals[child].internal, "Anubis");
-  assert.equal(matrix.length, catalog.pals.length * catalog.pals.length * 2);
-});
-
-test("advanced breeding requests clamp resources and normalize trait lists", () => {
-  const { normalizeBreedingInput } = helpers();
-  const input = normalizeBreedingInput({
-    target: " Anubis ",
-    requiredPassives: "Legend, Swift，Legend\nRunner",
-    optionalPassives: ["Lucky", "Lucky"],
-    minIV: { health: 120, attack: -5, defense: 88 },
-    maxSteps: 99,
-    maxIterations: 1,
-    threads: 999,
-  });
-  assert.equal(input.target, "Anubis");
-  assert.deepEqual(input.requiredPassives, ["Legend", "Swift", "Runner"]);
-  assert.deepEqual(input.optionalPassives, ["Lucky"]);
-  assert.deepEqual(input.minIV, { health: 100, attack: 0, defense: 88 });
-  assert.equal(input.maxSteps, 8);
-  assert.equal(input.maxIterations, 100);
-  assert.equal(input.threads, 32);
-});
-
-test("custom breeding materials are normalized and save hashes are deterministic", () => {
-  const { normalizeCustomBreedingPal, breedingSourceHash } = helpers();
-  const pal = normalizeCustomBreedingPal({
-    type: "Anubis",
-    ivHealth: 101,
-    ivAttack: 77,
-    ivDefense: -1,
-    passives: "Legend, Swift, Legend",
-  });
-  assert.equal(pal.melee, 100);
-  assert.equal(pal.ranged, 77);
-  assert.equal(pal.defense, 0);
-  assert.deepEqual(pal.skills, ["Legend", "Swift"]);
-  assert.equal(
-    breedingSourceHash([pal, { type: "Lamball" }]),
-    breedingSourceHash([{ type: "Lamball" }, pal]),
-  );
-});
-
 test("failed background jobs preserve deployment logs and result details", async () => {
   const store = new Map();
   const features = createAdvancedFeatures({

@@ -4,12 +4,10 @@ import dayjs from "dayjs";
 import { useI18n } from "vue-i18n";
 import {
   Activity,
-  AlertTriangle,
   Apple,
   Archive,
   ArrowRight,
   BuildingCommunity,
-  Clock,
   Cpu,
   Database,
   DeviceDesktopAnalytics,
@@ -21,7 +19,6 @@ import {
   ShieldCheck,
   Stars,
   Tools,
-  Users,
   X,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
@@ -185,8 +182,6 @@ const liveDataIncomplete = computed(() =>
   props.serverInfo?.available === false || props.serverMetrics?.available === false,
 );
 const currentPlayers = computed(() => Number(props.serverMetrics?.current_player_num ?? onlinePlayers.value.length ?? 0));
-const maxPlayers = computed(() => Number(props.serverMetrics?.max_player_num || 0));
-const fps = computed(() => Number(props.serverMetrics?.server_fps || 0));
 const latestBackup = computed(() => [...backups.value].sort((a, b) => new Date(b.save_time) - new Date(a.save_time))[0]);
 const activeTasks = computed(() => tasks.value.filter((task) => task.enabled));
 const enrichedBases = computed(() => bases.value.map((base) => ({
@@ -251,14 +246,6 @@ function formatBytes(bytes) {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
   return `${(value / 1024 ** index).toFixed(index >= 3 ? 1 : 0)} ${units[index]}`;
-}
-function formatUptime(seconds) {
-  const total = Math.max(0, Number(seconds || 0));
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  if (zh.value) return days ? `${days}天 ${hours}小时` : `${hours}小时 ${minutes}分`;
-  return days ? `${days}d ${hours}h` : `${hours}h ${minutes}m`;
 }
 const formatDate = (value) => value ? dayjs(value).format("MM-DD HH:mm") : copy.value.never;
 const workerTone = (row) => {

@@ -394,6 +394,5 @@ test/                   Node.js 自动化测试
 - [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)：功能与兼容体验参考。
 - [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf)：完整服务器配置生成器，MIT License。
 - [deafdudecomputers/PalworldSaveTools](https://github.com/deafdudecomputers/PalworldSaveTools)：存档解析能力。
-- PalCalc：配种数据与计算能力。
 
 项目主体采用 MIT License。第三方组件、版权与许可证信息见 [NOTICE.md](NOTICE.md) 和 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)。

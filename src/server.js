@@ -17,9 +17,7 @@ const configPath = process.env.PAL_PANEL_CONFIG || path.join(rootDir, "data", "c
 const dataDir = path.dirname(configPath);
 const upstreamPublicDir = path.join(rootDir, "upstream-web", "dist");
 const upstreamSourcePublicDir = path.join(rootDir, "upstream-web", "public");
-const publicDir = fs.existsSync(path.join(upstreamPublicDir, "index.html"))
-  ? upstreamPublicDir
-  : path.join(rootDir, "public");
+const publicDir = upstreamPublicDir;
 const deployScriptPath = path.join(rootDir, "scripts", "deploy-palworld-server.sh");
 const agentRuntime = process.env.AGENT_MODE === "1";
 const authTokenTtlSeconds = 24 * 60 * 60;
@@ -328,14 +326,6 @@ function sendError(res, statusCode, message) {
 function effectivePanelToken(config) {
   const environmentToken = process.env.PANEL_TOKEN;
   return environmentToken && environmentToken !== "change-me" ? environmentToken : config.panel.token;
-}
-
-function isAuthorized(req, config) {
-  const expected = effectivePanelToken(config);
-  const header = req.headers.authorization || "";
-  if (!header.startsWith("Bearer ")) return false;
-  const token = header.slice(7);
-  return (Boolean(expected) && expected !== "change-me" && token === expected) || verifyAuthToken(config, token);
 }
 
 function publicPrincipal(user) {
@@ -2587,7 +2577,6 @@ async function clearServerPlayerData(reason) {
 
 async function handleApi(req, res, config) {
   if (await upstreamCompat.handlePublic(req, res, config)) return;
-  if (await advancedFeatures.handlePublicApi(req, res, config)) return;
 
   const principal = await authenticateRequest(req, config);
   const authorized = Boolean(principal);
@@ -3455,6 +3444,9 @@ async function main() {
   const config = await loadConfig();
   if (agentRuntime && !process.env.PAL_AGENT_TOKEN) {
     throw new Error("PAL_AGENT_TOKEN is required when AGENT_MODE=1.");
+  }
+  if (!agentRuntime && !fs.existsSync(path.join(publicDir, "index.html"))) {
+    throw new Error("Frontend build is missing. Run `npm run build:web` before starting the panel.");
   }
   if (!agentRuntime) startSchedulers();
   const requestHandler = async (req, res) => {

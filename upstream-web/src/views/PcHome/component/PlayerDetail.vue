@@ -3,7 +3,7 @@ import { ContentCopyFilled, PersonSearchSharp } from "@vicons/material";
 import { LogOut, Ban, ShieldCheckmarkOutline } from "@vicons/ionicons5";
 import { CrownFilled } from "@vicons/antd";
 import ApiService from "@/service/api";
-import { ref, onMounted, computed } from "vue";
+import { computed, h, nextTick, onMounted, reactive, ref, watch } from "vue";
 import dayjs from "dayjs";
 import { useI18n } from "vue-i18n";
 import palMap from "@/assets/pal.json";
@@ -20,7 +20,6 @@ import {
 } from "@/utils/gameLabels";
 
 const { t, locale } = useI18n();
-const PALWORLD_TOKEN = "palworld_token";
 const props = defineProps(["playerInfo", "playerPalsList"]);
 const playerInfo = computed(() => props.playerInfo);
 const playerPalsList = computed(() => props.playerPalsList);
@@ -290,8 +289,7 @@ const removeWhitelist = async (player) => {
 // 封禁、踢出
 const handelPlayerAction = async (type) => {
   if (!isLogin.value) {
-    message.error($t("message.requireauth"));
-    showLoginModal.value = true;
+    message.error(t("message.requireauth"));
     return;
   }
   const param = {

@@ -4,10 +4,8 @@ import { useDialog, useMessage } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import {
   AlertTriangle,
-  ClipboardList,
   Clock,
   FileText,
-  History,
   PlayerPlay,
   Plus,
   Refresh,

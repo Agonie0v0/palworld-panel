@@ -20,14 +20,11 @@ function createAdvancedFeatures(deps) {
     monitorAt: 0,
     scheduleAt: 0,
     runningJobs: new Set(),
-    breedingJobs: new Map(),
   };
 
   const load = (name, fallback) => deps.loadJsonFile(name, fallback);
   const save = (name, value) => deps.saveJsonFile(name, value);
   const nowIso = () => new Date().toISOString();
-  let breedingCatalogCache;
-
   async function prependLimited(name, value, limit) {
     const rows = await load(name, []);
     const next = [value, ...(Array.isArray(rows) ? rows : [])].slice(0, limit);
@@ -872,307 +869,6 @@ function createAdvancedFeatures(deps) {
     }
   }
 
-  async function breedingCatalog() {
-    if (!breedingCatalogCache) {
-      const file = path.join(__dirname, "..", "resources", "palcalc", "catalog.json");
-      const raw = JSON.parse(await fsp.readFile(file, "utf8"));
-      breedingCatalogCache = {
-        ...raw,
-        matrixBuffer: Buffer.from(raw.matrix, "base64"),
-        index: new Map(raw.pals.map((pal, index) => [pal.internal, index])),
-      };
-    }
-    return breedingCatalogCache;
-  }
-
-  function breedingChildIndex(catalog, first, second, firstGender = "WILDCARD", secondGender = "WILDCARD") {
-    const a = catalog.index.get(first);
-    const b = catalog.index.get(second);
-    if (a === undefined || b === undefined) throw new Error("Unknown Pal breeding parent.");
-    const override = catalog.genderOverrides.find(
-      (row) =>
-        (row[0] === a && row[1] === firstGender && row[2] === b && row[3] === secondGender) ||
-        (row[0] === b && row[1] === secondGender && row[2] === a && row[3] === firstGender),
-    );
-    if (override) return override[4];
-    const value = catalog.matrixBuffer.readUInt16LE((a * catalog.pals.length + b) * 2);
-    if (!value) throw new Error("No breeding result is available for this pair.");
-    return value - 1;
-  }
-
-  async function breedingDirect(input = {}) {
-    const catalog = await breedingCatalog();
-    const child = catalog.pals[breedingChildIndex(
-      catalog,
-      input.parent1,
-      input.parent2,
-      input.parent1Gender || "WILDCARD",
-      input.parent2Gender || "WILDCARD",
-    )];
-    return { parent1: input.parent1, parent2: input.parent2, child };
-  }
-
-  async function breedingParents(target) {
-    const catalog = await breedingCatalog();
-    const targetIndex = catalog.index.get(target);
-    if (targetIndex === undefined) throw new Error("Unknown target Pal.");
-    const rows = [];
-    for (let first = 0; first < catalog.pals.length; first += 1) {
-      for (let second = first; second < catalog.pals.length; second += 1) {
-        const value = catalog.matrixBuffer.readUInt16LE((first * catalog.pals.length + second) * 2);
-        if (value - 1 === targetIndex) rows.push({ parent1: catalog.pals[first], parent2: catalog.pals[second] });
-      }
-    }
-    for (const override of catalog.genderOverrides) {
-      if (override[4] !== targetIndex) continue;
-      rows.push({
-        parent1: catalog.pals[override[0]],
-        parent1Gender: override[1],
-        parent2: catalog.pals[override[2]],
-        parent2Gender: override[3],
-      });
-    }
-    return rows;
-  }
-
-  function normalizeStringList(value) {
-    const rows = Array.isArray(value) ? value : String(value || "").split(/[\n,\uFF0C]/);
-    return [...new Set(rows.map((row) => String(row || "").trim()).filter(Boolean))].slice(0, 32);
-  }
-
-  function normalizeBreedingInput(value, legacyMaxSteps) {
-    const input = typeof value === "string" ? { target: value, maxSteps: legacyMaxSteps } : (value || {});
-    return {
-      target: String(input.target || "").trim(),
-      targetGender: ["WILDCARD", "MALE", "FEMALE"].includes(input.targetGender)
-        ? input.targetGender
-        : "WILDCARD",
-      requiredPassives: normalizeStringList(input.requiredPassives),
-      optionalPassives: normalizeStringList(input.optionalPassives),
-      minIV: {
-        health: Math.max(0, Math.min(100, Number(input.minIV?.health || 0))),
-        attack: Math.max(0, Math.min(100, Number(input.minIV?.attack || 0))),
-        defense: Math.max(0, Math.min(100, Number(input.minIV?.defense || 0))),
-      },
-      maxSteps: Math.max(1, Math.min(8, Number(input.maxSteps || 4))),
-      maxIterations: Math.max(100, Math.min(500000, Number(input.maxIterations || 10000))),
-      threads: Math.max(1, Math.min(32, Number(input.threads || Math.min(4, os.cpus().length || 1)))),
-      allowWild: Boolean(input.allowWild),
-      ignoreIrrelevantPassives: input.ignoreIrrelevantPassives !== false,
-      allowSurgery: Boolean(input.allowSurgery),
-      customContainerIds: normalizeStringList(input.customContainerIds),
-    };
-  }
-
-  function breedingSourceHash(pals) {
-    return crypto
-      .createHash("sha256")
-      .update(
-        JSON.stringify(
-          (pals || []).map((pal) => [pal.type, pal.gender, pal.melee, pal.ranged, pal.defense, pal.skills]).sort(),
-        ),
-      )
-      .digest("hex");
-  }
-
-  async function waitForBreedingControl(control) {
-    if (!control) return;
-    if (control.cancelled) throw Object.assign(new Error("Breeding job cancelled."), { code: "BREEDING_CANCELLED" });
-    while (control.paused) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      if (control.cancelled) throw Object.assign(new Error("Breeding job cancelled."), { code: "BREEDING_CANCELLED" });
-    }
-  }
-
-  async function breedingMaterials(config, input) {
-    const saveData = await deps.managedCall("saveData", {}, () => deps.querySaveData(config));
-    const customContainers = await load("breeding-containers.json", []);
-    const selectedContainers = new Set(input.customContainerIds || []);
-    const customPals = (Array.isArray(customContainers) ? customContainers : [])
-      .filter((container) => selectedContainers.has(container.id))
-      .flatMap((container) => (container.pals || []).map((pal) => ({ ...pal, customContainerId: container.id })));
-    const pals = [...(saveData.pals || []), ...customPals];
-    return { pals, sourceHash: breedingSourceHash(pals), saveData };
-  }
-
-  async function breedingSolve(config, value, legacyMaxSteps, control) {
-    const input = normalizeBreedingInput(value, legacyMaxSteps);
-    const catalog = await breedingCatalog();
-    const targetIndex = catalog.index.get(input.target);
-    if (targetIndex === undefined) throw new Error("Unknown target Pal.");
-    const materials = await breedingMaterials(config, input);
-    const owned = new Set(materials.pals.map((pal) => catalog.index.get(pal.type)).filter((index) => index !== undefined));
-    if (!owned.size) throw new Error("No owned Pals were found in the active save source.");
-    const matchingMaterials = materials.pals.filter((pal) => {
-      const skills = new Set(pal.skills || []);
-      return (
-        input.requiredPassives.every((skill) => skills.has(skill)) &&
-        Number(pal.melee || 0) >= input.minIV.health &&
-        Number(pal.ranged || 0) >= input.minIV.attack &&
-        Number(pal.defense || 0) >= input.minIV.defense
-      );
-    });
-    const routeMeta = {
-      criteria: input,
-      sourceHash: materials.sourceHash,
-      materialCount: materials.pals.length,
-      matchingMaterialCount: matchingMaterials.length,
-      generatedAt: nowIso(),
-      requestedThreads: input.threads,
-    };
-    if (owned.has(targetIndex)) return { target: catalog.pals[targetIndex], owned: true, steps: [], ...routeMeta };
-    const known = new Set(owned);
-    const recipes = new Map();
-    const limit = input.maxSteps;
-    let combinations = 0;
-    for (let step = 1; step <= limit; step += 1) {
-      await waitForBreedingControl(control);
-      const parents = [...known];
-      const discovered = [];
-      for (let i = 0; i < parents.length; i += 1) {
-        for (let j = i; j < parents.length; j += 1) {
-          combinations += 1;
-          if (combinations >= input.maxIterations) {
-            return {
-              target: catalog.pals[targetIndex],
-              owned: false,
-              steps: null,
-              tree: null,
-              combinations,
-              iterationLimitReached: true,
-              ...routeMeta,
-            };
-          }
-          if (combinations % 4000 === 0) {
-            await waitForBreedingControl(control);
-            await new Promise((resolve) => setImmediate(resolve));
-            if (control?.onProgress) {
-              await control.onProgress(Math.min(92, 10 + Math.round((step / limit) * 75)), `Searching generation ${step}`);
-            }
-          }
-          const value = catalog.matrixBuffer.readUInt16LE((parents[i] * catalog.pals.length + parents[j]) * 2);
-          if (!value) continue;
-          const child = value - 1;
-          if (known.has(child)) continue;
-          known.add(child);
-          discovered.push(child);
-          recipes.set(child, { parent1: parents[i], parent2: parents[j], step });
-          if (child === targetIndex) {
-            const build = (index) => {
-              const recipe = recipes.get(index);
-              if (!recipe) return { pal: catalog.pals[index], owned: true };
-              return {
-                pal: catalog.pals[index],
-                step: recipe.step,
-                parent1: build(recipe.parent1),
-                parent2: build(recipe.parent2),
-              };
-            };
-            const inheritedTraits = input.requiredPassives.length + input.optionalPassives.length;
-            const probability = Math.max(0.01, Math.min(1, Math.pow(0.62, inheritedTraits || 1)));
-            return {
-              target: catalog.pals[targetIndex],
-              owned: false,
-              steps: step,
-              tree: build(targetIndex),
-              probability,
-              estimatedEggs: Math.ceil(1 / probability),
-              estimatedMinutes: Math.ceil(1 / probability) * 10 * step,
-              combinations,
-              ...routeMeta,
-            };
-          }
-        }
-      }
-      if (!discovered.length) break;
-    }
-    return { target: catalog.pals[targetIndex], owned: false, steps: null, tree: null, combinations, ...routeMeta };
-  }
-
-  async function updateBreedingJob(id, patch) {
-    const rows = await load("breeding-jobs.json", []);
-    const next = (Array.isArray(rows) ? rows : []).map((row) =>
-      row.id === id ? { ...row, ...patch, updatedAt: nowIso() } : row,
-    );
-    await save("breeding-jobs.json", next.slice(0, MAX_JOB_ROWS));
-    return next.find((row) => row.id === id);
-  }
-
-  async function queueBreedingJob(config, value) {
-    const input = normalizeBreedingInput(value);
-    if (!input.target) throw new Error("A target Pal is required.");
-    const job = {
-      id: crypto.randomUUID(),
-      status: "queued",
-      progress: 0,
-      message: "Queued",
-      input,
-      result: null,
-      error: "",
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    };
-    await prependLimited("breeding-jobs.json", job, MAX_JOB_ROWS);
-    const control = { paused: false, cancelled: false, onProgress: (progress, message) => updateBreedingJob(job.id, { progress, message }) };
-    state.breedingJobs.set(job.id, control);
-    setImmediate(async () => {
-      await updateBreedingJob(job.id, { status: "running", progress: 5, message: "Loading save materials" });
-      try {
-        const result = await breedingSolve(config, input, undefined, control);
-        await waitForBreedingControl(control);
-        const completed = await updateBreedingJob(job.id, { status: "completed", progress: 100, message: "Completed", result });
-        await prependLimited("breeding-history.json", { ...completed, stale: false }, MAX_JOB_ROWS);
-      } catch (error) {
-        const cancelled = control.cancelled || error?.code === "BREEDING_CANCELLED";
-        await updateBreedingJob(job.id, {
-          status: cancelled ? "cancelled" : "failed",
-          progress: cancelled ? 100 : 100,
-          message: cancelled ? "Cancelled" : "Failed",
-          error: cancelled ? "" : (error?.message || String(error)),
-        });
-      } finally {
-        state.breedingJobs.delete(job.id);
-      }
-    });
-    return job;
-  }
-
-  async function controlBreedingJob(id, action) {
-    const jobs = await load("breeding-jobs.json", []);
-    const job = (Array.isArray(jobs) ? jobs : []).find((row) => row.id === id);
-    if (!job) throw new Error("Breeding job was not found.");
-    if (["completed", "failed", "cancelled"].includes(job.status)) return job;
-    const control = state.breedingJobs.get(id);
-    if (!control) throw new Error("Breeding job is no longer active on this panel process.");
-    if (action === "pause") {
-      control.paused = true;
-      return updateBreedingJob(id, { status: "paused", message: "Paused" });
-    }
-    if (action === "resume") {
-      control.paused = false;
-      return updateBreedingJob(id, { status: "running", message: "Running" });
-    }
-    if (action === "cancel") {
-      control.cancelled = true;
-      control.paused = false;
-      return updateBreedingJob(id, { status: "cancelling", message: "Cancelling" });
-    }
-    throw new Error("Unsupported breeding job action.");
-  }
-
-  function normalizeCustomBreedingPal(pal = {}) {
-    return {
-      id: pal.id || crypto.randomUUID(),
-      type: String(pal.type || "").trim(),
-      nickname: String(pal.nickname || "").slice(0, 80),
-      gender: String(pal.gender || "WILDCARD"),
-      melee: Math.max(0, Math.min(100, Number(pal.melee || pal.ivHealth || 0))),
-      ranged: Math.max(0, Math.min(100, Number(pal.ranged || pal.ivAttack || 0))),
-      defense: Math.max(0, Math.min(100, Number(pal.defense || pal.ivDefense || 0))),
-      skills: normalizeStringList(pal.skills || pal.passives),
-    };
-  }
-
   function normalizeWorkshopConfig(input = {}, current = {}) {
     const appId = String(input.appId ?? current.appId ?? "1623730").trim();
     if (!/^\d{5,10}$/.test(appId)) throw new Error("Workshop App ID must be numeric.");
@@ -1536,7 +1232,6 @@ function createAdvancedFeatures(deps) {
           webdav: true,
           saveSources: true,
           mods: true,
-          breeding: false,
           workshop: true,
         },
       });
@@ -1562,17 +1257,6 @@ function createAdvancedFeatures(deps) {
 
     if (req.method === "GET" && pathname === "/api/advanced/jobs") {
       deps.sendJson(res, 200, { ok: true, jobs: await load("jobs.json", []) });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/breeding/catalog") {
-      const catalog = await breedingCatalog();
-      deps.sendJson(res, 200, {
-        ok: true,
-        source: catalog.source,
-        version: catalog.version,
-        pals: catalog.pals,
-      });
       return true;
     }
 
@@ -1642,132 +1326,6 @@ function createAdvancedFeatures(deps) {
     if (req.method === "POST" && pathname === "/api/advanced/workshop/translate") {
       const body = await deps.readBody(req);
       deps.sendJson(res, 200, { ok: true, translation: await translateWorkshop(body.id, body.language) });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/breeding/direct") {
-      const body = await deps.readBody(req);
-      deps.sendJson(res, 200, { ok: true, result: await breedingDirect(body) });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/breeding/parents") {
-      deps.sendJson(res, 200, { ok: true, parents: await breedingParents(url.searchParams.get("target")) });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/breeding/solve") {
-      const body = await deps.readBody(req);
-      const result = await breedingSolve(config, body);
-      deps.sendJson(res, 200, { ok: true, result });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/breeding/jobs") {
-      deps.sendJson(res, 200, { ok: true, jobs: await load("breeding-jobs.json", []) });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/breeding/jobs") {
-      const body = await deps.readBody(req);
-      const job = await auditRequest(req, principal, "breeding.job.create", body.target || "", () => queueBreedingJob(config, body));
-      deps.sendJson(res, 202, { ok: true, job });
-      return true;
-    }
-
-    const breedingJobAction = pathname.match(/^\/api\/advanced\/breeding\/jobs\/([^/]+)\/(pause|resume|cancel)$/);
-    if (req.method === "POST" && breedingJobAction) {
-      const job = await auditRequest(
-        req,
-        principal,
-        `breeding.job.${breedingJobAction[2]}`,
-        breedingJobAction[1],
-        () => controlBreedingJob(breedingJobAction[1], breedingJobAction[2]),
-      );
-      deps.sendJson(res, 200, { ok: true, job });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/breeding/history") {
-      const history = await load("breeding-history.json", []);
-      let savePals = [];
-      let customContainers = [];
-      try {
-        const saveData = await deps.managedCall("saveData", {}, () => deps.querySaveData(config));
-        savePals = saveData.pals || [];
-        customContainers = await load("breeding-containers.json", []);
-      } catch {}
-      deps.sendJson(res, 200, {
-        ok: true,
-        history: (Array.isArray(history) ? history : []).map((row) => {
-          const selected = new Set(row.input?.customContainerIds || []);
-          const customPals = (Array.isArray(customContainers) ? customContainers : [])
-            .filter((container) => selected.has(container.id))
-            .flatMap((container) => container.pals || []);
-          const currentHash = breedingSourceHash([...savePals, ...customPals]);
-          return {
-            ...row,
-            stale: Boolean(row.result?.sourceHash && row.result.sourceHash !== currentHash),
-          };
-        }),
-      });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/breeding/containers") {
-      deps.sendJson(res, 200, { ok: true, containers: await load("breeding-containers.json", []) });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/breeding/containers") {
-      const body = await deps.readBody(req);
-      const rows = await load("breeding-containers.json", []);
-      const container = {
-        id: body.id || crypto.randomUUID(),
-        name: String(body.name || "Custom Pal container").slice(0, 100),
-        pals: (Array.isArray(body.pals) ? body.pals : []).map(normalizeCustomBreedingPal).filter((pal) => pal.type),
-        updatedAt: nowIso(),
-      };
-      const next = [container, ...(Array.isArray(rows) ? rows : []).filter((row) => row.id !== container.id)];
-      await save("breeding-containers.json", next);
-      deps.sendJson(res, 200, { ok: true, container, containers: next });
-      return true;
-    }
-
-    const breedingContainer = pathname.match(/^\/api\/advanced\/breeding\/containers\/([^/]+)$/);
-    if (req.method === "DELETE" && breedingContainer) {
-      const next = (await load("breeding-containers.json", [])).filter((row) => row.id !== breedingContainer[1]);
-      await save("breeding-containers.json", next);
-      deps.sendJson(res, 200, { ok: true, containers: next });
-      return true;
-    }
-
-    if (req.method === "GET" && pathname === "/api/advanced/breeding/presets") {
-      deps.sendJson(res, 200, { ok: true, presets: await load("breeding-presets.json", []) });
-      return true;
-    }
-
-    if (req.method === "POST" && pathname === "/api/advanced/breeding/presets") {
-      const body = await deps.readBody(req);
-      const presets = await load("breeding-presets.json", []);
-      const preset = {
-        id: body.id || crypto.randomUUID(),
-        name: String(body.name || "Breeding plan").slice(0, 100),
-        ...normalizeBreedingInput(body),
-        createdAt: body.createdAt || nowIso(),
-        updatedAt: nowIso(),
-      };
-      const next = [preset, ...(Array.isArray(presets) ? presets : []).filter((row) => row.id !== preset.id)];
-      await save("breeding-presets.json", next);
-      deps.sendJson(res, 200, { ok: true, presets: next });
-      return true;
-    }
-
-    const breedingPreset = pathname.match(/^\/api\/advanced\/breeding\/presets\/([^/]+)$/);
-    if (req.method === "DELETE" && breedingPreset) {
-      const next = (await load("breeding-presets.json", [])).filter((row) => row.id !== breedingPreset[1]);
-      await save("breeding-presets.json", next);
-      deps.sendJson(res, 200, { ok: true, presets: next });
       return true;
     }
 
@@ -2026,10 +1584,6 @@ function createAdvancedFeatures(deps) {
     return false;
   }
 
-  async function handlePublicApi(req, res, config) {
-    return false;
-  }
-
   async function handleAgentUpload(req, res, config, kind) {
     if (kind === "save-source") {
       const uploaded = await receiveUpload(req, "save-source");
@@ -2049,7 +1603,6 @@ function createAdvancedFeatures(deps) {
 
   return {
     handleApi,
-    handlePublicApi,
     handleAgentUpload,
     executeAgentOperation,
     tick,
@@ -2067,9 +1620,6 @@ function createAdvancedFeatures(deps) {
       nextScheduleRun,
       assertModPath,
       inspectZip,
-      normalizeBreedingInput,
-      breedingSourceHash,
-      normalizeCustomBreedingPal,
       normalizeWorkshopConfig,
     },
   };

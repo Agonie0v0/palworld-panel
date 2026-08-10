@@ -9,7 +9,7 @@ const props = defineProps({
   inheritWorkspaceTitle: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(["update:show"]);
+defineEmits(["update:show"]);
 const workspaceTitle = inject("workspace-title", null);
 const resolvedTitle = computed(() =>
   props.embedded && props.inheritWorkspaceTitle && workspaceTitle?.value
@@ -17,7 +17,6 @@ const resolvedTitle = computed(() =>
     : props.title,
 );
 
-const close = () => emit("update:show", false);
 </script>
 
 <template>
