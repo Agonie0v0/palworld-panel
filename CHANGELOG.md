@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 - 2026-08-10
+
+- Rework the overview's host and safeguard cards into compact horizontal telemetry bands so ultra-wide displays use their space without stretching sparse content vertically.
+- Render passive-skill tiers as full neutral, negative, gold, or rainbow surfaces and remove the redundant visible tier-name pills while preserving accessible tier descriptions.
+
 ## 0.8.0 - 2026-08-10
 
 - Hide the desktop sidebar scrollbar at rest and reveal it only when the navigation can be scrolled and receives pointer or keyboard interaction.
