@@ -299,17 +299,6 @@ const workerState = (row) => {
 const rounded = (value) => value == null ? "-" : `${Math.round(Number(value))}%`;
 const facilityLabel = (row) => String(row?.facility || row?.activityDetail || copy.value.noFacility).replace(/_/g, " ");
 const workLabel = (work) => workLabels[zh.value ? "zh" : "en"][work.id] || work.name || work.id;
-const workerSkills = (row) => {
-  const records = [...asArray(row?.equippedSkills), ...asArray(row?.masteredSkills)];
-  if (row?.partnerSkill) records.push({ ...row.partnerSkill, id: `partner:${row.partnerSkill.id || row.partnerSkill.name}` });
-  const seen = new Set();
-  return records.filter((skill) => {
-    const key = String(skill?.id || skill?.name || "");
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
 const passiveTone = (skill) => passiveTier(skill?.rank);
 const useFallback = (event) => {
   const image = event.currentTarget;
@@ -524,27 +513,17 @@ onBeforeUnmount(() => {
                 <span class="pal-node__section pal-node__work">
                   <small class="pal-node__section-label">{{ copy.workAbility }}</small>
                   <span v-if="row.workSuitabilities.length" class="pal-node__work-list">
-                    <pal-work-badge v-for="work in row.workSuitabilities.slice(0, 3)" :key="work.id" :work="work" :label="workLabel(work)" compact />
-                    <span v-if="row.workSuitabilities.length > 3" class="pal-node__work-count">+{{ row.workSuitabilities.length - 3 }}</span>
+                    <pal-work-badge v-for="work in row.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" compact />
                   </span>
                   <em v-else>—</em>
-                </span>
-                <span class="pal-node__section pal-node__skills">
-                  <small class="pal-node__section-label">{{ copy.skills }}</small>
-                  <span v-if="workerSkills(row).length" class="pal-node__skill-list">
-                    <span v-for="skill in workerSkills(row).slice(0, 2)" :key="skill.id" class="pal-node__skill">{{ skill.name || skill.id }}</span>
-                    <span v-if="workerSkills(row).length > 2" class="pal-node__skill-count">+{{ workerSkills(row).length - 2 }}</span>
-                  </span>
-                  <em v-else>{{ copy.noSkills }}</em>
                 </span>
                 <span class="pal-node__section pal-node__passives">
                   <small class="pal-node__section-label">{{ copy.passives }}</small>
                   <span v-if="row.passives.length" class="pal-node__passive-list">
-                    <span v-for="skill in row.passives.slice(0, 3)" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
+                    <span v-for="skill in row.passives" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
                       <i class="pal-node__passive-dot" aria-hidden="true" />
                       <span>{{ skill.name || skill.id }}</span>
                     </span>
-                    <span v-if="row.passives.length > 3" class="pal-node__passive-count">+{{ row.passives.length - 3 }}</span>
                   </span>
                   <em v-else>{{ copy.noPassives }}</em>
                 </span>
@@ -1928,6 +1907,85 @@ onBeforeUnmount(() => {
   .pal-node__visual img {
     width: 52px;
     height: 52px;
+  }
+}
+
+/* The overview is a status surface: spend the detail row on every work
+   suitability and passive trait, while active skills remain available from
+   the Pal status/detail views. */
+.pal-node__details {
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  overflow: visible;
+}
+.pal-node__work,
+.pal-node__passives {
+  min-width: 0;
+}
+.pal-node__passives {
+  grid-column: auto;
+}
+.pal-node__work-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: flex-start;
+  gap: 3px;
+  overflow: visible;
+}
+.pal-node__work-list :deep(.pal-work-badge) {
+  max-width: 100%;
+}
+.pal-node__work-list :deep(.pal-work-badge__copy) {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 2px;
+}
+.pal-node__work-list :deep(.pal-work-badge strong) {
+  max-width: 10ch;
+}
+.pal-node__work-list :deep(.pal-work-badge small) {
+  display: inline;
+  flex: 0 0 auto;
+  font-size: 7px;
+  line-height: 1;
+}
+.pal-node__passive-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(15px, auto);
+  align-content: start;
+  gap: 2px 7px;
+  overflow: visible;
+}
+.pal-node__passive {
+  min-width: 0;
+  max-width: 100%;
+  align-items: flex-start;
+}
+.pal-node__passive > span:last-child {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+@media (max-width: 719px) {
+  .pal-node__details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .pal-node__passives {
+    grid-column: auto;
+  }
+}
+@media (max-width: 420px) {
+  .pal-node__details {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
   }
 }
 </style>
