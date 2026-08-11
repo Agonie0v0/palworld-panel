@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2 - 2026-08-11
+
+- Equalize every passive-skill card within its detail grid using the tallest natural content height, keeping long descriptions fully wrapped without clipping or fixed-height overflow.
+
 ## 0.8.1 - 2026-08-10
 
 - Rework the overview's host and safeguard cards into compact horizontal telemetry bands so ultra-wide displays use their space without stretching sparse content vertically.
