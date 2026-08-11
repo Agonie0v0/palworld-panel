@@ -1965,12 +1965,13 @@ onBeforeUnmount(() => {
   min-width: 0;
   max-width: 100%;
   align-items: flex-start;
+  font-size: clamp(7px, .42vw, 8px);
 }
 .pal-node__passive > span:last-child {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.15;
 }
 @media (max-width: 719px) {

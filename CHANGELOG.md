@@ -3,7 +3,7 @@
 ## 0.8.9 - 2026-08-11
 
 - Remove active-skill chips from overview Pal cards so the fixed card can show every work suitability and passive trait without summary counts or clipped rows.
-- Keep work levels visible beside their icons and let passive names wrap inside a stable two-column detail grid.
+- Keep work levels visible beside their icons and keep passive names on one line with a compact fallback size inside a stable two-column detail grid.
 
 ## 0.8.8 - 2026-08-11
 
