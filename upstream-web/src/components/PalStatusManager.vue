@@ -28,7 +28,7 @@ import {
   palPortrait,
 } from "@/utils/gameData";
 import { buildPalWorkerRows, filterPalWorkerRows } from "@/utils/palWorkers";
-import { DEFAULT_CACHE_TTL, requestCached } from "@/utils/requestCache";
+import { DEFAULT_CACHE_TTL, readCachedEntry, requestCached } from "@/utils/requestCache";
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -238,6 +238,11 @@ const hydrateStatus = (snapshot) => {
   loadError.value = snapshot.worldAvailable ? "" : copy.value.unavailable;
 };
 
+const unwrapWorldPayload = (value) => {
+  if (value?.data && typeof value.data === "object") return value.data;
+  return value && typeof value === "object" ? value : {};
+};
+
 const fetchStatus = async ({ force = false } = {}) => {
   const [worldResult, productionResult] = await Promise.allSettled([
     requestCached("world-data", async () => {
@@ -250,14 +255,23 @@ const fetchStatus = async ({ force = false } = {}) => {
     }, { force }),
   ]);
   const previous = statusSnapshot?.snapshot || {};
+  const worldPayload = worldResult.status === "fulfilled" ? unwrapWorldPayload(worldResult.value) : null;
+  const staleWorldPayload = unwrapWorldPayload(readCachedEntry("world-data")?.value);
+  const worldBases = Array.isArray(worldPayload?.bases) ? worldPayload.bases : null;
+  const worldUsable = worldResult.status === "fulfilled"
+    && Array.isArray(worldBases)
+    && worldPayload?.source !== "parser_error";
+  const fallbackBases = Array.isArray(previous.bases)
+    ? previous.bases
+    : (Array.isArray(staleWorldPayload?.bases) ? staleWorldPayload.bases : []);
   const snapshot = {
     bases: worldResult.status === "fulfilled"
-      ? (Array.isArray(worldResult.value?.data?.bases) ? worldResult.value.data.bases : [])
-      : (previous.bases || []),
+      ? (worldUsable ? worldBases : fallbackBases)
+      : fallbackBases,
     production: productionResult.status === "fulfilled"
       ? productionResult.value || { current: null, history: [] }
       : (previous.production || { current: null, history: [] }),
-    worldAvailable: worldResult.status === "fulfilled",
+    worldAvailable: worldUsable,
   };
   if (worldResult.status === "fulfilled" || productionResult.status === "fulfilled") {
     statusSnapshot = { fetchedAt: Date.now(), snapshot };

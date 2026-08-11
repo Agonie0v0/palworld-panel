@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.12 - 2026-08-11
+
+- Compact mobile overview Pal cards, show five Pals per page, and fit passive traits into a four-column summary.
+- Add editable mobile bottom navigation with drag ordering and selectable shortcuts.
+- Fix tool-surface close buttons and retain the last valid world snapshot during transient refresh/parser failures.
+
 ## 0.8.11 - 2026-08-11
 
 - Reorder overview Pal cards so full-width hunger and SAN bars lead the card, followed by stacked work suitability and passive trait sections.

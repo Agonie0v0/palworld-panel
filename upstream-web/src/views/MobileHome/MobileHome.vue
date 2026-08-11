@@ -15,10 +15,14 @@ import {
   Paw,
 } from "@vicons/tabler";
 import {
+  CheckmarkOutline,
+  ChevronDownOutline,
+  ChevronUpOutline,
   ConstructOutline,
   GameController,
   LanguageSharp,
   MoonOutline,
+  ReorderFourOutline,
   Settings,
   ShieldCheckmarkSharp,
   SunnyOutline,
@@ -104,6 +108,80 @@ const currentViewLabel = computed(() => {
   return t(labels[currentDisplay.value] || labels.players);
 });
 
+const MOBILE_NAV_STORAGE_KEY = "palworld_mobile_bottom_nav_v1";
+const MOBILE_NAV_LIMIT = 4;
+const mobileNavDefaults = ["overview", "players", "guilds", "map"];
+const mobileNavSelection = ref([...mobileNavDefaults]);
+const mobileNavDraft = ref([]);
+const isEditingMobileNav = ref(false);
+const mobileNavDragState = ref(null);
+
+const mobileNavigationCatalog = computed(() => ({
+  overview: { icon: DashboardOutlined, label: t("button.overview"), gate: "operate", kind: "view" },
+  players: { icon: GameController, label: t("button.players"), kind: "view" },
+  guilds: { icon: SupervisedUserCircleRound, label: t("button.guilds"), kind: "view" },
+  map: { icon: PublicRound, label: t("button.map"), kind: "view" },
+  operations: { icon: GuiManagement, label: t("operations.title"), gate: "operate" },
+  settings: { icon: Settings, label: t("configuration.title"), gate: "admin" },
+  "game-settings": { icon: ConstructOutline, label: t("gameSettings.title"), gate: "operate" },
+  "pal-status": { icon: Paw, label: locale.value === "zh" ? "帕鲁状态" : "Pal status", gate: "operate" },
+  advanced: { icon: Activity, label: locale.value === "zh" ? "运维中心" : "Operations center", gate: "operate" },
+  "save-sources": { icon: Database, label: locale.value === "zh" ? "存档源" : "Save sources", gate: "operate" },
+  mods: { icon: Package, label: locale.value === "zh" ? "模组管理" : "Mods", gate: "operate" },
+  access: { icon: AdminPanelSettingsOutlined, label: locale.value === "zh" ? "账号权限" : "Access", gate: "admin" },
+  "world-data": { icon: Database, label: locale.value === "zh" ? "世界数据" : "World data", gate: "operate" },
+  "player-data": { icon: GameController, label: locale.value === "zh" ? "玩家数据" : "Player data", gate: "operate" },
+  "pal-archive": { icon: Paw, label: locale.value === "zh" ? "帕鲁仓库" : "Pal archive", gate: "operate" },
+  inventory: { icon: Package, label: locale.value === "zh" ? "全服库存" : "Global inventory", gate: "operate" },
+  palconf: { icon: Settings, label: t("button.palconf") },
+  rcon: { icon: Terminal, label: t("button.rcon"), gate: "operate" },
+  backup: { icon: ArchiveOutlined, label: t("button.backup"), gate: "operate" },
+  whitelist: { icon: ShieldCheckmarkSharp, label: t("button.whitelist"), gate: "operate" },
+  broadcast: { icon: BroadcastTower, label: t("button.broadcast"), gate: "operate" },
+  shutdown: { icon: SettingsPowerRound, label: t("button.shutdown"), gate: "admin", danger: true },
+}));
+
+const isMobileNavAvailable = (item) => {
+  if (!item) return false;
+  if (item.gate === "admin") return isAdmin.value;
+  if (item.gate === "operate") return canOperate.value;
+  if (item.gate === "login") return isLogin.value;
+  return true;
+};
+const normalizeMobileNavSelection = (value) => {
+  const known = new Set(Object.keys(mobileNavigationCatalog.value));
+  const unique = [];
+  for (const id of asArray(value)) {
+    if (typeof id !== "string" || id === "tools" || !known.has(id) || unique.includes(id)) continue;
+    unique.push(id);
+  }
+  for (const id of mobileNavDefaults) {
+    if (unique.length >= MOBILE_NAV_LIMIT) break;
+    if (!unique.includes(id) && known.has(id)) unique.push(id);
+  }
+  return unique.slice(0, MOBILE_NAV_LIMIT);
+};
+const mobileNavItems = computed(() => {
+  const items = mobileNavSelection.value
+    .map((id) => ({ id, ...mobileNavigationCatalog.value[id] }))
+    .filter((item) => item.label && isMobileNavAvailable(item));
+  if (isLogin.value) {
+    items.push({
+      id: "tools",
+      icon: GuiManagement,
+      label: t("button.tools"),
+      kind: "tools",
+    });
+  }
+  return items;
+});
+const mobileNavDraftItems = computed(() => mobileNavDraft.value
+  .map((id) => ({ id, ...mobileNavigationCatalog.value[id] }))
+  .filter((item) => item.label && isMobileNavAvailable(item)));
+const mobileNavAvailableItems = computed(() => Object.entries(mobileNavigationCatalog.value)
+  .filter(([id, item]) => isMobileNavAvailable(item) && !mobileNavDraft.value.includes(id))
+  .map(([id, item]) => ({ id, ...item })));
+
 const contentRef = ref(null);
 
 const isLogin = ref(false);
@@ -115,6 +193,81 @@ const isAdmin = computed(() => currentRole.value === "admin");
 const authToken = ref("");
 let refreshTimer = null;
 const asArray = (value) => (Array.isArray(value) ? value : []);
+
+const loadMobileNavigation = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MOBILE_NAV_STORAGE_KEY) || "null");
+    if (Array.isArray(saved)) mobileNavSelection.value = normalizeMobileNavSelection(saved);
+  } catch {
+    mobileNavSelection.value = normalizeMobileNavSelection(mobileNavDefaults);
+  }
+};
+const beginMobileNavEditing = () => {
+  mobileNavDraft.value = [...mobileNavSelection.value];
+  mobileNavDragState.value = null;
+  isEditingMobileNav.value = true;
+  showMobileTools.value = true;
+};
+const cancelMobileNavEditing = () => {
+  mobileNavDraft.value = [];
+  mobileNavDragState.value = null;
+  isEditingMobileNav.value = false;
+};
+const saveMobileNavEditing = () => {
+  mobileNavSelection.value = normalizeMobileNavSelection(mobileNavDraft.value);
+  localStorage.setItem(MOBILE_NAV_STORAGE_KEY, JSON.stringify(mobileNavSelection.value));
+  cancelMobileNavEditing();
+  message.success(locale.value === "zh" ? "底部导航已保存" : "Bottom navigation saved");
+};
+const toggleMobileNavItem = (id) => {
+  if (mobileNavDraft.value.includes(id)) {
+    mobileNavDraft.value = mobileNavDraft.value.filter((value) => value !== id);
+    return;
+  }
+  if (mobileNavDraft.value.length >= MOBILE_NAV_LIMIT) {
+    message.info(locale.value === "zh" ? `最多选择 ${MOBILE_NAV_LIMIT} 个底部项目` : `Choose up to ${MOBILE_NAV_LIMIT} bottom items`);
+    return;
+  }
+  mobileNavDraft.value = [...mobileNavDraft.value, id];
+};
+const moveMobileNavItem = (index, offset) => {
+  const target = index + offset;
+  if (target < 0 || target >= mobileNavDraft.value.length) return;
+  const next = [...mobileNavDraft.value];
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  mobileNavDraft.value = next;
+};
+const beginMobileNavDrag = (event, id) => {
+  mobileNavDragState.value = id;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", id);
+};
+const dropMobileNav = (event, targetIndex) => {
+  event.preventDefault();
+  const sourceId = mobileNavDragState.value;
+  const sourceIndex = mobileNavDraft.value.indexOf(sourceId);
+  if (sourceIndex < 0 || sourceIndex === targetIndex) return;
+  const next = [...mobileNavDraft.value];
+  const [item] = next.splice(sourceIndex, 1);
+  next.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, item);
+  mobileNavDraft.value = next;
+  mobileNavDragState.value = null;
+};
+const handleMobileNavigation = (id) => {
+  if (id === "tools") {
+    showMobileTools.value = true;
+    return;
+  }
+  if (mobileNavigationCatalog.value[id]?.kind === "view") {
+    if (id === "overview") toOverview();
+    if (id === "players") toPlayers();
+    if (id === "guilds") toGuilds();
+    if (id === "map") toMap();
+    return;
+  }
+  executeAdminAction(id);
+};
 
 const handleSelectLanguage = (key) => {
   message.info(t("message.changelanguage"));
@@ -369,6 +522,7 @@ const handleAdminAction = (key) => {
 };
 
 const handleToolsClosed = () => {
+  if (isEditingMobileNav.value) cancelMobileNavEditing();
   if (!pendingAdminAction.value) return;
   const action = pendingAdminAction.value;
   pendingAdminAction.value = "";
@@ -495,6 +649,7 @@ onMounted(async () => {
     },
     {},
   );
+  loadMobileNavigation();
   loading.value = true;
   checkAuthToken();
   await Promise.all([getServerInfo(), getServerMetrics(), getPlayerList()]);
@@ -648,51 +803,16 @@ onBeforeUnmount(() => {
 
     <nav class="mobile-bottom-nav" :aria-label="$t('button.management')">
       <button
-        v-if="canOperate"
+        v-for="item in mobileNavItems"
+        :key="item.id"
         type="button"
         class="mobile-nav-button"
-        :class="{ 'is-active': currentDisplay === 'overview' }"
-        @click="toOverview"
+        :class="{ 'is-active': item.id === 'tools' ? showMobileTools : currentDisplay === item.id }"
+        :aria-label="item.label"
+        @click="handleMobileNavigation(item.id)"
       >
-        <n-icon size="21"><DashboardOutlined /></n-icon>
-        <span>{{ $t("button.overview") }}</span>
-      </button>
-      <button
-        type="button"
-        class="mobile-nav-button"
-        :class="{ 'is-active': currentDisplay === 'players' }"
-        @click="toPlayers"
-      >
-        <n-icon size="21"><GameController /></n-icon>
-        <span>{{ $t("button.players") }}</span>
-      </button>
-      <button
-        type="button"
-        class="mobile-nav-button"
-        :class="{ 'is-active': currentDisplay === 'guilds' }"
-        @click="toGuilds"
-      >
-        <n-icon size="21"><SupervisedUserCircleRound /></n-icon>
-        <span>{{ $t("button.guilds") }}</span>
-      </button>
-      <button
-        type="button"
-        class="mobile-nav-button"
-        :class="{ 'is-active': currentDisplay === 'map' }"
-        @click="toMap"
-      >
-        <n-icon size="21"><PublicRound /></n-icon>
-        <span>{{ $t("button.map") }}</span>
-      </button>
-      <button
-        v-if="isLogin"
-        type="button"
-        class="mobile-nav-button"
-        :class="{ 'is-active': showMobileTools }"
-        @click="showMobileTools = true"
-      >
-        <n-icon size="21"><GuiManagement /></n-icon>
-        <span>{{ $t("button.tools") }}</span>
+        <n-icon size="21"><component :is="item.icon" /></n-icon>
+        <span>{{ item.label }}</span>
       </button>
     </nav>
   </div>
@@ -704,7 +824,63 @@ onBeforeUnmount(() => {
     @after-leave="handleToolsClosed"
   >
     <n-drawer-content :title="$t('button.tools')" closable>
-      <div class="mobile-tool-grid">
+      <template #header-extra>
+        <n-button
+          quaternary
+          size="small"
+          :aria-label="locale === 'zh' ? '编辑底部导航' : 'Edit bottom navigation'"
+          @click="isEditingMobileNav ? cancelMobileNavEditing() : beginMobileNavEditing()"
+        >
+          <template #icon><n-icon><Settings /></n-icon></template>
+          {{ isEditingMobileNav ? (locale === "zh" ? "取消" : "Cancel") : (locale === "zh" ? "编辑导航" : "Edit nav") }}
+        </n-button>
+      </template>
+
+      <div v-if="isEditingMobileNav" class="mobile-nav-editor">
+        <div class="mobile-nav-editor__intro">
+          <div>
+            <strong>{{ locale === "zh" ? "底部导航项目" : "Bottom navigation" }}</strong>
+            <span>{{ locale === "zh" ? "拖动排序或勾选要显示的项目" : "Drag to reorder or choose what appears below" }}</span>
+          </div>
+          <span class="mobile-nav-editor__count">{{ mobileNavDraft.length }}/{{ MOBILE_NAV_LIMIT }}</span>
+        </div>
+        <div class="mobile-nav-editor__list">
+          <div
+            v-for="(item, index) in mobileNavDraftItems"
+            :key="item.id"
+            class="mobile-nav-editor__item"
+            :class="{ 'is-dragging': mobileNavDragState === item.id }"
+            draggable="true"
+            @dragstart="beginMobileNavDrag($event, item.id)"
+            @dragover.prevent
+            @drop="dropMobileNav($event, index)"
+          >
+            <n-icon class="mobile-nav-editor__handle"><ReorderFourOutline /></n-icon>
+            <button type="button" class="mobile-nav-editor__toggle is-selected" :aria-label="item.label" @click="toggleMobileNavItem(item.id)">
+              <n-icon><CheckmarkOutline /></n-icon>
+              <n-icon><component :is="item.icon" /></n-icon>
+              <span>{{ item.label }}</span>
+            </button>
+            <div class="mobile-nav-editor__order">
+              <n-button quaternary circle size="tiny" :disabled="index === 0" :aria-label="locale === 'zh' ? '上移' : 'Move up'" @click="moveMobileNavItem(index, -1)"><template #icon><n-icon><ChevronUpOutline /></n-icon></template></n-button>
+              <n-button quaternary circle size="tiny" :disabled="index === mobileNavDraftItems.length - 1" :aria-label="locale === 'zh' ? '下移' : 'Move down'" @click="moveMobileNavItem(index, 1)"><template #icon><n-icon><ChevronDownOutline /></n-icon></template></n-button>
+            </div>
+          </div>
+          <div v-if="!mobileNavDraftItems.length" class="mobile-nav-editor__empty">{{ locale === "zh" ? "请至少选择一个项目" : "Choose at least one item" }}</div>
+        </div>
+        <div v-if="mobileNavAvailableItems.length" class="mobile-nav-editor__available">
+          <span>{{ locale === "zh" ? "可添加项目" : "Available items" }}</span>
+          <button v-for="item in mobileNavAvailableItems" :key="item.id" type="button" class="mobile-nav-editor__available-item" @click="toggleMobileNavItem(item.id)">
+            <n-icon><component :is="item.icon" /></n-icon><span>{{ item.label }}</span><strong>＋</strong>
+          </button>
+        </div>
+        <div class="mobile-nav-editor__actions">
+          <n-button size="small" @click="cancelMobileNavEditing">{{ locale === "zh" ? "取消" : "Cancel" }}</n-button>
+          <n-button type="primary" size="small" @click="saveMobileNavEditing">{{ locale === "zh" ? "保存" : "Save" }}</n-button>
+        </div>
+      </div>
+
+      <div v-else class="mobile-tool-grid">
         <button
           type="button"
           class="mobile-tool-button"

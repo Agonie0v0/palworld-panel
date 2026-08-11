@@ -56,6 +56,7 @@ watch(
     style="width: 92%; max-width: 560px"
     :title="$t('danger.title')"
     :mask-closable="false"
+    closable
     @update:show="emit('update:show', $event)"
   >
     <n-space vertical size="large">

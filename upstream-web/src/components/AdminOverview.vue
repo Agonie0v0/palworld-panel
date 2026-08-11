@@ -27,7 +27,7 @@ import PalWorkBadge from "@/components/PalWorkBadge.vue";
 import { enrichPals, palPortrait } from "@/utils/gameData";
 import { passiveTier } from "@/utils/palPresentation";
 import { buildPalWorkerRows } from "@/utils/palWorkers";
-import { DEFAULT_CACHE_TTL, requestCached } from "@/utils/requestCache";
+import { DEFAULT_CACHE_TTL, readCachedEntry, requestCached } from "@/utils/requestCache";
 import unknownPal from "@/assets/pals/unknown.png";
 
 const props = defineProps({
@@ -247,7 +247,7 @@ const palPageSize = computed(() => {
   if (viewportWidth.value >= 1800) return 12;
   if (viewportWidth.value >= 1200) return 9;
   if (viewportWidth.value >= 720) return 6;
-  return 3;
+  return 5;
 });
 const palPageCount = computed(() => Math.max(1, Math.ceil(activeBaseWorkers.value.length / palPageSize.value)));
 const visiblePalWorkers = computed(() => activeBaseWorkers.value.slice(palPage.value * palPageSize.value, (palPage.value + 1) * palPageSize.value));
@@ -321,6 +321,11 @@ const hydrateOverview = (snapshot) => {
   worldDataError.value = Boolean(snapshot.worldDataError);
 };
 
+const unwrapWorldPayload = (value) => {
+  if (value?.data && typeof value.data === "object") return value.data;
+  return value && typeof value === "object" ? value : {};
+};
+
 const fetchOverview = async ({ force = false } = {}) => {
   const [online, backup, rconTasks, host, world] = await Promise.allSettled([
     requestCached("online-players", async () => {
@@ -345,13 +350,25 @@ const fetchOverview = async ({ force = false } = {}) => {
     }, { force }),
   ]);
   const previous = overviewSnapshot?.snapshot || {};
+  const worldPayload = world.status === "fulfilled" ? unwrapWorldPayload(world.value) : null;
+  const staleWorldPayload = unwrapWorldPayload(readCachedEntry("world-data")?.value);
+  const worldBases = Array.isArray(worldPayload?.bases) ? worldPayload.bases : null;
+  const worldUsable = world.status === "fulfilled"
+    && Array.isArray(worldBases)
+    && worldPayload?.source !== "parser_error";
+  const fallbackBases = Array.isArray(previous.bases)
+    ? previous.bases
+    : asArray(staleWorldPayload?.bases);
   const snapshot = {
     onlinePlayers: online.status === "fulfilled" ? online.value : asArray(previous.onlinePlayers),
     backups: backup.status === "fulfilled" ? backup.value : asArray(previous.backups),
     tasks: rconTasks.status === "fulfilled" ? rconTasks.value : asArray(previous.tasks),
     hostMetrics: host.status === "fulfilled" ? host.value : previous.hostMetrics || {},
-    bases: world.status === "fulfilled" ? asArray(world.value?.data?.bases) : asArray(previous.bases),
-    worldDataError: world.status !== "fulfilled",
+    // Keep the last known worker records while a parser/API refresh is
+    // incomplete. A transient empty/error response must not blank the card
+    // grid until the user performs another manual sync.
+    bases: worldUsable ? worldBases : fallbackBases,
+    worldDataError: !worldUsable,
   };
   if ([online, backup, rconTasks, host, world].some((item) => item.status === "fulfilled")) {
     overviewSnapshot = { fetchedAt: Date.now(), snapshot };
@@ -2081,6 +2098,58 @@ onBeforeUnmount(() => {
   }
   .pal-node__passive-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Mobile cards use their content height. The desktop equal-height rhythm is
+   intentionally not carried into the narrow layout, where it leaves a large
+   empty lower half and makes the status surface feel disconnected. */
+@media (max-width: 719px) {
+  .pal-constellation {
+    grid-auto-rows: auto;
+    gap: 8px;
+  }
+  .pal-node {
+    height: auto;
+    min-height: 0;
+    padding: 10px;
+  }
+  .pal-node__details {
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    grid-template-rows: auto;
+    align-items: start;
+  }
+  .pal-node__work,
+  .pal-node__passives {
+    grid-column: auto;
+  }
+  .pal-node__passive-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: 3px 5px;
+  }
+  .pal-node__passive {
+    --passive-inline-space: 10px;
+    min-width: 0;
+    font-size: clamp(6.8px, calc((100cqw - var(--passive-inline-space)) * var(--passive-name-ratio, .25)), 9px);
+  }
+}
+
+@media (max-width: 359px) {
+  .pal-node__top {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 7px;
+  }
+  .pal-node__visual {
+    width: 52px;
+    height: 64px;
+  }
+  .pal-node__visual img {
+    width: 48px;
+    height: 48px;
+  }
+  .pal-node__passive-list {
+    column-gap: 3px;
   }
 }
 </style>
