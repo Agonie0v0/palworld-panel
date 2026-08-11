@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0 - 2026-08-11
+
+- Publish the first official stable release.
+- Refresh the project documentation and screenshots for general deployments.
+
 ## 0.8.13 - 2026-08-11
 
 - Keep mobile overview Pal cards mounted while switching pages so cached data and refresh state remain intact.
