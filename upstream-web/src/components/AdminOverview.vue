@@ -25,6 +25,7 @@ import ApiService from "@/service/api";
 import PalPassiveBadge from "@/components/PalPassiveBadge.vue";
 import PalWorkBadge from "@/components/PalWorkBadge.vue";
 import { enrichPals, palPortrait } from "@/utils/gameData";
+import { passiveTier } from "@/utils/palPresentation";
 import { buildPalWorkerRows } from "@/utils/palWorkers";
 import unknownPal from "@/assets/pals/unknown.png";
 
@@ -241,6 +242,8 @@ const activeBaseWorkers = computed(() => {
     || Number(["working", "assigned"].includes(b.activityKind)) - Number(["working", "assigned"].includes(a.activityKind)));
 });
 const palPageSize = computed(() => {
+  if (viewportWidth.value >= 2200) return 10;
+  if (viewportWidth.value >= 1800) return 8;
   if (viewportWidth.value >= 1200) return 6;
   if (viewportWidth.value >= 720) return 4;
   return viewportWidth.value >= 520 ? 2 : 1;
@@ -306,6 +309,7 @@ const workerSkills = (row) => {
     return true;
   });
 };
+const passiveTone = (skill) => passiveTier(skill?.rank);
 const useFallback = (event) => {
   const image = event.currentTarget;
   if (image.dataset.fallback === "true") return;
@@ -491,31 +495,41 @@ onBeforeUnmount(() => {
                   <span class="pal-node__identity"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level || '—' }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
                   <span class="pal-node__state"><i />{{ workerState(row) }}</span>
                   <span class="pal-node__task"><n-icon><Activity /></n-icon><span><strong>{{ facilityLabel(row) }}</strong><small>{{ row.baseName }}</small></span></span>
-                </span>
-                <span class="pal-node__vitals">
-                  <span><n-icon><Apple /></n-icon><i><b :style="{ width: `${row.hunger ?? 0}%` }" /></i><em>{{ rounded(row.hunger) }}</em></span>
-                  <span><n-icon><Heart /></n-icon><i><b :style="{ width: `${row.sanity ?? 0}%` }" /></i><em>{{ rounded(row.sanity) }}</em></span>
+                  <span class="pal-node__vitals" :aria-label="`${copy.hunger}, ${rounded(row.hunger)}; ${copy.sanity}, ${rounded(row.sanity)}`">
+                    <span class="pal-node__vital">
+                      <span class="pal-node__vital-meta"><n-icon><Apple /></n-icon><small>{{ copy.hunger }}</small><em>{{ rounded(row.hunger) }}</em></span>
+                      <i><b :style="{ width: `${row.hunger ?? 0}%` }" /></i>
+                    </span>
+                    <span class="pal-node__vital">
+                      <span class="pal-node__vital-meta"><n-icon><Heart /></n-icon><small>{{ copy.sanity }}</small><em>{{ rounded(row.sanity) }}</em></span>
+                      <i><b :style="{ width: `${row.sanity ?? 0}%` }" /></i>
+                    </span>
+                  </span>
                 </span>
               </span>
               <span class="pal-node__details">
-                <span class="pal-node__section">
+                <span class="pal-node__section pal-node__work">
                   <small class="pal-node__section-label">{{ copy.workAbility }}</small>
-                  <span v-if="row.workSuitabilities.length" class="pal-node__badges">
+                  <span v-if="row.workSuitabilities.length" class="pal-node__work-list">
                     <pal-work-badge v-for="work in row.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" compact />
                   </span>
                   <em v-else>—</em>
                 </span>
-                <span class="pal-node__section">
+                <span class="pal-node__section pal-node__skills">
                   <small class="pal-node__section-label">{{ copy.skills }}</small>
                   <span v-if="workerSkills(row).length" class="pal-node__skill-list">
-                    <span v-for="skill in workerSkills(row)" :key="skill.id" class="pal-node__skill">{{ skill.name || skill.id }}</span>
+                    <span v-for="skill in workerSkills(row).slice(0, 2)" :key="skill.id" class="pal-node__skill">{{ skill.name || skill.id }}</span>
+                    <span v-if="workerSkills(row).length > 2" class="pal-node__skill-count">+{{ workerSkills(row).length - 2 }}</span>
                   </span>
                   <em v-else>{{ copy.noSkills }}</em>
                 </span>
                 <span class="pal-node__section pal-node__passives">
                   <small class="pal-node__section-label">{{ copy.passives }}</small>
-                  <span v-if="row.passives.length" class="pal-node__badges">
-                    <pal-passive-badge v-for="skill in row.passives" :key="skill.id" :skill="skill" :show-description="false" compact />
+                  <span v-if="row.passives.length" class="pal-node__passive-list">
+                    <span v-for="skill in row.passives" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
+                      <i class="pal-node__passive-dot" aria-hidden="true" />
+                      <span>{{ skill.name || skill.id }}</span>
+                    </span>
                   </span>
                   <em v-else>{{ copy.noPassives }}</em>
                 </span>
@@ -1354,6 +1368,289 @@ onBeforeUnmount(() => {
   }
   .pal-node__details {
     grid-template-columns: 1fr;
+  }
+}
+
+/* State-first overview cards: wellbeing leads, profile details stay compact. */
+.pal-constellation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+.pal-node {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  padding: 11px;
+  border-radius: 12px;
+}
+.pal-node__top {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+.pal-node__visual {
+  width: 64px;
+  height: 78px;
+}
+.pal-node__visual img {
+  width: 60px;
+  height: 60px;
+}
+.pal-node__visual > i {
+  width: 23px;
+  height: 23px;
+  font-size: 8px;
+}
+.pal-node__summary {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 5px;
+}
+.pal-node__identity strong {
+  font-size: 14px;
+}
+.pal-node__identity small {
+  margin-top: 2px;
+  font-size: 9px;
+}
+.pal-node__state {
+  font-size: 9px;
+}
+.pal-node__task {
+  gap: 5px;
+  padding-top: 5px;
+}
+.pal-node__task > .n-icon {
+  font-size: 12px;
+}
+.pal-node__task strong {
+  font-size: 10px;
+}
+.pal-node__task small {
+  margin-top: 1px;
+  font-size: 9px;
+}
+.pal-node__vitals {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 7px 0 0;
+  border-top: 1px solid var(--app-border);
+  border-left: 0;
+}
+.pal-node__vital,
+.pal-node__vitals > .pal-node__vital {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1fr;
+  gap: 3px;
+}
+.pal-node__vital-meta {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--app-ink-muted);
+}
+.pal-node__vital-meta .n-icon {
+  color: var(--app-accent);
+  font-size: 12px;
+}
+.pal-node__vital-meta small {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__vital-meta em {
+  color: var(--app-ink);
+  font: 700 10px var(--app-font-data);
+  font-style: normal;
+}
+.pal-node__vital > i {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  background: var(--app-surface-muted);
+  border-radius: 4px;
+}
+.pal-node__vital > i b {
+  display: block;
+  height: 100%;
+  background: var(--app-accent);
+  border-radius: inherit;
+}
+.pal-node__details {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 7px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-border);
+}
+.pal-node__section {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+}
+.pal-node__section-label {
+  color: var(--app-ink-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.pal-node__work-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.pal-node__work-list :deep(.pal-work-badge) {
+  max-width: 100%;
+  gap: 4px;
+  padding: 2px 5px 2px 3px;
+  border-radius: 6px;
+}
+.pal-node__work-list :deep(.pal-work-badge__icon) {
+  width: 19px;
+  height: 19px;
+  flex-basis: 19px;
+  border-radius: 4px;
+}
+.pal-node__work-list :deep(.pal-work-badge__icon img) {
+  width: 60px;
+  height: 60px;
+}
+.pal-node__work-list :deep(.pal-work-badge__copy) {
+  min-width: 0;
+  gap: 0;
+}
+.pal-node__work-list :deep(.pal-work-badge strong) {
+  max-width: 6ch;
+  font-size: 9px;
+}
+.pal-node__work-list :deep(.pal-work-badge small) {
+  display: none;
+}
+.pal-node__skills .pal-node__skill-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.pal-node__skills .pal-node__skill {
+  max-width: 12ch;
+  overflow: hidden;
+  padding: 3px 5px;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__skill-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 5px;
+  color: var(--app-ink-muted);
+  background: var(--app-surface-muted);
+  border-radius: 5px;
+  font: 700 9px var(--app-font-data);
+}
+.pal-node__passives {
+  grid-column: 1 / -1;
+}
+.pal-node__passive-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.pal-node__passive {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  color: var(--app-ink-secondary);
+  font-size: 10px;
+}
+.pal-node__passive > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__passive-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  background: var(--app-ink-muted);
+  border: 1px solid color-mix(in srgb, var(--app-ink-muted) 60%, white);
+  border-radius: 50%;
+}
+.pal-node__passive.is-negative .pal-node__passive-dot {
+  background: #b43f50;
+  border-color: #d47786;
+}
+.pal-node__passive.is-gold .pal-node__passive-dot {
+  background: #b87922;
+  border-color: #d9a94f;
+}
+.pal-node__passive.is-rainbow .pal-node__passive-dot {
+  background: conic-gradient(#d44c70, #8d61c5, #357fba, #2e9472, #c18a20, #d44c70);
+  border-color: #8e77ad;
+}
+@media (min-width: 2200px) {
+  .pal-constellation {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1800px) and (max-width: 2199px) {
+  .pal-constellation {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1199px) {
+  .pal-constellation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 719px) {
+  .pal-constellation {
+    grid-template-columns: 1fr;
+  }
+  .pal-node__top {
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 9px;
+  }
+  .pal-node__visual {
+    width: 58px;
+    height: 72px;
+  }
+  .pal-node__visual img {
+    width: 54px;
+    height: 54px;
+  }
+  .pal-node__details {
+    grid-template-columns: 1fr;
+  }
+  .pal-node__passives {
+    grid-column: auto;
   }
 }
 </style>
