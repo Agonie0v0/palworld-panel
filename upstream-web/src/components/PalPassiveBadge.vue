@@ -102,4 +102,18 @@ const accessibleLabel = computed(() =>
   font-size: 9px;
   line-height: 1.35;
 }
+.pal-passive-badge {
+  display: grid;
+  align-content: center;
+  overflow: visible;
+}
+.pal-passive-badge.is-compact {
+  min-height: 42px;
+  align-content: center;
+}
+.pal-passive-badge.is-compact strong,
+.pal-passive-badge.is-compact p {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
 </style>

@@ -46,8 +46,12 @@ const worldDataError = ref(false);
 const activeBaseId = ref("");
 const selectedWorker = ref(null);
 const palPage = ref(0);
-const palPageSize = 4;
+const viewportWidth = ref(typeof window === "undefined" ? 1440 : window.innerWidth);
 let refreshTimer;
+
+const OVERVIEW_CACHE_TTL = 30000;
+let overviewCache = null;
+let overviewRequest = null;
 
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() => zh.value ? {
@@ -236,8 +240,13 @@ const activeBaseWorkers = computed(() => {
   return [...rows].sort((a, b) => Number(b.attention) - Number(a.attention)
     || Number(["working", "assigned"].includes(b.activityKind)) - Number(["working", "assigned"].includes(a.activityKind)));
 });
-const palPageCount = computed(() => Math.max(1, Math.ceil(activeBaseWorkers.value.length / palPageSize)));
-const visiblePalWorkers = computed(() => activeBaseWorkers.value.slice(palPage.value * palPageSize, (palPage.value + 1) * palPageSize));
+const palPageSize = computed(() => {
+  if (viewportWidth.value >= 1560) return 6;
+  if (viewportWidth.value >= 720) return 4;
+  return viewportWidth.value >= 520 ? 2 : 1;
+});
+const palPageCount = computed(() => Math.max(1, Math.ceil(activeBaseWorkers.value.length / palPageSize.value)));
+const visiblePalWorkers = computed(() => activeBaseWorkers.value.slice(palPage.value * palPageSize.value, (palPage.value + 1) * palPageSize.value));
 const palPageText = computed(() => copy.value.page
   .replace("{current}", String(Math.min(palPage.value + 1, palPageCount.value)))
   .replace("{total}", String(palPageCount.value)));
@@ -254,7 +263,7 @@ watch(baseSummaries, (items) => {
   if (items.length && activeBaseId.value !== "all" && !items.some((base) => base.id === activeBaseId.value)) activeBaseId.value = items[0].id;
 }, { immediate: true });
 
-watch([activeBaseWorkers, activeBaseId], () => {
+watch([activeBaseWorkers, activeBaseId, palPageSize], () => {
   palPage.value = Math.min(palPage.value, palPageCount.value - 1);
 }, { immediate: true });
 watch(activeBaseId, () => {
@@ -304,8 +313,16 @@ const useFallback = (event) => {
   image.src = unknownPal;
 };
 
-const refresh = async () => {
-  loading.value = true;
+const hydrateOverview = (snapshot) => {
+  onlinePlayers.value = asArray(snapshot.onlinePlayers);
+  backups.value = asArray(snapshot.backups);
+  tasks.value = asArray(snapshot.tasks);
+  hostMetrics.value = snapshot.hostMetrics || {};
+  bases.value = asArray(snapshot.bases);
+  worldDataError.value = Boolean(snapshot.worldDataError);
+};
+
+const fetchOverview = async () => {
   const [online, backup, rconTasks, host, world] = await Promise.allSettled([
     api.getOnlinePlayerList(),
     api.getBackupList({}),
@@ -313,24 +330,54 @@ const refresh = async () => {
     api.getHostMetrics(),
     api.getWorldData(),
   ]);
-  if (online.status === "fulfilled") onlinePlayers.value = asArray(online.value.data.value);
-  if (backup.status === "fulfilled") backups.value = asArray(backup.value.data.value);
-  if (rconTasks.status === "fulfilled") tasks.value = asArray(rconTasks.value.data.value);
-  if (host.status === "fulfilled") hostMetrics.value = host.value.data.value?.metrics || {};
-  if (world.status === "fulfilled") {
-    bases.value = asArray(world.value.data.value?.data?.bases);
-    worldDataError.value = false;
-  } else {
-    worldDataError.value = true;
+  const previous = overviewCache?.snapshot || {};
+  const snapshot = {
+    onlinePlayers: online.status === "fulfilled" ? asArray(online.value.data.value) : asArray(previous.onlinePlayers),
+    backups: backup.status === "fulfilled" ? asArray(backup.value.data.value) : asArray(previous.backups),
+    tasks: rconTasks.status === "fulfilled" ? asArray(rconTasks.value.data.value) : asArray(previous.tasks),
+    hostMetrics: host.status === "fulfilled" ? host.value.data.value?.metrics || {} : previous.hostMetrics || {},
+    bases: world.status === "fulfilled" ? asArray(world.value.data.value?.data?.bases) : asArray(previous.bases),
+    worldDataError: world.status !== "fulfilled",
+  };
+  if ([online, backup, rconTasks, host, world].some((item) => item.status === "fulfilled")) {
+    overviewCache = { fetchedAt: Date.now(), snapshot };
   }
-  loading.value = false;
+  return snapshot;
+};
+
+const refresh = async ({ force = false } = {}) => {
+  const now = Date.now();
+  if (!force && overviewCache && now - overviewCache.fetchedAt < OVERVIEW_CACHE_TTL) {
+    hydrateOverview(overviewCache.snapshot);
+    return;
+  }
+  if (!overviewRequest) {
+    overviewRequest = fetchOverview().finally(() => {
+      overviewRequest = null;
+    });
+  }
+  loading.value = true;
+  try {
+    hydrateOverview(await overviewRequest);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const updateViewportWidth = () => {
+  viewportWidth.value = window.innerWidth;
 };
 
 onMounted(() => {
+  updateViewportWidth();
+  window.addEventListener("resize", updateViewportWidth, { passive: true });
   refresh();
   refreshTimer = setInterval(() => refresh().catch(() => {}), 30000);
 });
-onBeforeUnmount(() => clearInterval(refreshTimer));
+onBeforeUnmount(() => {
+  clearInterval(refreshTimer);
+  window.removeEventListener("resize", updateViewportWidth);
+});
 </script>
 
 <template>
@@ -343,7 +390,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
         <div class="command-deck__world-state"><n-icon><Activity /></n-icon><strong>{{ copy.worldActive }}</strong><span>{{ worldMessage }}</span></div>
       </div>
       <div class="command-deck__actions">
-        <n-button type="primary" :loading="loading" @click="refresh"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
+        <n-button type="primary" :loading="loading" @click="refresh({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
         <button type="button" class="deck-link" @click="emit('navigate', 'pal-status')">{{ copy.allPals }}<n-icon><ArrowRight /></n-icon></button>
       </div>
     </header>
@@ -434,19 +481,23 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
               @keydown.enter="selectedWorker = row"
               @keydown.space.prevent="selectedWorker = row"
             >
-              <span class="pal-node__visual">
-                <span class="pal-node__halo" />
-                <img :src="palPortrait(row.assetKey)" :alt="row.speciesName" loading="lazy" @error="useFallback" />
-                <i>{{ row.level || '—' }}</i>
-              </span>
-              <span class="pal-node__body">
-                <span class="pal-node__identity"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level || '—' }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
-                <span class="pal-node__state"><i />{{ workerState(row) }}</span>
-                <span class="pal-node__task"><n-icon><Activity /></n-icon><span><strong>{{ facilityLabel(row) }}</strong><small>{{ row.baseName }}</small></span></span>
+              <span class="pal-node__top">
+                <span class="pal-node__visual">
+                  <span class="pal-node__halo" />
+                  <img :src="palPortrait(row.assetKey)" :alt="row.speciesName" loading="lazy" @error="useFallback" />
+                  <i>{{ row.level || '—' }}</i>
+                </span>
+                <span class="pal-node__summary">
+                  <span class="pal-node__identity"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level || '—' }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
+                  <span class="pal-node__state"><i />{{ workerState(row) }}</span>
+                  <span class="pal-node__task"><n-icon><Activity /></n-icon><span><strong>{{ facilityLabel(row) }}</strong><small>{{ row.baseName }}</small></span></span>
+                </span>
                 <span class="pal-node__vitals">
                   <span><n-icon><Apple /></n-icon><i><b :style="{ width: `${row.hunger ?? 0}%` }" /></i><em>{{ rounded(row.hunger) }}</em></span>
                   <span><n-icon><Heart /></n-icon><i><b :style="{ width: `${row.sanity ?? 0}%` }" /></i><em>{{ rounded(row.sanity) }}</em></span>
                 </span>
+              </span>
+              <span class="pal-node__details">
                 <span class="pal-node__section">
                   <small class="pal-node__section-label">{{ copy.workAbility }}</small>
                   <span v-if="row.workSuitabilities.length" class="pal-node__badges">
@@ -1040,5 +1091,207 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
   .pal-node { grid-template-columns: 76px minmax(0, 1fr); }
   .pal-node__visual { width: 76px; height: 92px; }
   .pal-node__visual img { width: 72px; height: 72px; }
+}
+
+/* Responsive Pal cards: keep the summary full-width and the detail grid balanced. */
+.pal-constellation {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.pal-node {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  min-height: clamp(340px, 24vw, 440px);
+  aspect-ratio: 1.55 / 1;
+  overflow: visible;
+  padding: 16px;
+  border-radius: 18px;
+}
+.pal-node__top {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 88px minmax(0, 1fr) minmax(128px, .72fr);
+  align-items: start;
+  gap: 14px;
+}
+.pal-node__visual {
+  width: 88px;
+  height: 104px;
+}
+.pal-node__visual img {
+  width: 84px;
+  height: 84px;
+}
+.pal-node__summary {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+}
+.pal-node__identity,
+.pal-node__task {
+  min-width: 0;
+}
+.pal-node__identity strong {
+  display: block;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__identity small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--app-ink-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__state {
+  font-size: 10px;
+}
+.pal-node__task {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-border);
+}
+.pal-node__task > .n-icon {
+  flex: 0 0 auto;
+  color: var(--app-accent);
+}
+.pal-node__task > span {
+  display: grid;
+  min-width: 0;
+}
+.pal-node__task strong,
+.pal-node__task small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__task strong {
+  font-size: 11px;
+}
+.pal-node__task small {
+  margin-top: 2px;
+  color: var(--app-ink-muted);
+  font-size: 10px;
+}
+.pal-node__vitals {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  margin-top: 0;
+  padding-left: 13px;
+  border-left: 1px solid var(--app-border);
+}
+.pal-node__vitals > span {
+  grid-template-columns: 15px minmax(0, 1fr) 34px;
+  gap: 6px;
+}
+.pal-node__details {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-border);
+}
+.pal-node__section {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+}
+.pal-node__passives {
+  grid-column: 1 / -1;
+}
+.pal-node__section-label {
+  font-size: 9px;
+  letter-spacing: .04em;
+}
+.pal-node__badges {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.pal-node__passives .pal-node__badges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 42px;
+  align-items: stretch;
+}
+.pal-node__passives :deep(.pal-passive-badge) {
+  display: grid;
+  height: 100%;
+  align-content: center;
+  overflow: visible;
+}
+.pal-node__skill-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.pal-node__skill {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 4px 7px;
+  color: var(--app-ink-secondary);
+  background: var(--app-surface-muted);
+  border-radius: 6px;
+  font-size: 9px;
+  line-height: 1.3;
+}
+@media (max-width: 1559px) {
+  .pal-constellation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 719px) {
+  .pal-constellation {
+    grid-template-columns: 1fr;
+  }
+  .pal-node {
+    min-height: 0;
+    aspect-ratio: auto;
+  }
+  .pal-node__top {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 11px;
+  }
+  .pal-node__visual {
+    width: 76px;
+    height: 92px;
+  }
+  .pal-node__visual img {
+    width: 72px;
+    height: 72px;
+  }
+  .pal-node__vitals {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px 0 0;
+    border-top: 1px solid var(--app-border);
+    border-left: 0;
+  }
+  .pal-node__details {
+    grid-template-columns: 1fr;
+  }
+  .pal-node__passives {
+    grid-column: auto;
+  }
 }
 </style>

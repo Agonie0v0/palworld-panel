@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Activity,
@@ -47,6 +47,10 @@ const attentionOnly = ref(false);
 const selectedWork = ref([]);
 const selectedPassives = ref([]);
 const selected = ref(null);
+const STATUS_CACHE_TTL = 30000;
+let statusCache = null;
+let statusRequest = null;
+let statusRefreshTimer;
 
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() =>
@@ -228,24 +232,49 @@ const passiveOptions = computed(() => {
 const currentProductionItems = computed(() => productionItems(production.value.current));
 
 const result = (response) => response?.data?.value || {};
-const load = async () => {
-  loading.value = true;
-  loadError.value = "";
+const hydrateStatus = (snapshot) => {
+  bases.value = Array.isArray(snapshot.bases) ? snapshot.bases : [];
+  production.value = snapshot.production || { current: null, history: [] };
+  loadError.value = snapshot.worldAvailable ? "" : copy.value.unavailable;
+};
+
+const fetchStatus = async () => {
   const [worldResult, productionResult] = await Promise.allSettled([
     api.getWorldData(),
     api.getOfflineProduction(),
   ]);
-  if (worldResult.status === "fulfilled") {
-    const data = result(worldResult.value).data || {};
-    bases.value = Array.isArray(data.bases) ? data.bases : [];
-  } else {
-    bases.value = [];
-    loadError.value = copy.value.unavailable;
+  const previous = statusCache?.snapshot || {};
+  const snapshot = {
+    bases: worldResult.status === "fulfilled"
+      ? (Array.isArray(result(worldResult.value).data?.bases) ? result(worldResult.value).data.bases : [])
+      : (previous.bases || []),
+    production: productionResult.status === "fulfilled"
+      ? result(productionResult.value).data || { current: null, history: [] }
+      : (previous.production || { current: null, history: [] }),
+    worldAvailable: worldResult.status === "fulfilled",
+  };
+  if (worldResult.status === "fulfilled" || productionResult.status === "fulfilled") {
+    statusCache = { fetchedAt: Date.now(), snapshot };
   }
-  if (productionResult.status === "fulfilled") {
-    production.value = result(productionResult.value).data || { current: null, history: [] };
+  return snapshot;
+};
+
+const load = async ({ force = false } = {}) => {
+  if (!force && statusCache && Date.now() - statusCache.fetchedAt < STATUS_CACHE_TTL) {
+    hydrateStatus(statusCache.snapshot);
+    return;
   }
-  loading.value = false;
+  if (!statusRequest) {
+    statusRequest = fetchStatus().finally(() => {
+      statusRequest = null;
+    });
+  }
+  loading.value = true;
+  try {
+    hydrateStatus(await statusRequest);
+  } finally {
+    loading.value = false;
+  }
 };
 
 const toggleWork = (id) => {
@@ -315,7 +344,13 @@ function productionItems(session) {
   );
 }
 
-watch(() => props.show, (show) => show && load(), { immediate: true });
+watch(() => props.show, (show) => {
+  clearInterval(statusRefreshTimer);
+  if (!show) return;
+  load();
+  statusRefreshTimer = setInterval(() => load().catch(() => {}), STATUS_CACHE_TTL);
+}, { immediate: true });
+onBeforeUnmount(() => clearInterval(statusRefreshTimer));
 </script>
 
 <template>
@@ -329,7 +364,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
   >
     <template #description>{{ copy.subtitle }}</template>
     <template #header-extra>
-      <n-button quaternary :loading="loading" @click="load">
+      <n-button quaternary :loading="loading" @click="load({ force: true })">
         <template #icon><n-icon><Refresh /></n-icon></template>
         {{ copy.refresh }}
       </n-button>
@@ -367,10 +402,22 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
         <div class="result-count">{{ visibleRows.length }} / {{ rows.length }}</div>
         <div v-if="visibleRows.length" class="worker-grid" :aria-busy="loading">
           <article v-for="row in visibleRows" :key="row.id" class="worker-card" :class="{ attention: row.attention }" role="button" tabindex="0" @click="selected = row" @keydown.enter="selected = row" @keydown.space.prevent="selected = row">
-            <span class="pal-portrait"><img :src="palPortrait(row.type)" :alt="row.speciesName" @error="useFallback" /></span>
-            <span class="worker-main">
-              <span class="worker-name"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
-              <span class="worker-task"><n-icon><Activity /></n-icon><span><strong>{{ activityLabel(row) }}</strong><small>{{ facilityLabel(row) }} · {{ row.baseName }}</small></span></span>
+            <div class="worker-card__top">
+              <span class="pal-portrait"><img :src="palPortrait(row.type)" :alt="row.speciesName" @error="useFallback" /></span>
+              <span class="worker-main">
+                <span class="worker-name"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
+                <span class="worker-task"><n-icon><Activity /></n-icon><span><strong>{{ activityLabel(row) }}</strong><small>{{ facilityLabel(row) }} · {{ row.baseName }}</small></span></span>
+              </span>
+              <span class="worker-vitals">
+                <span><n-icon><Apple /></n-icon><i>{{ copy.hunger }}</i><strong>{{ rounded(row.hunger) }}</strong></span>
+                <n-progress type="line" :percentage="row.hunger ?? 0" :status="meterStatus(row.hunger, 20)" :show-indicator="false" :height="5" />
+                <span><n-icon><Heart /></n-icon><i>{{ copy.sanity }}</i><strong>{{ rounded(row.sanity) }}</strong></span>
+                <n-progress type="line" :percentage="row.sanity ?? 0" :status="meterStatus(row.sanity, 50)" :show-indicator="false" :height="5" />
+                <n-tag v-if="row.attention" size="small" type="warning" :bordered="false">{{ row.conditions.join(' · ') }}</n-tag>
+                <n-tag v-else size="small" type="success" :bordered="false">{{ copy.healthy }}</n-tag>
+              </span>
+            </div>
+            <div class="worker-card__details">
               <span class="card-section">
                 <small class="card-section__label">{{ copy.work }}</small>
                 <span v-if="row.workSuitabilities.length" class="work-chips">
@@ -392,15 +439,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
                 </span>
                 <em v-else>—</em>
               </span>
-            </span>
-            <span class="worker-vitals">
-              <span><n-icon><Apple /></n-icon><i>{{ copy.hunger }}</i><strong>{{ rounded(row.hunger) }}</strong></span>
-              <n-progress type="line" :percentage="row.hunger ?? 0" :status="meterStatus(row.hunger, 20)" :show-indicator="false" :height="5" />
-              <span><n-icon><Heart /></n-icon><i>{{ copy.sanity }}</i><strong>{{ rounded(row.sanity) }}</strong></span>
-              <n-progress type="line" :percentage="row.sanity ?? 0" :status="meterStatus(row.sanity, 50)" :show-indicator="false" :height="5" />
-              <n-tag v-if="row.attention" size="small" type="warning" :bordered="false">{{ row.conditions.join(' · ') }}</n-tag>
-              <n-tag v-else size="small" type="success" :bordered="false">{{ copy.healthy }}</n-tag>
-            </span>
+            </div>
           </article>
         </div>
         <n-empty v-else-if="!loading" class="status-empty" :description="copy.empty"><template #icon><n-icon><Paw /></n-icon></template></n-empty>
@@ -629,6 +668,164 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
   .worker-vitals .n-tag {
     grid-column: 1 / -1;
     max-width: none;
+  }
+}
+
+/* Status cards use the same full-width summary/detail rhythm as the overview. */
+.worker-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.worker-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+  min-height: clamp(340px, 24vw, 440px);
+  aspect-ratio: 1.55 / 1;
+  overflow: visible;
+  gap: 0;
+  padding: 16px;
+  border-radius: 16px;
+}
+.worker-card__top {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 76px minmax(0, 1fr) minmax(128px, .72fr);
+  align-items: start;
+  gap: 12px;
+}
+.worker-card__top .pal-portrait {
+  width: 76px;
+  height: 76px;
+}
+.worker-card__top .pal-portrait img {
+  width: 72px;
+  height: 72px;
+}
+.worker-main {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 8px;
+}
+.worker-name strong {
+  display: block;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.worker-name small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.worker-task {
+  margin-top: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-border);
+}
+.worker-vitals {
+  display: grid;
+  min-width: 0;
+  align-self: stretch;
+  gap: 7px;
+  padding-left: 12px;
+  border-left: 1px solid var(--app-border);
+}
+.worker-vitals > span {
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  gap: 5px;
+}
+.worker-vitals .n-tag {
+  max-width: 100%;
+}
+.worker-card__details {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-border);
+}
+.card-section {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.card-section--passives {
+  grid-column: 1 / -1;
+}
+.card-section__label {
+  font-size: 9px;
+  letter-spacing: .04em;
+}
+.work-chips,
+.skill-chips {
+  margin-top: 0;
+  gap: 5px;
+}
+.skill-chip {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.passive-grid {
+  grid-auto-rows: 42px;
+  gap: 5px;
+}
+.passive-grid :deep(.pal-passive-badge) {
+  display: grid;
+  height: 100%;
+  align-content: center;
+  overflow: visible;
+}
+@media (max-width: 760px) {
+  .worker-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 680px) {
+  .worker-card {
+    min-height: 0;
+    aspect-ratio: auto;
+  }
+  .worker-card__top {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .worker-card__top .pal-portrait {
+    width: 62px;
+    height: 62px;
+  }
+  .worker-card__top .pal-portrait img {
+    width: 58px;
+    height: 58px;
+  }
+  .worker-vitals {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-self: auto;
+    padding: 10px 0 0;
+    border-top: 1px solid var(--app-border);
+    border-left: 0;
+  }
+  .worker-vitals .n-tag {
+    grid-column: 1 / -1;
+  }
+  .worker-card__details {
+    grid-template-columns: 1fr;
+  }
+  .card-section--passives {
+    grid-column: auto;
   }
 }
 </style>
