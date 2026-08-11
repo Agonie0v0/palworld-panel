@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.10 - 2026-08-11
+
+- Keep passive trait names on one line across overview and status cards, shrinking the label to the available card width instead of breaking four-character names.
+
 ## 0.8.9 - 2026-08-11
 
 - Remove active-skill chips from overview Pal cards so the fixed card can show every work suitability and passive trait without summary counts or clipped rows.

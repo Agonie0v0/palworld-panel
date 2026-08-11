@@ -300,6 +300,11 @@ const rounded = (value) => value == null ? "-" : `${Math.round(Number(value))}%`
 const facilityLabel = (row) => String(row?.facility || row?.activityDetail || copy.value.noFacility).replace(/_/g, " ");
 const workLabel = (work) => workLabels[zh.value ? "zh" : "en"][work.id] || work.name || work.id;
 const passiveTone = (skill) => passiveTier(skill?.rank);
+const passiveNameStyle = (skill) => {
+  const name = String(skill?.name || skill?.id || "");
+  const length = Math.max(Array.from(name).length, 1);
+  return { "--passive-name-ratio": 1 / length };
+};
 const useFallback = (event) => {
   const image = event.currentTarget;
   if (image.dataset.fallback === "true") return;
@@ -520,7 +525,7 @@ onBeforeUnmount(() => {
                 <span class="pal-node__section pal-node__passives">
                   <small class="pal-node__section-label">{{ copy.passives }}</small>
                   <span v-if="row.passives.length" class="pal-node__passive-list">
-                    <span v-for="skill in row.passives" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
+                    <span v-for="skill in row.passives" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :style="passiveNameStyle(skill)" :title="skill.name || skill.id">
                       <i class="pal-node__passive-dot" aria-hidden="true" />
                       <span>{{ skill.name || skill.id }}</span>
                     </span>
@@ -1962,15 +1967,19 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 .pal-node__passive {
+  --passive-inline-space: 13px;
+  container-type: inline-size;
   min-width: 0;
   max-width: 100%;
   align-items: flex-start;
-  font-size: clamp(7px, .42vw, 8px);
+  font-size: clamp(6px, calc((100cqw - var(--passive-inline-space)) * var(--passive-name-ratio, .25)), 8.5px);
+  line-height: 1.15;
+  white-space: nowrap;
 }
 .pal-node__passive > span:last-child {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
   line-height: 1.15;
 }

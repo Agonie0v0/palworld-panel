@@ -1,6 +1,6 @@
 {
   "name": "palworld-oneclick-panel",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "private": true,
   "description": "Cross-architecture Palworld server deployment and management panel.",
   "main": "src/server.js",

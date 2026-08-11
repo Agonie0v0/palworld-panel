@@ -10,6 +10,9 @@ const props = defineProps({
 });
 
 const { locale } = useI18n();
+const passiveName = computed(() => String(props.skill?.name || props.skill?.id || ""));
+const passiveNameLength = computed(() => Math.max(Array.from(passiveName.value).length, 1));
+const passiveNameRatio = computed(() => 1 / passiveNameLength.value);
 const tier = computed(() => passiveTier(props.skill?.rank));
 const tierLabel = computed(() => passiveTierLabel(props.skill?.rank, locale.value));
 const accessibleLabel = computed(() =>
@@ -24,7 +27,12 @@ const accessibleLabel = computed(() =>
 </script>
 
 <template>
-  <article class="pal-passive-badge" :class="[`is-${tier}`, { 'is-compact': compact }]" :aria-label="accessibleLabel">
+  <article
+    class="pal-passive-badge"
+    :class="[`is-${tier}`, { 'is-compact': compact }]"
+    :style="{ '--passive-name-ratio': passiveNameRatio }"
+    :aria-label="accessibleLabel"
+  >
     <strong>{{ skill.name || skill.id }}</strong>
     <p v-if="showDescription">{{ skill.description || skill.id }}</p>
   </article>
@@ -36,6 +44,8 @@ const accessibleLabel = computed(() =>
   --passive-border: #73818c;
   --passive-ink: #fff;
   --passive-copy: #fff;
+  --passive-inline-space: 24px;
+  container-type: inline-size;
   position: relative;
   min-width: 0;
   overflow: hidden;
@@ -53,10 +63,13 @@ const accessibleLabel = computed(() =>
   z-index: 1;
   display: block;
   min-width: 0;
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--passive-ink);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: clamp(8px, calc((100cqw - var(--passive-inline-space)) * var(--passive-name-ratio, .25)), 12px);
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: nowrap;
   text-shadow: 0 1px 1px rgb(0 0 0 / 22%);
 }
 .pal-passive-badge p {
@@ -90,12 +103,13 @@ const accessibleLabel = computed(() =>
   --passive-border: #8e77ad;
 }
 .pal-passive-badge.is-compact {
+  --passive-inline-space: 16px;
   padding: 6px 8px;
   border-radius: 7px;
 }
 .pal-passive-badge.is-compact strong {
-  font-size: 10px;
-  line-height: 1.3;
+  font-size: clamp(7px, calc((100cqw - var(--passive-inline-space)) * var(--passive-name-ratio, .25)), 10px);
+  line-height: 1.2;
 }
 .pal-passive-badge.is-compact p {
   margin-top: 3px;
@@ -111,9 +125,9 @@ const accessibleLabel = computed(() =>
   min-height: 42px;
   align-content: center;
 }
-.pal-passive-badge.is-compact strong,
-.pal-passive-badge.is-compact p {
-  overflow-wrap: anywhere;
-  white-space: normal;
+.pal-passive-badge.is-compact strong {
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 </style>
