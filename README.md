@@ -10,18 +10,23 @@
 
 ## 界面预览
 
-截图展示的是面板的实际界面，包含据点生态总览和帕鲁详情。更多功能可在面板中按需打开。
+以下截图来自当前正式版 `v1.0.0`，覆盖桌面端和移动端的主要工作区。
+
+### 桌面端
 
 <div align="center">
-  <img src="docs/screenshots/desktop-overview.png" alt="据点生态与帕鲁卡片总览" width="100%" />
+  <img src="docs/screenshots/desktop-overview.png" alt="桌面端概览与据点生态" width="49%" />
+  <img src="docs/screenshots/desktop-pal-status.png" alt="桌面端帕鲁状态" width="49%" />
   <br />
-  <em>据点生态：饱食度、SAN、工作能力和被动词条一目了然</em>
+  <img src="docs/screenshots/desktop-inventory.png" alt="桌面端全服库存" width="49%" />
+  <img src="docs/screenshots/desktop-operations.png" alt="桌面端服务器运维" width="49%" />
 </div>
 
+### 移动端
+
 <div align="center">
-  <img src="docs/screenshots/pal-detail.png" alt="帕鲁详情与工作能力、被动词条" width="720" />
-  <br />
-  <em>帕鲁详情：工作能力图标、等级和带品质颜色的被动词条</em>
+  <img src="docs/screenshots/mobile-overview.png" alt="移动端概览" width="260" />
+  <img src="docs/screenshots/mobile-pal-status.png" alt="移动端帕鲁状态" width="260" />
 </div>
 
 ## 核心功能
