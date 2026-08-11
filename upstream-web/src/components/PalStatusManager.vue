@@ -673,35 +673,38 @@ onBeforeUnmount(() => clearInterval(statusRefreshTimer));
 
 /* Status cards use the same full-width summary/detail rhythm as the overview. */
 .worker-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+  gap: 8px;
 }
 .worker-card {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
   align-content: start;
-  min-height: clamp(340px, 24vw, 440px);
-  aspect-ratio: 1.55 / 1;
-  overflow: visible;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  aspect-ratio: auto;
+  overflow: hidden;
   gap: 0;
-  padding: 16px;
-  border-radius: 16px;
+  padding: 12px;
+  border-radius: 10px;
 }
 .worker-card__top {
   display: grid;
   min-width: 0;
-  grid-template-columns: 76px minmax(0, 1fr) minmax(128px, .72fr);
+  grid-template-columns: 68px minmax(0, 1fr) minmax(112px, .62fr);
   align-items: start;
-  gap: 12px;
+  gap: 10px;
 }
 .worker-card__top .pal-portrait {
-  width: 76px;
-  height: 76px;
+  width: 68px;
+  height: 68px;
 }
 .worker-card__top .pal-portrait img {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
 }
 .worker-main {
   display: grid;
@@ -748,9 +751,9 @@ onBeforeUnmount(() => clearInterval(statusRefreshTimer));
   min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  gap: 10px;
-  margin-top: 13px;
-  padding-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--app-border);
 }
 .card-section {
@@ -796,7 +799,6 @@ onBeforeUnmount(() => clearInterval(statusRefreshTimer));
 @media (max-width: 680px) {
   .worker-card {
     min-height: 0;
-    aspect-ratio: auto;
   }
   .worker-card__top {
     grid-template-columns: 62px minmax(0, 1fr);

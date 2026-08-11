@@ -241,7 +241,7 @@ const activeBaseWorkers = computed(() => {
     || Number(["working", "assigned"].includes(b.activityKind)) - Number(["working", "assigned"].includes(a.activityKind)));
 });
 const palPageSize = computed(() => {
-  if (viewportWidth.value >= 1560) return 6;
+  if (viewportWidth.value >= 1200) return 6;
   if (viewportWidth.value >= 720) return 4;
   return viewportWidth.value >= 520 ? 2 : 1;
 });
@@ -1292,6 +1292,68 @@ onBeforeUnmount(() => {
   }
   .pal-node__passives {
     grid-column: auto;
+  }
+}
+
+/* Keep the original compact record size; only the content arrangement changes. */
+.pal-constellation {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.pal-node {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  grid-template-rows: auto auto;
+  aspect-ratio: auto;
+  overflow: hidden;
+  padding: 14px;
+  border-radius: 14px;
+}
+.pal-node__top {
+  grid-template-columns: 76px minmax(0, 1fr) minmax(112px, .62fr);
+  gap: 10px;
+}
+.pal-node__visual {
+  width: 76px;
+  height: 92px;
+}
+.pal-node__visual img {
+  width: 72px;
+  height: 72px;
+}
+.pal-node__details {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.pal-node__passives .pal-node__badges {
+  grid-auto-rows: 42px;
+}
+@media (max-width: 1199px) {
+  .pal-constellation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 719px) {
+  .pal-constellation {
+    grid-template-columns: 1fr;
+  }
+  .pal-node__top {
+    grid-template-columns: 62px minmax(0, 1fr);
+  }
+  .pal-node__visual {
+    width: 62px;
+    height: 78px;
+  }
+  .pal-node__visual img {
+    width: 58px;
+    height: 58px;
+  }
+  .pal-node__details {
+    grid-template-columns: 1fr;
   }
 }
 </style>
