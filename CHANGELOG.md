@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.13 - 2026-08-11
+
+- Keep mobile overview Pal cards mounted while switching pages so cached data and refresh state remain intact.
+- Reuse mobile player, guild, server, and online lists when switching pages; refresh them on the existing interval instead of re-requesting on every tap.
+- Separate work suitability and passive traits into two stacked card sections on mobile.
+- Make the bottom-navigation editor visible at the top of the mobile tools drawer.
+
 ## 0.8.12 - 2026-08-11
 
 - Compact mobile overview Pal cards, show five Pals per page, and fit passive traits into a four-column summary.

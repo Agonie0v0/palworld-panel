@@ -61,6 +61,7 @@ import InventoryManager from "@/components/InventoryManager.vue";
 import MapView from "@/views/PcHome/component/MapView.vue";
 import playerToGuildStore from "@/stores/model/playerToGuild";
 import themeStore from "@/stores/model/theme.js";
+import { requestCached } from "@/utils/requestCache";
 
 const emit = defineEmits(["open-config"]);
 
@@ -87,6 +88,7 @@ const guildInfo = ref({});
 const languageOptions = ref([]);
 const showMobileTools = ref(false);
 const pendingAdminAction = ref("");
+const overviewReady = ref(false);
 const serverAvailable = computed(() =>
   typeof serverInfo.value?.available === "boolean"
     ? serverInfo.value.available
@@ -190,9 +192,14 @@ const canOperate = computed(() =>
   ["admin", "operator"].includes(currentRole.value),
 );
 const isAdmin = computed(() => currentRole.value === "admin");
+watch([currentDisplay, canOperate], ([display, allowed]) => {
+  if (allowed && display === "overview") overviewReady.value = true;
+}, { immediate: true });
 const authToken = ref("");
 let refreshTimer = null;
 const asArray = (value) => (Array.isArray(value) ? value : []);
+const playerDataReady = ref(false);
+const guildDataReady = ref(false);
 
 const loadMobileNavigation = () => {
   try {
@@ -278,25 +285,39 @@ const handleSelectLanguage = (key) => {
 };
 
 // get data
-const getServerInfo = async () => {
-  const { data } = await new ApiService().getServerInfo();
-  serverInfo.value = data.value || {};
+const getServerInfo = async ({ force = false } = {}) => {
+  const value = await requestCached("mobile-server-info", async () => {
+    const { data } = await new ApiService().getServerInfo();
+    return data.value || {};
+  }, { force });
+  serverInfo.value = value || {};
 };
-const getServerMetrics = async () => {
-  const { data } = await new ApiService().getServerMetrics();
-  serverMetrics.value = data.value || {};
+const getServerMetrics = async ({ force = false } = {}) => {
+  const value = await requestCached("mobile-server-metrics", async () => {
+    const { data } = await new ApiService().getServerMetrics();
+    return data.value || {};
+  }, { force });
+  serverMetrics.value = value || {};
 };
-const getPlayerList = async () => {
-  getOnlineList();
-  const { data } = await new ApiService().getPlayerList({
-    order_by: "last_online",
-    desc: true,
-  });
-  playerList.value = asArray(data.value);
+const getPlayerList = async ({ force = false } = {}) => {
+  void getOnlineList();
+  const value = await requestCached("mobile-player-list", async () => {
+    const { data } = await new ApiService().getPlayerList({
+      order_by: "last_online",
+      desc: true,
+    });
+    return asArray(data.value);
+  }, { force });
+  playerList.value = asArray(value);
+  playerDataReady.value = true;
 };
-const getGuildList = async () => {
-  const { data } = await new ApiService().getGuildList();
-  guildList.value = asArray(data.value);
+const getGuildList = async ({ force = false } = {}) => {
+  const value = await requestCached("mobile-guild-list", async () => {
+    const { data } = await new ApiService().getGuildList();
+    return asArray(data.value);
+  }, { force });
+  guildList.value = asArray(value);
+  guildDataReady.value = true;
 };
 
 const getPlayerInfo = async (player_uid) => {
@@ -395,15 +416,24 @@ const onContentScroll = (event) => {
 };
 
 const getOnlineList = async () => {
-  const { data } = await new ApiService().getOnlinePlayerList();
-  onlinePlayerList.value = asArray(data.value);
+  const value = await requestCached("online-players", async () => {
+    const { data } = await new ApiService().getOnlinePlayerList();
+    return asArray(data.value);
+  });
+  onlinePlayerList.value = asArray(value);
 };
 const refreshManagedServerData = async () => {
   const selectedPlayerUid =
     currentDisplay.value === "players" && isShowDetail.value
       ? playerInfo.value?.player_uid
       : "";
-  await Promise.all([getServerInfo(), getServerMetrics(), getPlayerList()]);
+  await Promise.all([
+    getServerInfo({ force: true }),
+    getServerMetrics({ force: true }),
+    getPlayerList({ force: true }),
+    getOnlineList(),
+    guildDataReady.value ? getGuildList({ force: true }) : Promise.resolve(),
+  ]);
   if (selectedPlayerUid) await getPlayerInfo(selectedPlayerUid);
 };
 
@@ -533,7 +563,7 @@ const toPlayers = async () => {
   if (currentDisplay.value === "players") {
     return;
   }
-  await getPlayerList();
+  if (!playerDataReady.value) await getPlayerList();
   currentDisplay.value = "players";
   isShowDetail.value = false;
 
@@ -547,7 +577,7 @@ const toGuilds = async () => {
   if (currentDisplay.value === "guilds") {
     return;
   }
-  await getGuildList();
+  if (!guildDataReady.value) await getGuildList();
   currentDisplay.value = "guilds";
   isShowDetail.value = false;
 
@@ -656,8 +686,10 @@ onMounted(async () => {
   if (isLogin.value) currentDisplay.value = "overview";
   loading.value = false;
   refreshTimer = setInterval(() => {
-    getPlayerList();
-    getServerMetrics();
+    getServerMetrics({ force: true });
+    if (playerDataReady.value) getPlayerList({ force: true });
+    if (guildDataReady.value) getGuildList({ force: true });
+    getOnlineList();
   }, 60000);
 });
 
@@ -766,7 +798,8 @@ onBeforeUnmount(() => {
       </div>
       <template v-else>
         <admin-overview
-          v-if="currentDisplay === 'overview'"
+          v-if="overviewReady"
+          v-show="currentDisplay === 'overview'"
           :server-info="serverInfo"
           :server-metrics="serverMetrics"
           :players="playerList"
@@ -824,9 +857,14 @@ onBeforeUnmount(() => {
     @after-leave="handleToolsClosed"
   >
     <n-drawer-content :title="$t('button.tools')" closable>
-      <template #header-extra>
+      <div class="mobile-tools-toolbar">
+        <div class="mobile-tools-toolbar__copy">
+          <strong>{{ locale === "zh" ? "底部导航" : "Bottom navigation" }}</strong>
+          <span>{{ locale === "zh" ? "可编辑显示项目和顺序" : "Choose shortcuts and their order" }}</span>
+        </div>
         <n-button
-          quaternary
+          type="primary"
+          secondary
           size="small"
           :aria-label="locale === 'zh' ? '编辑底部导航' : 'Edit bottom navigation'"
           @click="isEditingMobileNav ? cancelMobileNavEditing() : beginMobileNavEditing()"
@@ -834,7 +872,7 @@ onBeforeUnmount(() => {
           <template #icon><n-icon><Settings /></n-icon></template>
           {{ isEditingMobileNav ? (locale === "zh" ? "取消" : "Cancel") : (locale === "zh" ? "编辑导航" : "Edit nav") }}
         </n-button>
-      </template>
+      </div>
 
       <div v-if="isEditingMobileNav" class="mobile-nav-editor">
         <div class="mobile-nav-editor__intro">

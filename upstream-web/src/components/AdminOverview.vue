@@ -2115,13 +2115,17 @@ onBeforeUnmount(() => {
     padding: 10px;
   }
   .pal-node__details {
-    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
-    grid-template-rows: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
     align-items: start;
   }
   .pal-node__work,
   .pal-node__passives {
-    grid-column: auto;
+    grid-column: 1 / -1;
+  }
+  .pal-node__passives {
+    padding-top: 6px;
+    border-top: 1px solid var(--app-border);
   }
   .pal-node__passive-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
