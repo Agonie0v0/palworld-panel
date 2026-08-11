@@ -949,6 +949,7 @@ onBeforeUnmount(() => {
     v-model:show="showMobileTools"
     placement="bottom"
     height="min(470px, 82dvh)"
+    :auto-focus="false"
     class="mobile-tools-drawer"
     @after-leave="handleToolsClosed"
   >
@@ -975,13 +976,6 @@ onBeforeUnmount(() => {
           </n-button>
         </div>
       </template>
-      <div class="mobile-tools-toolbar">
-        <div class="mobile-tools-toolbar__copy">
-          <strong>{{ locale === "zh" ? "底部导航" : "Bottom navigation" }}</strong>
-          <span>{{ locale === "zh" ? "编辑图标可调整所有项目顺序，并选择底部导航" : "Edit to reorder every tool and choose bottom shortcuts" }}</span>
-        </div>
-      </div>
-
       <div v-if="isEditingMobileNav" class="mobile-nav-editor">
         <div class="mobile-nav-editor__intro">
           <div>
