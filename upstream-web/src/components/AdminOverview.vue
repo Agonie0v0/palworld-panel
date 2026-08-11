@@ -504,8 +504,10 @@ onBeforeUnmount(() => {
                 </span>
                 <span class="pal-node__summary">
                   <span class="pal-node__identity"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level || '—' }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
-                  <span class="pal-node__state"><i />{{ workerState(row) }}</span>
-                  <span class="pal-node__task"><n-icon><Activity /></n-icon><span><strong>{{ facilityLabel(row) }}</strong><small>{{ row.baseName }}</small></span></span>
+                  <span class="pal-node__task" :class="`is-${workerTone(row)}`">
+                    <n-icon><Activity /></n-icon>
+                    <span><strong>{{ workerState(row) }}</strong><small>{{ facilityLabel(row) }} · {{ row.baseName }}</small></span>
+                  </span>
                   <span class="pal-node__vitals" :aria-label="`${copy.hunger}, ${rounded(row.hunger)}; ${copy.sanity}, ${rounded(row.sanity)}`">
                     <span class="pal-node__vital">
                       <span class="pal-node__vital-meta"><n-icon><Apple /></n-icon><small>{{ copy.hunger }}</small><em>{{ rounded(row.hunger) }}</em></span>
@@ -1762,6 +1764,170 @@ onBeforeUnmount(() => {
   }
   .pal-node__passives {
     grid-column: auto;
+  }
+}
+
+/* Information-complete card interior: reclaim vertical space from the
+   summary and give each compact detail section enough room to finish its
+   labels and values without changing the established card footprint. */
+.pal-node {
+  padding: 10px;
+}
+.pal-node__top {
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 9px;
+}
+.pal-node__visual {
+  width: 60px;
+  height: 70px;
+}
+.pal-node__visual img {
+  width: 56px;
+  height: 56px;
+}
+.pal-node__visual > i {
+  width: 21px;
+  height: 21px;
+  font-size: 8px;
+}
+.pal-node__summary {
+  gap: 3px;
+}
+.pal-node__identity strong {
+  font-size: 13px;
+  line-height: 1.15;
+}
+.pal-node__identity small {
+  margin-top: 1px;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.pal-node__task {
+  gap: 4px;
+  padding-top: 4px;
+}
+.pal-node__task > .n-icon {
+  font-size: 11px;
+}
+.pal-node__task > span {
+  min-width: 0;
+}
+.pal-node__task strong,
+.pal-node__task small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__task strong {
+  font-size: 9px;
+  line-height: 1.2;
+}
+.pal-node__task small {
+  margin-top: 1px;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.pal-node__task.is-attention strong {
+  color: var(--app-warning);
+}
+.pal-node__task.is-working strong,
+.pal-node__task.is-assigned strong {
+  color: var(--app-success);
+}
+.pal-node__vitals {
+  gap: 5px;
+  margin-top: 0;
+  padding-top: 5px;
+}
+.pal-node__vital-meta {
+  gap: 3px;
+}
+.pal-node__vital-meta .n-icon {
+  font-size: 10px;
+}
+.pal-node__vital-meta small {
+  font-size: 8px;
+}
+.pal-node__vital-meta em {
+  font-size: 9px;
+}
+.pal-node__vital > i {
+  height: 3px;
+}
+.pal-node__details {
+  gap: 6px;
+  margin-top: 7px;
+  padding-top: 6px;
+}
+.pal-node__section {
+  gap: 3px;
+  overflow: visible;
+}
+.pal-node__section-label {
+  font-size: 8px;
+  line-height: 1;
+}
+.pal-node__work-list,
+.pal-node__skills .pal-node__skill-list {
+  gap: 2px;
+}
+.pal-node__work-list :deep(.pal-work-badge) {
+  gap: 3px;
+  padding: 1px 4px 1px 2px;
+  border-radius: 5px;
+}
+.pal-node__work-list :deep(.pal-work-badge__icon) {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+  border-radius: 3px;
+}
+.pal-node__work-list :deep(.pal-work-badge__icon img) {
+  width: 52px;
+  height: 52px;
+}
+.pal-node__work-list :deep(.pal-work-badge strong) {
+  max-width: 7ch;
+  font-size: 8px;
+  line-height: 1;
+}
+.pal-node__skills .pal-node__skill {
+  padding: 2px 4px;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.pal-node__skill-count,
+.pal-node__work-count,
+.pal-node__passive-count {
+  padding: 2px 4px;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.pal-node__passive-list {
+  gap: 2px 7px;
+  grid-auto-rows: minmax(15px, 1fr);
+}
+.pal-node__passive {
+  gap: 3px;
+  font-size: 8.5px;
+  line-height: 1.2;
+}
+.pal-node__passive-dot {
+  width: 6px;
+  height: 6px;
+  flex-basis: 6px;
+}
+@media (max-width: 719px) {
+  .pal-node__top {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .pal-node__visual {
+    width: 56px;
+    height: 68px;
+  }
+  .pal-node__visual img {
+    width: 52px;
+    height: 52px;
   }
 }
 </style>

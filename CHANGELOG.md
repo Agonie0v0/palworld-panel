@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.8 - 2026-08-11
+
+- Rebalance the overview Pal card interior so the fixed-size cards keep the complete status, wellbeing, work, active-skill, and passive sections visible without bottom clipping.
+- Keep compact work badges, tier-colored passive markers, ellipsis-safe labels, and explicit overflow counts while preserving the existing five-column / three-row desktop density.
+
 ## 0.8.7 - 2026-08-11
 
 - Normalize overview Pal card heights and keep the compact card layout stable across responsive breakpoints.
