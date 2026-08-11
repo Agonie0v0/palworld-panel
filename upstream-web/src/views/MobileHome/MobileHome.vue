@@ -16,6 +16,7 @@ import {
 } from "@vicons/tabler";
 import {
   CheckmarkOutline,
+  CloseOutline,
   ChevronDownOutline,
   ChevronUpOutline,
   ConstructOutline,
@@ -25,6 +26,7 @@ import {
   ReorderFourOutline,
   Settings,
   ShieldCheckmarkSharp,
+  SquareOutline,
   SunnyOutline,
   Terminal,
 } from "@vicons/ionicons5";
@@ -111,12 +113,40 @@ const currentViewLabel = computed(() => {
 });
 
 const MOBILE_NAV_STORAGE_KEY = "palworld_mobile_bottom_nav_v1";
+const MOBILE_NAV_ORDER_STORAGE_KEY = "palworld_mobile_nav_order_v1";
 const MOBILE_NAV_LIMIT = 4;
 const mobileNavDefaults = ["overview", "players", "guilds", "map"];
+const mobileNavOrderDefaults = [
+  "overview",
+  "players",
+  "guilds",
+  "map",
+  "operations",
+  "settings",
+  "game-settings",
+  "pal-status",
+  "advanced",
+  "save-sources",
+  "mods",
+  "access",
+  "world-data",
+  "player-data",
+  "pal-archive",
+  "inventory",
+  "palconf",
+  "rcon",
+  "backup",
+  "whitelist",
+  "broadcast",
+  "shutdown",
+];
 const mobileNavSelection = ref([...mobileNavDefaults]);
+const mobileNavOrder = ref([...mobileNavOrderDefaults]);
 const mobileNavDraft = ref([]);
+const mobileNavDraftOrder = ref([]);
 const isEditingMobileNav = ref(false);
 const mobileNavDragState = ref(null);
+const mobileNavPointerState = ref(null);
 
 const mobileNavigationCatalog = computed(() => ({
   overview: { icon: DashboardOutlined, label: t("button.overview"), gate: "operate", kind: "view" },
@@ -150,6 +180,21 @@ const isMobileNavAvailable = (item) => {
   if (item.gate === "login") return isLogin.value;
   return true;
 };
+const normalizeMobileNavOrder = (value) => {
+  const known = new Set(Object.keys(mobileNavigationCatalog.value));
+  const unique = [];
+  for (const id of asArray(value)) {
+    if (typeof id !== "string" || id === "tools" || !known.has(id) || unique.includes(id)) continue;
+    unique.push(id);
+  }
+  for (const id of mobileNavOrderDefaults) {
+    if (!unique.includes(id) && known.has(id)) unique.push(id);
+  }
+  for (const id of known) {
+    if (!unique.includes(id)) unique.push(id);
+  }
+  return unique;
+};
 const normalizeMobileNavSelection = (value) => {
   const known = new Set(Object.keys(mobileNavigationCatalog.value));
   const unique = [];
@@ -177,12 +222,16 @@ const mobileNavItems = computed(() => {
   }
   return items;
 });
-const mobileNavDraftItems = computed(() => mobileNavDraft.value
-  .map((id) => ({ id, ...mobileNavigationCatalog.value[id] }))
+const mobileNavEditorItems = computed(() => mobileNavDraftOrder.value
+  .map((id) => ({
+    id,
+    ...mobileNavigationCatalog.value[id],
+    selected: mobileNavDraft.value.includes(id),
+  }))
   .filter((item) => item.label && isMobileNavAvailable(item)));
-const mobileNavAvailableItems = computed(() => Object.entries(mobileNavigationCatalog.value)
-  .filter(([id, item]) => isMobileNavAvailable(item) && !mobileNavDraft.value.includes(id))
-  .map(([id, item]) => ({ id, ...item })));
+const mobileToolItems = computed(() => mobileNavOrder.value
+  .map((id) => ({ id, ...mobileNavigationCatalog.value[id] }))
+  .filter((item) => item.label && item.kind !== "view" && isMobileNavAvailable(item)));
 
 const contentRef = ref(null);
 
@@ -205,24 +254,35 @@ const loadMobileNavigation = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(MOBILE_NAV_STORAGE_KEY) || "null");
     if (Array.isArray(saved)) mobileNavSelection.value = normalizeMobileNavSelection(saved);
+    const savedOrder = JSON.parse(localStorage.getItem(MOBILE_NAV_ORDER_STORAGE_KEY) || "null");
+    mobileNavOrder.value = normalizeMobileNavOrder(savedOrder);
   } catch {
     mobileNavSelection.value = normalizeMobileNavSelection(mobileNavDefaults);
+    mobileNavOrder.value = normalizeMobileNavOrder(mobileNavOrderDefaults);
   }
 };
 const beginMobileNavEditing = () => {
   mobileNavDraft.value = [...mobileNavSelection.value];
+  mobileNavDraftOrder.value = normalizeMobileNavOrder(mobileNavOrder.value);
   mobileNavDragState.value = null;
   isEditingMobileNav.value = true;
   showMobileTools.value = true;
 };
 const cancelMobileNavEditing = () => {
+  stopMobileNavPointerDrag();
   mobileNavDraft.value = [];
+  mobileNavDraftOrder.value = [];
   mobileNavDragState.value = null;
   isEditingMobileNav.value = false;
 };
 const saveMobileNavEditing = () => {
-  mobileNavSelection.value = normalizeMobileNavSelection(mobileNavDraft.value);
+  const nextOrder = normalizeMobileNavOrder(mobileNavDraftOrder.value);
+  const selected = new Set(mobileNavDraft.value);
+  const nextSelection = nextOrder.filter((id) => selected.has(id));
+  mobileNavOrder.value = nextOrder;
+  mobileNavSelection.value = normalizeMobileNavSelection(nextSelection);
   localStorage.setItem(MOBILE_NAV_STORAGE_KEY, JSON.stringify(mobileNavSelection.value));
+  localStorage.setItem(MOBILE_NAV_ORDER_STORAGE_KEY, JSON.stringify(mobileNavOrder.value));
   cancelMobileNavEditing();
   message.success(locale.value === "zh" ? "底部导航已保存" : "Bottom navigation saved");
 };
@@ -237,28 +297,63 @@ const toggleMobileNavItem = (id) => {
   }
   mobileNavDraft.value = [...mobileNavDraft.value, id];
 };
-const moveMobileNavItem = (index, offset) => {
-  const target = index + offset;
-  if (target < 0 || target >= mobileNavDraft.value.length) return;
-  const next = [...mobileNavDraft.value];
-  const [item] = next.splice(index, 1);
-  next.splice(target, 0, item);
-  mobileNavDraft.value = next;
+const reorderMobileNavDraft = (sourceId, targetId, placeAfter = false) => {
+  if (!sourceId || !targetId || sourceId === targetId) return;
+  const sourceIndex = mobileNavDraftOrder.value.indexOf(sourceId);
+  const targetIndex = mobileNavDraftOrder.value.indexOf(targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const next = [...mobileNavDraftOrder.value];
+  next.splice(sourceIndex, 1);
+  const nextTargetIndex = next.indexOf(targetId);
+  next.splice(nextTargetIndex + (placeAfter ? 1 : 0), 0, sourceId);
+  mobileNavDraftOrder.value = next;
 };
-const beginMobileNavDrag = (event, id) => {
-  mobileNavDragState.value = id;
-  event.dataTransfer.effectAllowed = "move";
-  event.dataTransfer.setData("text/plain", id);
+const moveMobileNavItem = (id, offset) => {
+  const visibleIds = mobileNavEditorItems.value.map((item) => item.id);
+  const index = visibleIds.indexOf(id);
+  const targetId = visibleIds[index + offset];
+  if (!targetId) return;
+  reorderMobileNavDraft(id, targetId, offset > 0);
 };
-const dropMobileNav = (event, targetIndex) => {
+const beginMobileNavPointerDrag = (event, id) => {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  stopMobileNavPointerDrag();
+  mobileNavPointerState.value = {
+    id,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+  };
+  window.addEventListener("pointermove", moveMobileNavPointerDrag, { passive: false });
+  window.addEventListener("pointerup", endMobileNavPointerDrag);
+  window.addEventListener("pointercancel", endMobileNavPointerDrag);
+};
+const moveMobileNavPointerDrag = (event) => {
+  const state = mobileNavPointerState.value;
+  if (!state || state.pointerId !== event.pointerId) return;
+  const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
+  if (!state.active && distance < 6) return;
   event.preventDefault();
-  const sourceId = mobileNavDragState.value;
-  const sourceIndex = mobileNavDraft.value.indexOf(sourceId);
-  if (sourceIndex < 0 || sourceIndex === targetIndex) return;
-  const next = [...mobileNavDraft.value];
-  const [item] = next.splice(sourceIndex, 1);
-  next.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, item);
-  mobileNavDraft.value = next;
+  if (!state.active) {
+    state.active = true;
+    mobileNavDragState.value = state.id;
+  }
+  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-mobile-nav-id]");
+  const targetId = target?.getAttribute("data-mobile-nav-id");
+  if (targetId) {
+    const bounds = target.getBoundingClientRect();
+    reorderMobileNavDraft(state.id, targetId, event.clientY > bounds.top + bounds.height / 2);
+  }
+};
+const endMobileNavPointerDrag = () => {
+  stopMobileNavPointerDrag();
+};
+const stopMobileNavPointerDrag = () => {
+  window.removeEventListener("pointermove", moveMobileNavPointerDrag);
+  window.removeEventListener("pointerup", endMobileNavPointerDrag);
+  window.removeEventListener("pointercancel", endMobileNavPointerDrag);
+  mobileNavPointerState.value = null;
   mobileNavDragState.value = null;
 };
 const handleMobileNavigation = (id) => {
@@ -695,6 +790,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearInterval(refreshTimer);
+  stopMobileNavPointerDrag();
 });
 </script>
 
@@ -856,61 +952,78 @@ onBeforeUnmount(() => {
     class="mobile-tools-drawer"
     @after-leave="handleToolsClosed"
   >
-    <n-drawer-content :title="$t('button.tools')" closable>
+    <n-drawer-content closable>
+      <template #header>
+        <div class="mobile-tools-drawer__header">
+          <span>{{ $t("button.tools") }}</span>
+          <n-button
+            class="mobile-tools-edit-trigger"
+            quaternary
+            circle
+            size="small"
+            :aria-label="isEditingMobileNav
+              ? (locale === 'zh' ? '取消编辑工具栏' : 'Cancel toolbar editing')
+              : (locale === 'zh' ? '编辑工具栏' : 'Edit toolbar')"
+            :title="isEditingMobileNav
+              ? (locale === 'zh' ? '取消编辑工具栏' : 'Cancel toolbar editing')
+              : (locale === 'zh' ? '编辑工具栏' : 'Edit toolbar')"
+            @click="isEditingMobileNav ? cancelMobileNavEditing() : beginMobileNavEditing()"
+          >
+            <template #icon>
+              <n-icon><CloseOutline v-if="isEditingMobileNav" /><Settings v-else /></n-icon>
+            </template>
+          </n-button>
+        </div>
+      </template>
       <div class="mobile-tools-toolbar">
         <div class="mobile-tools-toolbar__copy">
           <strong>{{ locale === "zh" ? "底部导航" : "Bottom navigation" }}</strong>
-          <span>{{ locale === "zh" ? "可编辑显示项目和顺序" : "Choose shortcuts and their order" }}</span>
+          <span>{{ locale === "zh" ? "编辑图标可调整所有项目顺序，并选择底部导航" : "Edit to reorder every tool and choose bottom shortcuts" }}</span>
         </div>
-        <n-button
-          type="primary"
-          secondary
-          size="small"
-          :aria-label="locale === 'zh' ? '编辑底部导航' : 'Edit bottom navigation'"
-          @click="isEditingMobileNav ? cancelMobileNavEditing() : beginMobileNavEditing()"
-        >
-          <template #icon><n-icon><Settings /></n-icon></template>
-          {{ isEditingMobileNav ? (locale === "zh" ? "取消" : "Cancel") : (locale === "zh" ? "编辑导航" : "Edit nav") }}
-        </n-button>
       </div>
 
       <div v-if="isEditingMobileNav" class="mobile-nav-editor">
         <div class="mobile-nav-editor__intro">
           <div>
-            <strong>{{ locale === "zh" ? "底部导航项目" : "Bottom navigation" }}</strong>
-            <span>{{ locale === "zh" ? "拖动排序或勾选要显示的项目" : "Drag to reorder or choose what appears below" }}</span>
+            <strong>{{ locale === "zh" ? "所有工具项目" : "All tool items" }}</strong>
+            <span>{{ locale === "zh" ? "拖动左侧图标排序，勾选要显示在底部导航的项目" : "Drag the handle to reorder; check items for the bottom navigation" }}</span>
           </div>
           <span class="mobile-nav-editor__count">{{ mobileNavDraft.length }}/{{ MOBILE_NAV_LIMIT }}</span>
         </div>
         <div class="mobile-nav-editor__list">
           <div
-            v-for="(item, index) in mobileNavDraftItems"
+            v-for="(item, index) in mobileNavEditorItems"
             :key="item.id"
             class="mobile-nav-editor__item"
             :class="{ 'is-dragging': mobileNavDragState === item.id }"
-            draggable="true"
-            @dragstart="beginMobileNavDrag($event, item.id)"
-            @dragover.prevent
-            @drop="dropMobileNav($event, index)"
+            :data-mobile-nav-id="item.id"
           >
-            <n-icon class="mobile-nav-editor__handle"><ReorderFourOutline /></n-icon>
-            <button type="button" class="mobile-nav-editor__toggle is-selected" :aria-label="item.label" @click="toggleMobileNavItem(item.id)">
-              <n-icon><CheckmarkOutline /></n-icon>
+            <button
+              type="button"
+              class="mobile-nav-editor__handle"
+              :aria-label="locale === 'zh' ? `拖动${item.label}排序` : `Drag ${item.label} to reorder`"
+              @pointerdown.stop.prevent="beginMobileNavPointerDrag($event, item.id)"
+            >
+              <n-icon><ReorderFourOutline /></n-icon>
+            </button>
+            <button
+              type="button"
+              class="mobile-nav-editor__toggle"
+              :class="{ 'is-selected': item.selected }"
+              :aria-pressed="item.selected"
+              :aria-label="locale === 'zh' ? `${item.selected ? '取消选择' : '选择'}${item.label}` : `${item.selected ? 'Remove ' : 'Add '}${item.label} ${item.selected ? 'from' : 'to'} bottom navigation`"
+              @click="toggleMobileNavItem(item.id)"
+            >
+              <n-icon><CheckmarkOutline v-if="item.selected" /><SquareOutline v-else /></n-icon>
               <n-icon><component :is="item.icon" /></n-icon>
               <span>{{ item.label }}</span>
             </button>
             <div class="mobile-nav-editor__order">
-              <n-button quaternary circle size="tiny" :disabled="index === 0" :aria-label="locale === 'zh' ? '上移' : 'Move up'" @click="moveMobileNavItem(index, -1)"><template #icon><n-icon><ChevronUpOutline /></n-icon></template></n-button>
-              <n-button quaternary circle size="tiny" :disabled="index === mobileNavDraftItems.length - 1" :aria-label="locale === 'zh' ? '下移' : 'Move down'" @click="moveMobileNavItem(index, 1)"><template #icon><n-icon><ChevronDownOutline /></n-icon></template></n-button>
+              <n-button quaternary circle size="small" :disabled="index === 0" :aria-label="locale === 'zh' ? '上移' : 'Move up'" @click="moveMobileNavItem(item.id, -1)"><template #icon><n-icon><ChevronUpOutline /></n-icon></template></n-button>
+              <n-button quaternary circle size="small" :disabled="index === mobileNavEditorItems.length - 1" :aria-label="locale === 'zh' ? '下移' : 'Move down'" @click="moveMobileNavItem(item.id, 1)"><template #icon><n-icon><ChevronDownOutline /></n-icon></template></n-button>
             </div>
           </div>
-          <div v-if="!mobileNavDraftItems.length" class="mobile-nav-editor__empty">{{ locale === "zh" ? "请至少选择一个项目" : "Choose at least one item" }}</div>
-        </div>
-        <div v-if="mobileNavAvailableItems.length" class="mobile-nav-editor__available">
-          <span>{{ locale === "zh" ? "可添加项目" : "Available items" }}</span>
-          <button v-for="item in mobileNavAvailableItems" :key="item.id" type="button" class="mobile-nav-editor__available-item" @click="toggleMobileNavItem(item.id)">
-            <n-icon><component :is="item.icon" /></n-icon><span>{{ item.label }}</span><strong>＋</strong>
-          </button>
+          <div v-if="!mobileNavEditorItems.length" class="mobile-nav-editor__empty">{{ locale === "zh" ? "暂无可编辑项目" : "No editable items" }}</div>
         </div>
         <div class="mobile-nav-editor__actions">
           <n-button size="small" @click="cancelMobileNavEditing">{{ locale === "zh" ? "取消" : "Cancel" }}</n-button>
@@ -920,137 +1033,15 @@ onBeforeUnmount(() => {
 
       <div v-else class="mobile-tool-grid">
         <button
+          v-for="item in mobileToolItems"
+          :key="item.id"
           type="button"
           class="mobile-tool-button"
-          @click="handleAdminAction('operations')"
+          :class="{ 'mobile-tool-button--danger': item.danger }"
+          @click="handleAdminAction(item.id)"
         >
-          <n-icon><GuiManagement /></n-icon>
-          <span>{{ $t("operations.title") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('settings')"
-        >
-          <n-icon><Settings /></n-icon>
-          <span>{{ $t("configuration.title") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('game-settings')"
-        >
-          <n-icon><ConstructOutline /></n-icon>
-          <span>{{ $t("gameSettings.title") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('pal-status')"
-        >
-          <n-icon><Paw /></n-icon>
-          <span>{{ locale === "zh" ? "帕鲁状态" : "Pal status" }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('advanced')"
-        >
-          <n-icon><Activity /></n-icon>
-          <span>{{ locale === "zh" ? "运维中心" : "Operations center" }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('save-sources')"
-        >
-          <n-icon><Database /></n-icon>
-          <span>{{ locale === "zh" ? "存档源" : "Save sources" }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('mods')"
-        >
-          <n-icon><Package /></n-icon>
-          <span>{{ locale === "zh" ? "模组管理" : "Mods" }}</span>
-        </button>
-        <button
-          v-if="isAdmin"
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('access')"
-        >
-          <n-icon><AdminPanelSettingsOutlined /></n-icon>
-          <span>{{ locale === "zh" ? "账号权限" : "Access" }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('world-data')"
-        >
-          <n-icon><Database /></n-icon>
-          <span>{{ locale === "zh" ? "世界数据" : "World data" }}</span>
-        </button>
-        <button type="button" class="mobile-tool-button" @click="handleAdminAction('player-data')">
-          <n-icon><GameController /></n-icon>
-          <span>{{ locale === "zh" ? "玩家数据" : "Player data" }}</span>
-        </button>
-        <button type="button" class="mobile-tool-button" @click="handleAdminAction('pal-archive')">
-          <n-icon><Paw /></n-icon>
-          <span>{{ locale === "zh" ? "帕鲁仓库" : "Pal archive" }}</span>
-        </button>
-        <button type="button" class="mobile-tool-button" @click="handleAdminAction('inventory')">
-          <n-icon><Package /></n-icon>
-          <span>{{ locale === "zh" ? "全服库存" : "Global inventory" }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('palconf')"
-        >
-          <n-icon><Settings /></n-icon>
-          <span>{{ $t("button.palconf") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('rcon')"
-        >
-          <n-icon><Terminal /></n-icon>
-          <span>{{ $t("button.rcon") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('backup')"
-        >
-          <n-icon><ArchiveOutlined /></n-icon>
-          <span>{{ $t("button.backup") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('whitelist')"
-        >
-          <n-icon><ShieldCheckmarkSharp /></n-icon>
-          <span>{{ $t("button.whitelist") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button"
-          @click="handleAdminAction('broadcast')"
-        >
-          <n-icon><BroadcastTower /></n-icon>
-          <span>{{ $t("button.broadcast") }}</span>
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-button mobile-tool-button--danger"
-          @click="handleAdminAction('shutdown')"
-        >
-          <n-icon><SettingsPowerRound /></n-icon>
-          <span>{{ $t("button.shutdown") }}</span>
+          <n-icon><component :is="item.icon" /></n-icon>
+          <span>{{ item.label }}</span>
         </button>
       </div>
     </n-drawer-content>
