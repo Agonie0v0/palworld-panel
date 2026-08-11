@@ -1998,4 +1998,89 @@ onBeforeUnmount(() => {
     grid-template-rows: auto auto;
   }
 }
+
+/* Status-first horizontal rhythm: let wellbeing span the card before the
+   work and passive sections stack underneath it. */
+.pal-node__top {
+  grid-template-columns: 60px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  gap: 5px 9px;
+}
+.pal-node__summary {
+  display: contents;
+}
+.pal-node__visual {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.pal-node__identity {
+  grid-column: 2;
+  grid-row: 1;
+}
+.pal-node__task {
+  grid-column: 2;
+  grid-row: 2;
+}
+.pal-node__vitals {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--app-border);
+}
+.pal-node__vital,
+.pal-node__vitals > .pal-node__vital {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(58px, 72px) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.pal-node__vital-meta {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px;
+}
+.pal-node__vital-meta small {
+  font-size: 9px;
+}
+.pal-node__vital-meta em {
+  font-size: 10px;
+}
+.pal-node__vital > i {
+  grid-column: 2;
+  height: 7px;
+  border-radius: 7px;
+}
+.pal-node__vital > i b {
+  min-width: 3px;
+}
+.pal-node__details {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 7px;
+}
+.pal-node__work,
+.pal-node__passives {
+  grid-column: auto;
+}
+.pal-node__section {
+  gap: 3px;
+}
+.pal-node__passive-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px 7px;
+}
+@media (max-width: 719px) {
+  .pal-node__top {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .pal-node__passive-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 </style>

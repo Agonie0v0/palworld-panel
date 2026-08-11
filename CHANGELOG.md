@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.11 - 2026-08-11
+
+- Reorder overview Pal cards so full-width hunger and SAN bars lead the card, followed by stacked work suitability and passive trait sections.
+
 ## 0.8.10 - 2026-08-11
 
 - Keep passive trait names on one line across overview and status cards, shrinking the label to the available card width instead of breaking four-character names.
