@@ -27,6 +27,7 @@ import PalWorkBadge from "@/components/PalWorkBadge.vue";
 import { enrichPals, palPortrait } from "@/utils/gameData";
 import { passiveTier } from "@/utils/palPresentation";
 import { buildPalWorkerRows } from "@/utils/palWorkers";
+import { DEFAULT_CACHE_TTL, requestCached } from "@/utils/requestCache";
 import unknownPal from "@/assets/pals/unknown.png";
 
 const props = defineProps({
@@ -50,8 +51,8 @@ const palPage = ref(0);
 const viewportWidth = ref(typeof window === "undefined" ? 1440 : window.innerWidth);
 let refreshTimer;
 
-const OVERVIEW_CACHE_TTL = 30000;
-let overviewCache = null;
+const OVERVIEW_REFRESH_INTERVAL = DEFAULT_CACHE_TTL;
+let overviewSnapshot = null;
 let overviewRequest = null;
 
 const zh = computed(() => locale.value === "zh");
@@ -242,11 +243,11 @@ const activeBaseWorkers = computed(() => {
     || Number(["working", "assigned"].includes(b.activityKind)) - Number(["working", "assigned"].includes(a.activityKind)));
 });
 const palPageSize = computed(() => {
-  if (viewportWidth.value >= 2200) return 10;
-  if (viewportWidth.value >= 1800) return 8;
-  if (viewportWidth.value >= 1200) return 6;
-  if (viewportWidth.value >= 720) return 4;
-  return viewportWidth.value >= 520 ? 2 : 1;
+  if (viewportWidth.value >= 2200) return 15;
+  if (viewportWidth.value >= 1800) return 12;
+  if (viewportWidth.value >= 1200) return 9;
+  if (viewportWidth.value >= 720) return 6;
+  return 3;
 });
 const palPageCount = computed(() => Math.max(1, Math.ceil(activeBaseWorkers.value.length / palPageSize.value)));
 const visiblePalWorkers = computed(() => activeBaseWorkers.value.slice(palPage.value * palPageSize.value, (palPage.value + 1) * palPageSize.value));
@@ -326,37 +327,47 @@ const hydrateOverview = (snapshot) => {
   worldDataError.value = Boolean(snapshot.worldDataError);
 };
 
-const fetchOverview = async () => {
+const fetchOverview = async ({ force = false } = {}) => {
   const [online, backup, rconTasks, host, world] = await Promise.allSettled([
-    api.getOnlinePlayerList(),
-    api.getBackupList({}),
-    api.getRconTasks(),
-    api.getHostMetrics(),
-    api.getWorldData(),
+    requestCached("online-players", async () => {
+      const response = await api.getOnlinePlayerList();
+      return asArray(response.data.value);
+    }, { force }),
+    requestCached("backups", async () => {
+      const response = await api.getBackupList({});
+      return asArray(response.data.value);
+    }, { force }),
+    requestCached("rcon-tasks", async () => {
+      const response = await api.getRconTasks();
+      return asArray(response.data.value);
+    }, { force }),
+    requestCached("host-metrics", async () => {
+      const response = await api.getHostMetrics();
+      return response.data.value?.metrics || {};
+    }, { force }),
+    requestCached("world-data", async () => {
+      const response = await api.getWorldData();
+      return response.data.value || {};
+    }, { force }),
   ]);
-  const previous = overviewCache?.snapshot || {};
+  const previous = overviewSnapshot?.snapshot || {};
   const snapshot = {
-    onlinePlayers: online.status === "fulfilled" ? asArray(online.value.data.value) : asArray(previous.onlinePlayers),
-    backups: backup.status === "fulfilled" ? asArray(backup.value.data.value) : asArray(previous.backups),
-    tasks: rconTasks.status === "fulfilled" ? asArray(rconTasks.value.data.value) : asArray(previous.tasks),
-    hostMetrics: host.status === "fulfilled" ? host.value.data.value?.metrics || {} : previous.hostMetrics || {},
-    bases: world.status === "fulfilled" ? asArray(world.value.data.value?.data?.bases) : asArray(previous.bases),
+    onlinePlayers: online.status === "fulfilled" ? online.value : asArray(previous.onlinePlayers),
+    backups: backup.status === "fulfilled" ? backup.value : asArray(previous.backups),
+    tasks: rconTasks.status === "fulfilled" ? rconTasks.value : asArray(previous.tasks),
+    hostMetrics: host.status === "fulfilled" ? host.value : previous.hostMetrics || {},
+    bases: world.status === "fulfilled" ? asArray(world.value?.data?.bases) : asArray(previous.bases),
     worldDataError: world.status !== "fulfilled",
   };
   if ([online, backup, rconTasks, host, world].some((item) => item.status === "fulfilled")) {
-    overviewCache = { fetchedAt: Date.now(), snapshot };
+    overviewSnapshot = { fetchedAt: Date.now(), snapshot };
   }
   return snapshot;
 };
 
 const refresh = async ({ force = false } = {}) => {
-  const now = Date.now();
-  if (!force && overviewCache && now - overviewCache.fetchedAt < OVERVIEW_CACHE_TTL) {
-    hydrateOverview(overviewCache.snapshot);
-    return;
-  }
   if (!overviewRequest) {
-    overviewRequest = fetchOverview().finally(() => {
+    overviewRequest = fetchOverview({ force }).finally(() => {
       overviewRequest = null;
     });
   }
@@ -376,7 +387,7 @@ onMounted(() => {
   updateViewportWidth();
   window.addEventListener("resize", updateViewportWidth, { passive: true });
   refresh();
-  refreshTimer = setInterval(() => refresh().catch(() => {}), 30000);
+  refreshTimer = setInterval(() => refresh().catch(() => {}), OVERVIEW_REFRESH_INTERVAL);
 });
 onBeforeUnmount(() => {
   clearInterval(refreshTimer);
@@ -511,7 +522,8 @@ onBeforeUnmount(() => {
                 <span class="pal-node__section pal-node__work">
                   <small class="pal-node__section-label">{{ copy.workAbility }}</small>
                   <span v-if="row.workSuitabilities.length" class="pal-node__work-list">
-                    <pal-work-badge v-for="work in row.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" compact />
+                    <pal-work-badge v-for="work in row.workSuitabilities.slice(0, 3)" :key="work.id" :work="work" :label="workLabel(work)" compact />
+                    <span v-if="row.workSuitabilities.length > 3" class="pal-node__work-count">+{{ row.workSuitabilities.length - 3 }}</span>
                   </span>
                   <em v-else>—</em>
                 </span>
@@ -526,10 +538,11 @@ onBeforeUnmount(() => {
                 <span class="pal-node__section pal-node__passives">
                   <small class="pal-node__section-label">{{ copy.passives }}</small>
                   <span v-if="row.passives.length" class="pal-node__passive-list">
-                    <span v-for="skill in row.passives" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
+                    <span v-for="skill in row.passives.slice(0, 4)" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
                       <i class="pal-node__passive-dot" aria-hidden="true" />
                       <span>{{ skill.name || skill.id }}</span>
                     </span>
+                    <span v-if="row.passives.length > 4" class="pal-node__passive-count">+{{ row.passives.length - 4 }}</span>
                   </span>
                   <em v-else>{{ copy.noPassives }}</em>
                 </span>
@@ -1645,6 +1658,104 @@ onBeforeUnmount(() => {
   .pal-node__visual img {
     width: 54px;
     height: 54px;
+  }
+  .pal-node__details {
+    grid-template-columns: 1fr;
+  }
+  .pal-node__passives {
+    grid-column: auto;
+  }
+}
+
+/* Stable overview records: every row gets the same footprint while long
+   names remain readable through ellipsis and an explicit overflow count. */
+.pal-constellation {
+  align-items: stretch;
+  grid-auto-rows: 244px;
+}
+.pal-node {
+  display: flex;
+  height: 244px;
+  min-height: 244px;
+  flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
+}
+.pal-node__top {
+  flex: 0 0 auto;
+}
+.pal-node__summary {
+  min-height: 0;
+  overflow: hidden;
+}
+.pal-node__details {
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  overflow: hidden;
+}
+.pal-node__section {
+  min-height: 0;
+  overflow: hidden;
+}
+.pal-node__work-list,
+.pal-node__skills .pal-node__skill-list,
+.pal-node__passive-list {
+  min-height: 0;
+  overflow: hidden;
+}
+.pal-node__work-list,
+.pal-node__skills .pal-node__skill-list {
+  align-content: start;
+}
+.pal-node__passive-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(17px, 1fr);
+  align-content: start;
+  gap: 3px 8px;
+}
+.pal-node__passive {
+  max-width: 100%;
+}
+.pal-node__passive-count {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  color: var(--app-ink-muted);
+  font: 700 9px var(--app-font-data);
+}
+.pal-node__work-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 5px;
+  color: var(--app-ink-muted);
+  background: var(--app-surface-muted);
+  border-radius: 5px;
+  font: 700 9px var(--app-font-data);
+}
+@media (max-width: 719px) {
+  .pal-constellation {
+    grid-auto-rows: 244px;
+  }
+  .pal-node {
+    height: 244px;
+    min-height: 244px;
+  }
+  .pal-node__details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pal-node__passives {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 420px) {
+  .pal-constellation {
+    grid-auto-rows: 300px;
+  }
+  .pal-node {
+    height: 300px;
+    min-height: 300px;
   }
   .pal-node__details {
     grid-template-columns: 1fr;

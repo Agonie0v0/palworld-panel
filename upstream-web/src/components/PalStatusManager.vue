@@ -28,6 +28,7 @@ import {
   palPortrait,
 } from "@/utils/gameData";
 import { buildPalWorkerRows, filterPalWorkerRows } from "@/utils/palWorkers";
+import { DEFAULT_CACHE_TTL, requestCached } from "@/utils/requestCache";
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -47,8 +48,8 @@ const attentionOnly = ref(false);
 const selectedWork = ref([]);
 const selectedPassives = ref([]);
 const selected = ref(null);
-const STATUS_CACHE_TTL = 30000;
-let statusCache = null;
+const STATUS_CACHE_TTL = DEFAULT_CACHE_TTL;
+let statusSnapshot = null;
 let statusRequest = null;
 let statusRefreshTimer;
 
@@ -231,41 +232,42 @@ const passiveOptions = computed(() => {
 });
 const currentProductionItems = computed(() => productionItems(production.value.current));
 
-const result = (response) => response?.data?.value || {};
 const hydrateStatus = (snapshot) => {
   bases.value = Array.isArray(snapshot.bases) ? snapshot.bases : [];
   production.value = snapshot.production || { current: null, history: [] };
   loadError.value = snapshot.worldAvailable ? "" : copy.value.unavailable;
 };
 
-const fetchStatus = async () => {
+const fetchStatus = async ({ force = false } = {}) => {
   const [worldResult, productionResult] = await Promise.allSettled([
-    api.getWorldData(),
-    api.getOfflineProduction(),
+    requestCached("world-data", async () => {
+      const response = await api.getWorldData();
+      return response.data.value || {};
+    }, { force }),
+    requestCached("offline-production", async () => {
+      const response = await api.getOfflineProduction();
+      return response.data.value || { current: null, history: [] };
+    }, { force }),
   ]);
-  const previous = statusCache?.snapshot || {};
+  const previous = statusSnapshot?.snapshot || {};
   const snapshot = {
     bases: worldResult.status === "fulfilled"
-      ? (Array.isArray(result(worldResult.value).data?.bases) ? result(worldResult.value).data.bases : [])
+      ? (Array.isArray(worldResult.value?.data?.bases) ? worldResult.value.data.bases : [])
       : (previous.bases || []),
     production: productionResult.status === "fulfilled"
-      ? result(productionResult.value).data || { current: null, history: [] }
+      ? productionResult.value || { current: null, history: [] }
       : (previous.production || { current: null, history: [] }),
     worldAvailable: worldResult.status === "fulfilled",
   };
   if (worldResult.status === "fulfilled" || productionResult.status === "fulfilled") {
-    statusCache = { fetchedAt: Date.now(), snapshot };
+    statusSnapshot = { fetchedAt: Date.now(), snapshot };
   }
   return snapshot;
 };
 
 const load = async ({ force = false } = {}) => {
-  if (!force && statusCache && Date.now() - statusCache.fetchedAt < STATUS_CACHE_TTL) {
-    hydrateStatus(statusCache.snapshot);
-    return;
-  }
   if (!statusRequest) {
-    statusRequest = fetchStatus().finally(() => {
+    statusRequest = fetchStatus({ force }).finally(() => {
       statusRequest = null;
     });
   }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.7 - 2026-08-11
+
+- Normalize overview Pal card heights and keep the compact card layout stable across responsive breakpoints.
+- Show up to three rows of Pal cards per overview page, with long passive lists summarized by an explicit overflow count.
+- Share 30-second game-data caching between the overview and Pal status pages while preserving scheduled and manual refreshes.
+
 ## 0.8.2 - 2026-08-11
 
 - Equalize every passive-skill card within its detail grid using the tallest natural content height, keeping long descriptions fully wrapped without clipping or fixed-height overflow.
