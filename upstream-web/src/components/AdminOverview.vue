@@ -538,11 +538,11 @@ onBeforeUnmount(() => {
                 <span class="pal-node__section pal-node__passives">
                   <small class="pal-node__section-label">{{ copy.passives }}</small>
                   <span v-if="row.passives.length" class="pal-node__passive-list">
-                    <span v-for="skill in row.passives.slice(0, 4)" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
+                    <span v-for="skill in row.passives.slice(0, 3)" :key="skill.id" class="pal-node__passive" :class="`is-${passiveTone(skill)}`" :title="skill.name || skill.id">
                       <i class="pal-node__passive-dot" aria-hidden="true" />
                       <span>{{ skill.name || skill.id }}</span>
                     </span>
-                    <span v-if="row.passives.length > 4" class="pal-node__passive-count">+{{ row.passives.length - 4 }}</span>
+                    <span v-if="row.passives.length > 3" class="pal-node__passive-count">+{{ row.passives.length - 3 }}</span>
                   </span>
                   <em v-else>{{ copy.noPassives }}</em>
                 </span>
