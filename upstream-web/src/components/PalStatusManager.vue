@@ -28,7 +28,6 @@ import {
   palPortrait,
 } from "@/utils/gameData";
 import { buildPalWorkerRows, filterPalWorkerRows } from "@/utils/palWorkers";
-import { passiveTier } from "@/utils/palPresentation";
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -281,7 +280,21 @@ const activityLabel = (row) => {
   return row.activityLabel || "-";
 };
 const facilityLabel = (row) => humanizeToken(row.facility) || copy.value.noFacility;
-const passiveTierClass = (skill) => `is-${passiveTier(skill?.rank)}`;
+const workLabel = (work) => {
+  const id = humanizeToken(work?.id);
+  return workLabels.value[id] || work?.name || id || "-";
+};
+const skillRows = (row) => {
+  const records = [...(Array.isArray(row?.equippedSkills) ? row.equippedSkills : []), ...(Array.isArray(row?.masteredSkills) ? row.masteredSkills : [])];
+  if (row?.partnerSkill) records.push({ ...row.partnerSkill, id: `partner:${row.partnerSkill.id || row.partnerSkill.name}` });
+  const seen = new Set();
+  return records.filter((skill) => {
+    const key = String(skill?.id || skill?.name || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 const formatTime = (value) =>
   value ? new Intl.DateTimeFormat(zh.value ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-";
 const formatDuration = (seconds) => {
@@ -353,18 +366,31 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
         <n-alert v-if="loadError" type="error" :bordered="false">{{ loadError }}</n-alert>
         <div class="result-count">{{ visibleRows.length }} / {{ rows.length }}</div>
         <div v-if="visibleRows.length" class="worker-grid" :aria-busy="loading">
-          <button v-for="row in visibleRows" :key="row.id" type="button" class="worker-card" :class="{ attention: row.attention }" @click="selected = row">
+          <article v-for="row in visibleRows" :key="row.id" class="worker-card" :class="{ attention: row.attention }" role="button" tabindex="0" @click="selected = row" @keydown.enter="selected = row" @keydown.space.prevent="selected = row">
             <span class="pal-portrait"><img :src="palPortrait(row.type)" :alt="row.speciesName" @error="useFallback" /></span>
             <span class="worker-main">
               <span class="worker-name"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
               <span class="worker-task"><n-icon><Activity /></n-icon><span><strong>{{ activityLabel(row) }}</strong><small>{{ facilityLabel(row) }} · {{ row.baseName }}</small></span></span>
-              <span class="work-chips"><i v-for="work in row.workSuitabilities" :key="work.id">{{ workLabels[work.id] || work.id }} {{ work.level }}</i></span>
-              <span v-if="row.passives.length" class="passive-line">
-                <i
-                  v-for="skill in row.passives.slice(0, 3)"
-                  :key="skill.id"
-                  :class="passiveTierClass(skill)"
-                >{{ skill.name }}</i>
+              <span class="card-section">
+                <small class="card-section__label">{{ copy.work }}</small>
+                <span v-if="row.workSuitabilities.length" class="work-chips">
+                  <pal-work-badge v-for="work in row.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" compact />
+                </span>
+                <em v-else>—</em>
+              </span>
+              <span class="card-section">
+                <small class="card-section__label">{{ copy.skills }}</small>
+                <span v-if="skillRows(row).length" class="skill-chips">
+                  <span v-for="skill in skillRows(row)" :key="skill.id" class="skill-chip">{{ skill.name || skill.id }}</span>
+                </span>
+                <em v-else>—</em>
+              </span>
+              <span class="card-section card-section--passives">
+                <small class="card-section__label">{{ copy.passives }}</small>
+                <span v-if="row.passives.length" class="passive-grid">
+                  <pal-passive-badge v-for="skill in row.passives" :key="skill.id" :skill="skill" :show-description="false" compact />
+                </span>
+                <em v-else>—</em>
               </span>
             </span>
             <span class="worker-vitals">
@@ -375,7 +401,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
               <n-tag v-if="row.attention" size="small" type="warning" :bordered="false">{{ row.conditions.join(' · ') }}</n-tag>
               <n-tag v-else size="small" type="success" :bordered="false">{{ copy.healthy }}</n-tag>
             </span>
-          </button>
+          </article>
         </div>
         <n-empty v-else-if="!loading" class="status-empty" :description="copy.empty"><template #icon><n-icon><Paw /></n-icon></template></n-empty>
       </n-tab-pane>
@@ -449,7 +475,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
                 v-for="work in selected.workSuitabilities"
                 :key="work.id"
                 :work="work"
-                :label="workLabels[work.id] || work.id"
+                :label="workLabel(work)"
               />
               <span v-if="!selected.workSuitabilities.length">-</span>
             </div>
@@ -495,4 +521,114 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
 @media (max-width: 1050px) { .filter-main { grid-template-columns: 1fr 1fr; }.status-summary,.production-summary { grid-template-columns: repeat(2,1fr); }.worker-grid { grid-template-columns: 1fr; } }
 @media (max-width: 680px) { :global(.pal-status-modal) { width: 100vw; max-width: 100vw; }.status-summary,.production-summary,.filter-main { grid-template-columns: 1fr; }.work-filter { grid-template-columns: 1fr; }.worker-card { grid-template-columns: 62px minmax(0,1fr); }.pal-portrait { width: 62px; height: 62px; }.pal-portrait img { width: 58px; height: 58px; }.worker-vitals { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; padding-top: 10px; border-top: 1px solid var(--app-border); }.worker-vitals .n-tag { grid-column: 1 / -1; max-width: none; }.gain-grid { grid-template-columns: 1fr; }.pal-inspector { width: 96vw; padding: 24px 16px; border-radius: 22px; }.detail-hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }.detail-portrait { width: 170px; height: 170px; }.detail-portrait img { width: 150px; height: 150px; }.pal-inspector__body,.work-suitability-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .worker-card { transition: none; } }
+
+/* Status cards expose the complete worker profile without hiding traits. */
+.worker-card {
+  grid-template-columns: 76px minmax(0, 1fr) 124px;
+  align-items: start;
+  min-height: 260px;
+  padding: 14px;
+  border-radius: 10px;
+}
+.worker-card:hover,
+.worker-card:focus-visible {
+  border-color: color-mix(in srgb, var(--app-accent) 52%, var(--app-border));
+  outline: none;
+}
+.worker-main {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+.worker-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.worker-task {
+  margin-top: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-border);
+}
+.card-section {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-border);
+}
+.card-section__label {
+  color: var(--app-ink-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.card-section > em {
+  color: var(--app-ink-muted);
+  font-size: 10px;
+  font-style: normal;
+}
+.work-chips,
+.skill-chips {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 0;
+}
+.work-chips :deep(.pal-work-badge) {
+  max-width: 100%;
+}
+.work-chips :deep(.pal-work-badge__copy) {
+  min-width: 0;
+}
+.work-chips :deep(.pal-work-badge strong) {
+  max-width: 13ch;
+}
+.skill-chip {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 6px;
+  color: var(--app-ink-secondary);
+  background: var(--app-surface-muted);
+  border-radius: 5px;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.passive-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 4px;
+}
+.passive-grid :deep(.pal-passive-badge) {
+  height: 100%;
+}
+.worker-vitals {
+  align-self: start;
+  gap: 7px;
+}
+.worker-vitals .n-tag {
+  max-width: 124px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 680px) {
+  .worker-card {
+    grid-template-columns: 62px minmax(0, 1fr);
+  }
+  .worker-vitals {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    padding-top: 10px;
+    border-top: 1px solid var(--app-border);
+  }
+  .worker-vitals .n-tag {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+}
 </style>

@@ -6,6 +6,7 @@ import { passiveTier, passiveTierLabel } from "@/utils/palPresentation";
 const props = defineProps({
   skill: { type: Object, required: true },
   showDescription: { type: Boolean, default: true },
+  compact: { type: Boolean, default: false },
 });
 
 const { locale } = useI18n();
@@ -23,7 +24,7 @@ const accessibleLabel = computed(() =>
 </script>
 
 <template>
-  <article class="pal-passive-badge" :class="`is-${tier}`" :aria-label="accessibleLabel">
+  <article class="pal-passive-badge" :class="[`is-${tier}`, { 'is-compact': compact }]" :aria-label="accessibleLabel">
     <strong>{{ skill.name || skill.id }}</strong>
     <p v-if="showDescription">{{ skill.description || skill.id }}</p>
   </article>
@@ -87,5 +88,18 @@ const accessibleLabel = computed(() =>
 .pal-passive-badge.is-rainbow {
   --passive-surface: linear-gradient(120deg, #8b355f 0%, #654394 26%, #306f9e 52%, #267365 76%, #806019 100%);
   --passive-border: #8e77ad;
+}
+.pal-passive-badge.is-compact {
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+.pal-passive-badge.is-compact strong {
+  font-size: 10px;
+  line-height: 1.3;
+}
+.pal-passive-badge.is-compact p {
+  margin-top: 3px;
+  font-size: 9px;
+  line-height: 1.35;
 }
 </style>

@@ -6,6 +6,7 @@ import {
   Activity,
   Apple,
   Archive,
+  ArrowLeft,
   ArrowRight,
   BuildingCommunity,
   Cpu,
@@ -44,6 +45,8 @@ const bases = ref([]);
 const worldDataError = ref(false);
 const activeBaseId = ref("");
 const selectedWorker = ref(null);
+const palPage = ref(0);
+const palPageSize = 4;
 let refreshTimer;
 
 const zh = computed(() => locale.value === "zh");
@@ -98,6 +101,11 @@ const copy = computed(() => zh.value ? {
   workSpeed: "工作速度",
   workAbility: "工作能力",
   passives: "被动词条",
+  skills: "主动技能",
+  noSkills: "暂无主动技能",
+  previousPage: "上一页",
+  nextPage: "下一页",
+  page: "第 {current} / {total} 页",
   wellbeing: "身心状态",
   noFacility: "自主活动区域",
   noPassives: "暂无被动词条记录",
@@ -152,6 +160,11 @@ const copy = computed(() => zh.value ? {
   workSpeed: "Work speed",
   workAbility: "Work suitability",
   passives: "Passives",
+  skills: "Active skills",
+  noSkills: "No active skills",
+  previousPage: "Previous page",
+  nextPage: "Next page",
+  page: "Page {current} / {total}",
   wellbeing: "Wellbeing",
   noFacility: "Autonomous activity area",
   noPassives: "No passive records",
@@ -223,6 +236,11 @@ const activeBaseWorkers = computed(() => {
   return [...rows].sort((a, b) => Number(b.attention) - Number(a.attention)
     || Number(["working", "assigned"].includes(b.activityKind)) - Number(["working", "assigned"].includes(a.activityKind)));
 });
+const palPageCount = computed(() => Math.max(1, Math.ceil(activeBaseWorkers.value.length / palPageSize)));
+const visiblePalWorkers = computed(() => activeBaseWorkers.value.slice(palPage.value * palPageSize, (palPage.value + 1) * palPageSize));
+const palPageText = computed(() => copy.value.page
+  .replace("{current}", String(Math.min(palPage.value + 1, palPageCount.value)))
+  .replace("{total}", String(palPageCount.value)));
 const worldMessage = computed(() => currentPlayers.value
   ? copy.value.onlineWorldMessage(currentPlayers.value, workers.value.length)
   : copy.value.emptyWorldMessage(workers.value.length));
@@ -235,6 +253,13 @@ const resourceRows = computed(() => [
 watch(baseSummaries, (items) => {
   if (items.length && activeBaseId.value !== "all" && !items.some((base) => base.id === activeBaseId.value)) activeBaseId.value = items[0].id;
 }, { immediate: true });
+
+watch([activeBaseWorkers, activeBaseId], () => {
+  palPage.value = Math.min(palPage.value, palPageCount.value - 1);
+}, { immediate: true });
+watch(activeBaseId, () => {
+  palPage.value = 0;
+});
 
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
@@ -261,6 +286,17 @@ const workerState = (row) => {
 const rounded = (value) => value == null ? "-" : `${Math.round(Number(value))}%`;
 const facilityLabel = (row) => String(row?.facility || row?.activityDetail || copy.value.noFacility).replace(/_/g, " ");
 const workLabel = (work) => workLabels[zh.value ? "zh" : "en"][work.id] || work.name || work.id;
+const workerSkills = (row) => {
+  const records = [...asArray(row?.equippedSkills), ...asArray(row?.masteredSkills)];
+  if (row?.partnerSkill) records.push({ ...row.partnerSkill, id: `partner:${row.partnerSkill.id || row.partnerSkill.name}` });
+  const seen = new Set();
+  return records.filter((skill) => {
+    const key = String(skill?.id || skill?.name || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 const useFallback = (event) => {
   const image = event.currentTarget;
   if (image.dataset.fallback === "true") return;
@@ -375,19 +411,28 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
         <div class="pal-habitat">
           <header v-if="activeBase" class="pal-habitat__header">
             <div><span><n-icon><MapPin /></n-icon>{{ copy.base }}</span><h4>{{ activeBase.name }}</h4></div>
-            <div class="habitat-stats"><span><strong>{{ activeBase.working }}</strong>{{ copy.working }}</span><span :class="{ alert: activeBase.attention }"><strong>{{ activeBase.attention }}</strong>{{ copy.attention }}</span></div>
+            <div class="pal-habitat__header-actions">
+              <div class="habitat-stats"><span><strong>{{ activeBase.working }}</strong>{{ copy.working }}</span><span :class="{ alert: activeBase.attention }"><strong>{{ activeBase.attention }}</strong>{{ copy.attention }}</span></div>
+              <div v-if="palPageCount > 1" class="pal-pagination" :aria-label="copy.bases">
+                <button type="button" :disabled="palPage === 0" :aria-label="copy.previousPage" @click="palPage -= 1"><n-icon><ArrowLeft /></n-icon></button>
+                <span aria-live="polite">{{ palPageText }}</span>
+                <button type="button" :disabled="palPage >= palPageCount - 1" :aria-label="copy.nextPage" @click="palPage += 1"><n-icon><ArrowRight /></n-icon></button>
+              </div>
+            </div>
           </header>
 
           <n-alert v-if="worldDataError" type="warning" :bordered="false">{{ copy.worldUnavailable }}</n-alert>
           <div v-if="activeBaseWorkers.length" class="pal-constellation" :aria-busy="loading">
-            <button
-              v-for="row in activeBaseWorkers"
+            <article
+              v-for="row in visiblePalWorkers"
               :key="row.id"
-              v-memo="[row.id, row.hunger, row.sanity, row.activityKind, row.attention]"
-              type="button"
               class="pal-node"
               :class="[`is-${workerTone(row)}`, { attention: row.attention }]"
+              role="button"
+              tabindex="0"
               @click="selectedWorker = row"
+              @keydown.enter="selectedWorker = row"
+              @keydown.space.prevent="selectedWorker = row"
             >
               <span class="pal-node__visual">
                 <span class="pal-node__halo" />
@@ -395,15 +440,36 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
                 <i>{{ row.level || '—' }}</i>
               </span>
               <span class="pal-node__body">
+                <span class="pal-node__identity"><strong>{{ row.name }}</strong><small>{{ row.speciesName }} · Lv.{{ row.level || '—' }}<b v-if="row.stars"> {{ '★'.repeat(row.stars) }}</b></small></span>
                 <span class="pal-node__state"><i />{{ workerState(row) }}</span>
-                <strong>{{ row.name }}</strong>
-                <small>{{ row.speciesName }}</small>
+                <span class="pal-node__task"><n-icon><Activity /></n-icon><span><strong>{{ facilityLabel(row) }}</strong><small>{{ row.baseName }}</small></span></span>
                 <span class="pal-node__vitals">
                   <span><n-icon><Apple /></n-icon><i><b :style="{ width: `${row.hunger ?? 0}%` }" /></i><em>{{ rounded(row.hunger) }}</em></span>
                   <span><n-icon><Heart /></n-icon><i><b :style="{ width: `${row.sanity ?? 0}%` }" /></i><em>{{ rounded(row.sanity) }}</em></span>
                 </span>
+                <span class="pal-node__section">
+                  <small class="pal-node__section-label">{{ copy.workAbility }}</small>
+                  <span v-if="row.workSuitabilities.length" class="pal-node__badges">
+                    <pal-work-badge v-for="work in row.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" compact />
+                  </span>
+                  <em v-else>—</em>
+                </span>
+                <span class="pal-node__section">
+                  <small class="pal-node__section-label">{{ copy.skills }}</small>
+                  <span v-if="workerSkills(row).length" class="pal-node__skill-list">
+                    <span v-for="skill in workerSkills(row)" :key="skill.id" class="pal-node__skill">{{ skill.name || skill.id }}</span>
+                  </span>
+                  <em v-else>{{ copy.noSkills }}</em>
+                </span>
+                <span class="pal-node__section pal-node__passives">
+                  <small class="pal-node__section-label">{{ copy.passives }}</small>
+                  <span v-if="row.passives.length" class="pal-node__badges">
+                    <pal-passive-badge v-for="skill in row.passives" :key="skill.id" :skill="skill" :show-description="false" compact />
+                  </span>
+                  <em v-else>{{ copy.noPassives }}</em>
+                </span>
               </span>
-            </button>
+            </article>
           </div>
           <div v-else-if="!loading" class="pal-habitat__empty"><n-icon><Paw /></n-icon><span>{{ copy.noWorkers }}</span></div>
         </div>
@@ -774,4 +840,205 @@ onBeforeUnmount(() => clearInterval(refreshTimer));
 }
 @media (max-width: 720px) { .command-deck { padding: 16px 12px 100px; }.command-deck__intro { display: grid; align-items: start; gap: 14px; padding-inline: 4px; }.command-deck__intro h2 { font-size: 30px; }.command-deck__actions { flex-wrap: wrap; }.world-stage { min-height: 0; padding: 26px 20px 34px; border-radius: 22px 22px 58px 22px; }.world-stage h2 { font-size: 38px; }.world-orbit { width: 320px; height: 320px; min-width: 320px; min-height: 320px; }.orbit-signal { min-width: 106px; padding: 9px 11px; }.orbit-signal strong { font-size: 15px; }.world-orbit__core { inset: 32%; }.deck-heading { align-items: flex-start; flex-direction: column; }.habitat-overview span { text-align: left; }.base-switcher { display: flex; overflow-x: auto; margin-inline: -12px; padding: 0 12px 8px; }.base-switcher button { min-width: 240px; }.pal-habitat { padding: 18px 14px; border-radius: 20px; }.pal-constellation { grid-template-columns: 1fr; }.pal-node { min-height: 164px; grid-template-columns: 86px minmax(0, 1fr); }.pal-node__visual { width: 86px; }.pal-node__visual img { width: 84px; height: 84px; }.world-intelligence { grid-template-columns: 1fr; }.resource-radar { gap: 0; }.resource-radar__item { grid-template-columns: 1fr; justify-items: center; gap: 6px; padding-inline: 4px; text-align: center; }.resource-dial { width: 50px; height: 50px; }.resource-dial > span { width: 40px; height: 40px; }.pal-focus { width: 96vw; padding: 24px 18px; border-radius: 22px; }.pal-focus__hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }.pal-focus__portrait { width: 180px; height: 180px; }.pal-focus__portrait img { width: 160px; height: 160px; }.pal-focus__grid,.pal-focus__capabilities > div,.pal-focus__passives > div { grid-template-columns: 1fr; }.pal-focus__close { top: 14px; right: 14px; } }
 @media (prefers-reduced-motion: reduce) { .deck-link .n-icon,.base-switcher button,.pal-node { transition: none; }.deck-link:hover .n-icon,.base-switcher button:hover,.pal-node:hover { transform: none; } }
+
+/* Pal overview: keep the information-rich card readable through paging. */
+.pal-habitat__header-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 18px;
+}
+.pal-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--app-ink-muted);
+  font: 10px var(--app-font-data);
+  white-space: nowrap;
+}
+.pal-pagination button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: var(--app-ink-secondary);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.pal-pagination button:hover:not(:disabled) {
+  color: var(--app-accent);
+  border-color: color-mix(in srgb, var(--app-accent) 42%, var(--app-border));
+}
+.pal-pagination button:disabled {
+  color: var(--app-ink-muted);
+  opacity: .42;
+  cursor: not-allowed;
+}
+.pal-constellation {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
+}
+.pal-node {
+  min-height: 0;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+  padding: 14px;
+  border-color: var(--app-border);
+  border-radius: 14px;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+}
+.pal-node:hover,
+.pal-node:focus-visible {
+  border-color: color-mix(in srgb, var(--app-accent) 48%, var(--app-border));
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--app-ink) 8%, transparent);
+  outline: none;
+}
+.pal-node__visual {
+  width: 86px;
+  height: 100px;
+}
+.pal-node__visual img {
+  width: 82px;
+  height: 82px;
+}
+.pal-node__body {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 8px;
+}
+.pal-node__identity,
+.pal-node__task {
+  display: grid;
+  min-width: 0;
+}
+.pal-node__identity strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__identity small,
+.pal-node__task small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--app-ink-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__identity b {
+  color: var(--app-warning);
+  font-weight: 700;
+}
+.pal-node__state {
+  order: -1;
+}
+.pal-node__task {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--app-border);
+}
+.pal-node__task > .n-icon {
+  flex: 0 0 auto;
+  color: var(--app-accent);
+}
+.pal-node__task > span {
+  display: grid;
+  min-width: 0;
+}
+.pal-node__task strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-node__vitals {
+  margin-top: 0;
+}
+.pal-node__section {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--app-border);
+}
+.pal-node__section-label {
+  color: var(--app-ink-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.pal-node__section > em {
+  color: var(--app-ink-muted);
+  font-size: 10px;
+  font-style: normal;
+}
+.pal-node__badges {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pal-node__badges :deep(.pal-work-badge) {
+  max-width: 100%;
+}
+.pal-node__badges :deep(.pal-work-badge__copy) {
+  min-width: 0;
+}
+.pal-node__badges :deep(.pal-work-badge strong) {
+  max-width: 12ch;
+}
+.pal-node__passives .pal-node__badges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pal-node__passives :deep(.pal-passive-badge) {
+  height: 100%;
+}
+.pal-node__skill-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pal-node__skill {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 6px;
+  color: var(--app-ink-secondary);
+  background: var(--app-surface-muted);
+  border-radius: 5px;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-pagination button:focus-visible,
+.pal-node:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--app-accent) 65%, white);
+  outline-offset: 2px;
+}
+@media (max-width: 1180px) {
+  .pal-constellation { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .pal-habitat__header-actions {
+    width: 100%;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .pal-habitat__header { align-items: flex-start; flex-direction: column; }
+  .pal-node { grid-template-columns: 76px minmax(0, 1fr); }
+  .pal-node__visual { width: 76px; height: 92px; }
+  .pal-node__visual img { width: 72px; height: 72px; }
+}
 </style>
