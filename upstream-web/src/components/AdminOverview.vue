@@ -1550,8 +1550,8 @@ onBeforeUnmount(() => {
   border-radius: 4px;
 }
 .pal-node__work-list :deep(.pal-work-badge__icon img) {
-  width: 60px;
-  height: 60px;
+  width: 17px;
+  height: 17px;
 }
 .pal-node__work-list :deep(.pal-work-badge__copy) {
   min-width: 0;
@@ -1884,8 +1884,8 @@ onBeforeUnmount(() => {
   border-radius: 3px;
 }
 .pal-node__work-list :deep(.pal-work-badge__icon img) {
-  width: 52px;
-  height: 52px;
+  width: 14px;
+  height: 14px;
 }
 .pal-node__work-list :deep(.pal-work-badge strong) {
   max-width: 7ch;

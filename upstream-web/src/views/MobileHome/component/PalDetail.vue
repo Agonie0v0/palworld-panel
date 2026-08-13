@@ -2,16 +2,14 @@
 import skillMap from "@/assets/skill.json";
 import { useI18n } from "vue-i18n";
 import { computed } from "vue";
+import { palPortrait } from "@/utils/gameData";
 
 const { locale } = useI18n();
 
 const props = defineProps(["palDetail"]);
 const palDetail = computed(() => props.palDetail);
 
-const getPalAvatar = (name) => {
-  const lowerName = name.toLowerCase();
-  return new URL(`../../../assets/pals/${lowerName}.png`, import.meta.url).href;
-};
+const getPalAvatar = (name) => palPortrait(name);
 const getUnknowPalAvatar = (is_boss = false) => {
   if (is_boss) {
     return new URL("@/assets/pals/boss_unknown.png", import.meta.url).href;

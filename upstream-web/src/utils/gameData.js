@@ -13,7 +13,18 @@ export const gameDataContext = makeMetadataContext({
 
 export const enrichPals = (pals) => pals.map((pal) => normalizePal(pal, gameDataContext));
 export const enrichInventory = (items) => normalizeInventory(items, gameDataContext);
-export const palPortrait = (palId) =>
-  new URL(`../assets/pals/${String(palId).toLowerCase()}.png`, import.meta.url).href;
+const hdPalPortraits = import.meta.glob("../assets/pals-hd/*.webp", {
+  eager: true,
+  import: "default",
+  query: "?url&no-inline",
+});
+
+export const palPortrait = (palId) => {
+  const key = String(palId).replace(/^BOSS_/i, "boss_").toLowerCase();
+  return (
+    hdPalPortraits[`../assets/pals-hd/${key}.webp`] ||
+    new URL(`../assets/pals/${key}.png`, import.meta.url).href
+  );
+};
 export const itemIcon = (itemId) =>
   new URL(`../assets/items/${String(itemId).toLowerCase()}.webp`, import.meta.url).href;

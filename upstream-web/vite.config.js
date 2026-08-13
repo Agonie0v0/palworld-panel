@@ -11,6 +11,10 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    assetsInlineLimit: (filePath) =>
+      /[\\/]assets[\\/](?:pals-hd|work-suitability)[\\/].+\.webp$/i.test(filePath)
+        ? false
+        : undefined,
   },
   plugins: [
     vue(),

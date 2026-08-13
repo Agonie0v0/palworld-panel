@@ -272,9 +272,15 @@ test("static cache policy refreshes the app shell while retaining hashed assets"
     staticCacheControl("/app/upstream-web/dist/index.html"),
     "no-cache, no-store, must-revalidate",
   );
+  for (const extension of ["css", "js", "png", "webp", "svg", "ico", "woff", "woff2", "ttf"]) {
+    assert.equal(
+      staticCacheControl(`/app/upstream-web/dist/assets/example-BV_v5gyY.${extension}`),
+      "public, max-age=31536000, immutable",
+    );
+  }
   assert.equal(
-    staticCacheControl("/app/upstream-web/dist/assets/index-BV_v5gyY.js"),
-    "public, max-age=31536000, immutable",
+    staticCacheControl("/app/upstream-web/dist/assets/avatar.webp"),
+    "public, max-age=3600",
   );
   assert.equal(
     staticCacheControl("/app/upstream-web/public/map/tiles/0/0/0.png"),

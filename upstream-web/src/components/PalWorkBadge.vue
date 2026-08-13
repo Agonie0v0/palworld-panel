@@ -1,18 +1,18 @@
 <script setup>
 import { computed } from "vue";
 import { Hammer } from "@vicons/tabler";
-import collectionIcon from "@/assets/items/worksuitability_addticket_collection.webp";
-import coolIcon from "@/assets/items/worksuitability_addticket_cool.webp";
-import deforestIcon from "@/assets/items/worksuitability_addticket_deforest.webp";
-import emitFlameIcon from "@/assets/items/worksuitability_addticket_emitflame.webp";
-import electricityIcon from "@/assets/items/worksuitability_addticket_generateelectricity.webp";
-import handcraftIcon from "@/assets/items/worksuitability_addticket_handcraft.webp";
-import miningIcon from "@/assets/items/worksuitability_addticket_mining.webp";
-import farmingIcon from "@/assets/items/worksuitability_addticket_monsterfarm.webp";
-import medicineIcon from "@/assets/items/worksuitability_addticket_productmedicine.webp";
-import seedingIcon from "@/assets/items/worksuitability_addticket_seeding.webp";
-import transportIcon from "@/assets/items/worksuitability_addticket_transport.webp";
-import wateringIcon from "@/assets/items/worksuitability_addticket_watering.webp";
+import emitFlameIcon from "@/assets/work-suitability/palwork_00.webp";
+import wateringIcon from "@/assets/work-suitability/palwork_01.webp";
+import seedingIcon from "@/assets/work-suitability/palwork_02.webp";
+import electricityIcon from "@/assets/work-suitability/palwork_03.webp";
+import handcraftIcon from "@/assets/work-suitability/palwork_04.webp";
+import collectionIcon from "@/assets/work-suitability/palwork_05.webp";
+import deforestIcon from "@/assets/work-suitability/palwork_06.webp";
+import miningIcon from "@/assets/work-suitability/palwork_07.webp";
+import medicineIcon from "@/assets/work-suitability/palwork_08.webp";
+import coolIcon from "@/assets/work-suitability/palwork_10.webp";
+import transportIcon from "@/assets/work-suitability/palwork_11.webp";
+import farmingIcon from "@/assets/work-suitability/palwork_12.webp";
 import { workSuitabilityTone } from "@/utils/palPresentation";
 
 const props = defineProps({
@@ -89,15 +89,9 @@ const accessibleLabel = computed(() => `${props.label}, Lv.${level.value}`);
   font-size: 17px;
 }
 .pal-work-badge__icon img {
-  position: absolute;
-  top: calc(50% + 1px);
-  left: 50%;
-  width: 96px;
-  max-width: none;
-  height: 96px;
-  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
-  transform: translate(-50%, -50%);
 }
 .pal-work-badge__copy {
   display: grid;
@@ -128,8 +122,8 @@ const accessibleLabel = computed(() => `${props.label}, Lv.${level.value}`);
   font-size: 13px;
 }
 .pal-work-badge.is-compact .pal-work-badge__icon img {
-  width: 72px;
-  height: 72px;
+  width: 20px;
+  height: 20px;
 }
 .pal-work-badge.is-compact .pal-work-badge__copy {
   display: flex;

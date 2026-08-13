@@ -3434,7 +3434,7 @@ function staticCacheControl(filePath) {
   if (normalized.endsWith("/index.html") || path.extname(normalized) === ".html") {
     return "no-cache, no-store, must-revalidate";
   }
-  if (/\/assets\/[^/]+-[A-Za-z0-9_-]+\.(?:css|js)$/.test(normalized)) {
+  if (/\/assets\/[^/]+-[A-Za-z0-9_-]+\.(?:css|js|png|webp|svg|ico|woff2?|ttf)$/.test(normalized)) {
     return "public, max-age=31536000, immutable";
   }
   return "public, max-age=3600";

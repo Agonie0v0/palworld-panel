@@ -16,6 +16,7 @@ import {
   localizedSkillName,
   statusPointTranslationKey,
 } from "@/utils/gameLabels";
+import { palPortrait } from "@/utils/gameData";
 
 const { t, locale } = useI18n();
 
@@ -157,10 +158,7 @@ const percentageHP = (hp, max_hp) => {
   }
   return ((hp / max_hp) * 100).toFixed(2);
 };
-const getPalAvatar = (name) => {
-  const lowerName = name.toLowerCase();
-  return new URL(`../../../assets/pals/${lowerName}.png`, import.meta.url).href;
-};
+const getPalAvatar = (name) => palPortrait(name);
 const getPalName = (name) => {
   const lowerName = name.toLowerCase();
   return localeLowerPalMap.value[lowerName]

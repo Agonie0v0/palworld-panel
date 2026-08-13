@@ -18,6 +18,7 @@ import {
   localizedSkillName,
   statusPointTranslationKey,
 } from "@/utils/gameLabels";
+import { palPortrait } from "@/utils/gameData";
 
 const { t, locale } = useI18n();
 const props = defineProps(["playerInfo", "playerPalsList"]);
@@ -400,10 +401,7 @@ const getStatusPointLabel = (rawKey) => {
   const translationKey = statusPointTranslationKey(rawKey);
   return translationKey ? t(`statusPoint.${translationKey}`) : rawKey;
 };
-const getPalAvatar = (name) => {
-  const lowerName = name.toLowerCase();
-  return new URL(`../../../assets/pals/${lowerName}.png`, import.meta.url).href;
-};
+const getPalAvatar = (name) => palPortrait(name);
 const getPalName = (name) => {
   const lowerName = name.toLowerCase();
   return localeLowerPalMap.value[lowerName]

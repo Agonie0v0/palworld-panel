@@ -16,6 +16,20 @@ The Apache-2.0 license text is preserved at:
 
   THIRD_PARTY_LICENSES/palworld-server-tool-LICENSE
 
+Pal portraits and work-suitability icons were adapted from:
+
+  Project: https://github.com/taoyunan/palworld-paldeck-cn
+  Revision: d0167e16a3fd5e640d35366c40b991f80c2b14df
+  License: MIT (repository code and packaging)
+
+The upstream MIT license text is preserved at:
+
+  THIRD_PARTY_LICENSES/palworld-paldeck-cn-LICENSE
+
+The imported images depict Palworld game content. Palworld, its artwork, and
+its trademarks remain the property of Pocketpair, Inc. and/or their respective
+rights holders. They are not relicensed under this repository's MIT license.
+
 Files derived from or copied from palworld-server-tool remain subject to the
 Apache License 2.0. Other third-party parser dependencies retain their own
 licenses. Original project code is licensed as declared by this repository,
