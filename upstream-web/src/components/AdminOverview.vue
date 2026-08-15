@@ -2129,11 +2129,11 @@ onBeforeUnmount(() => {
    needed by the busiest worker in each grid row while retaining a compact
    minimum height for the normal case. */
 .pal-constellation {
-  grid-auto-rows: minmax(244px, auto);
+  grid-auto-rows: minmax(260px, auto);
 }
 .pal-node {
   height: auto;
-  min-height: 244px;
+  min-height: 260px;
 }
 .pal-node__details {
   display: flex;
@@ -2141,14 +2141,23 @@ onBeforeUnmount(() => {
   flex: 1 0 auto;
   flex-direction: column;
   align-items: stretch;
+  gap: 8px;
   grid-template-columns: none;
   grid-template-rows: none;
   overflow: visible;
+}
+.pal-node__work-list {
+  row-gap: 4px;
 }
 .pal-node__work,
 .pal-node__passives {
   min-height: 0;
   flex: 0 0 auto;
+}
+.pal-node__passives {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--app-border);
 }
 .pal-node__work-list,
 .pal-node__passive-list {
@@ -2166,6 +2175,9 @@ onBeforeUnmount(() => {
   .pal-node {
     height: auto;
     min-height: 0;
+  }
+  .pal-node__passives {
+    margin-top: 0;
   }
 }
 </style>

@@ -161,6 +161,43 @@ def _work_suitability_add_ranks(prop):
     return result
 
 
+def _work_suitability_levels(*props):
+    """Extract an explicit per-Pal work-suitability level map when present.
+
+    Most saves only persist the species baseline plus
+    ``GotWorkSuitabilityAddRankList`` bonuses. Newer/alternate save layouts
+    may also include a list with the complete level for each Pal.
+    """
+    result = {}
+    for prop in props:
+        for raw_row in _list_values(prop):
+            row = raw_row
+            for _ in range(8):
+                if not isinstance(row, dict):
+                    break
+                if any(key in row for key in ("WorkSuitability", "Suitability", "Id", "ID")):
+                    break
+                if "value" not in row:
+                    break
+                row = row["value"]
+            if not isinstance(row, dict):
+                continue
+            work = _enum_value(
+                row.get("WorkSuitability")
+                or row.get("Suitability")
+                or row.get("Id")
+                or row.get("ID"),
+                None,
+            )
+            level = _optional_int(
+                row.get("Level") or row.get("Rank") or row.get("Value"),
+                None,
+            )
+            if work and work != "None" and level is not None and level > 0:
+                result[work] = level
+    return result
+
+
 def tick2local(tick, real_date_time_ticks, filetime):
     ts = filetime + (tick - real_date_time_ticks) / 1e7
     t = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
@@ -280,6 +317,15 @@ class Pal:
         self.work_suitability_add_rank = _work_suitability_add_ranks(
             data.get("GotWorkSuitabilityAddRankList")
         )
+        work_options = data.get("WorkSuitabilityOptionInfo")
+        option_value = work_options.get("value", {}) if isinstance(work_options, dict) else {}
+        self.work_suitabilities = _work_suitability_levels(
+            data.get("WorkSuitabilityList"),
+            data.get("WorkSuitabilityLevelList"),
+            data.get("WorkSuitabilities"),
+            option_value.get("WorkSuitabilityList") if isinstance(option_value, dict) else None,
+            option_value.get("WorkSuitabilityLevelList") if isinstance(option_value, dict) else None,
+        )
         self.skills = (
             data["PassiveSkillList"]["value"]["values"]
             if data.get("PassiveSkillList")
@@ -343,6 +389,7 @@ class Pal:
             "pal_revive_timer",
             "skin_name",
             "work_suitability_add_rank",
+            "work_suitabilities",
             "skills",
             "equipped_skills",
             "mastered_skills",

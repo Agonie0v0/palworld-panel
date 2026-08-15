@@ -117,13 +117,23 @@ export const normalizePal = (pal = {}, context) => {
   // the catalog remains available separately as species reference data.
   const individualWork = new Map(speciesWorkSuitabilities.map((item) => [item.id, { ...item }]));
   const individualWorkSource = pal.work_suitabilities || pal.workSuitabilities;
-  if (Array.isArray(individualWorkSource) && individualWorkSource.length) {
-    individualWork.clear();
+  const explicitWork = new Map();
+  if (Array.isArray(individualWorkSource)) {
     individualWorkSource.forEach((item) => {
       const id = normalizeWorkId(item?.id || item?.name);
-      const level = number(item?.level);
-      if (id && level > 0) individualWork.set(id, { id, name: item?.name || "", level });
+      const level = number(item?.level ?? item?.rank);
+      if (id && level > 0) explicitWork.set(id, { id, name: item?.name || "", level });
     });
+  } else if (individualWorkSource && typeof individualWorkSource === "object") {
+    Object.entries(individualWorkSource).forEach(([rawId, value]) => {
+      const id = normalizeWorkId(rawId);
+      const level = number(value?.level ?? value?.rank ?? value);
+      if (id && level > 0) explicitWork.set(id, { id, name: value?.name || "", level });
+    });
+  }
+  if (explicitWork.size) {
+    individualWork.clear();
+    explicitWork.forEach((item, id) => individualWork.set(id, item));
   } else {
     Object.entries(pal.work_suitability_add_rank || pal.workSuitabilityAddRank || {}).forEach(([rawId, rawBonus]) => {
       const id = normalizeWorkId(rawId);

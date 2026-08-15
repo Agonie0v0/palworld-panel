@@ -73,6 +73,18 @@ test("preserves missing IVs instead of fabricating zero values", () => {
   assert.equal(pal.iv.average, null);
 });
 
+test("prefers explicit saved work levels over the species baseline", () => {
+  const pal = normalizePal({
+    type: "Anubis",
+    work_suitabilities: { Mining: 5, Handcraft: 2 },
+  }, context);
+
+  assert.deepEqual(
+    pal.workSuitabilities.map(({ id, level }) => ({ id, level })),
+    [{ id: "Mining", level: 5 }, { id: "Handcraft", level: 2 }],
+  );
+});
+
 test("does not rescale an already normalized maxHp value", () => {
   const pal = normalizePal({ type: "Anubis", maxHp: 987.5 }, context);
   assert.equal(pal.maxHp, 987.5);

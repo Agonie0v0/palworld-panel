@@ -137,6 +137,37 @@ class PalDetailParsingTests(unittest.TestCase):
             self.assertIsNone(pal[field], field)
         self.assertEqual(pal["work_suitability_add_rank"], {})
 
+    def test_parses_explicit_work_suitability_levels_when_saved(self):
+        data = {
+            "WorkSuitabilityLevelList": {
+                "type": "ArrayProperty",
+                "value": {
+                    "values": [
+                        {
+                            "WorkSuitability": enum_property(
+                                "EPalWorkSuitability",
+                                "EPalWorkSuitability::Cooling",
+                            ),
+                            "Level": {"type": "IntProperty", "value": 2},
+                        },
+                        {
+                            "value": {
+                                "Suitability": enum_property(
+                                    "EPalWorkSuitability",
+                                    "EPalWorkSuitability::Mining",
+                                ),
+                                "Rank": {"type": "IntProperty", "value": 5},
+                            }
+                        },
+                    ]
+                },
+            }
+        }
+
+        pal = Pal(data, 0, 0).to_dict()
+
+        self.assertEqual(pal["work_suitabilities"], {"Cooling": 2, "Mining": 5})
+
     def test_false_favorite_flags_are_not_treated_as_missing(self):
         pal = Pal(
             {
