@@ -11,6 +11,7 @@
     "build:pal-conf": "npm --prefix vendor/pal-conf ci && npm --prefix vendor/pal-conf run build && node scripts/sync-pal-conf-build.js",
     "build:web": "npm run build:pal-conf && pnpm --dir upstream-web build",
     "sync:paldeck-icons": "node scripts/sync-paldeck-icons.mjs",
+    "sync:pal-species": "node scripts/sync-pal-species-index.mjs",
     "test:web": "pnpm --dir upstream-web test"
   },
   "engines": {

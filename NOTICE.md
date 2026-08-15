@@ -26,6 +26,27 @@ The upstream MIT license text is preserved at:
 
   THIRD_PARTY_LICENSES/palworld-paldeck-cn-LICENSE
 
+Generated Pal species combat, hunger, and movement metadata was adapted from:
+
+  Project: https://github.com/Awy64/palworld-atlas-data
+  Revision: add14423f623c45836ed31f4a180c2adfa8b0ab7
+  Dataset: dedicated-server build 24088465
+  License: MIT
+
+The upstream MIT license text is preserved at:
+
+  THIRD_PARTY_LICENSES/palworld-atlas-data-LICENSE
+
+The generated species index also uses the PalCalc database:
+
+  Project: https://github.com/tylercamp/palcalc
+  Revision: c59712e24b839a0bedef16b06a1a0117e8741fe3 (v27)
+  License: MIT
+
+The upstream MIT license text is preserved at:
+
+  THIRD_PARTY_LICENSES/PalCalc-LICENSE
+
 The imported images depict Palworld game content. Palworld, its artwork, and
 its trademarks remain the property of Pocketpair, Inc. and/or their respective
 rights holders. They are not relicensed under this repository's MIT license.

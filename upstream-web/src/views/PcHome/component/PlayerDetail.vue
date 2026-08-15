@@ -9,7 +9,7 @@ import { useI18n } from "vue-i18n";
 import palMap from "@/assets/pal.json";
 import skillMap from "@/assets/skill.json";
 import { useDialog, useMessage, NAvatar, NTag, NButton } from "naive-ui";
-import PalDetail from "./PalDetail.vue";
+import PalDetailInspector from "@/components/PalDetailInspector.vue";
 import whitelistStore from "@/stores/model/whitelist.js";
 import playerToGuildStore from "@/stores/model/playerToGuild.js";
 import userStore from "@/stores/model/user";
@@ -18,7 +18,7 @@ import {
   localizedSkillName,
   statusPointTranslationKey,
 } from "@/utils/gameLabels";
-import { palPortrait } from "@/utils/gameData";
+import { enrichPals, palPortrait } from "@/utils/gameData";
 
 const { t, locale } = useI18n();
 const props = defineProps(["playerInfo", "playerPalsList"]);
@@ -211,7 +211,7 @@ const showPalDetailModal = ref(false);
 const palDetail = ref({});
 
 const showPalDetail = (pal) => {
-  palDetail.value = pal;
+  palDetail.value = enrichPals([pal])[0] || pal;
   showPalDetailModal.value = true;
 };
 
@@ -824,34 +824,12 @@ const createPlayerItemsColumns = () => {
       </n-button>
     </n-flex>
   </div>
-  <!-- 帕鲁详情 modal -->
-  <n-modal
+  <pal-detail-inspector
+    v-if="showPalDetailModal"
     v-model:show="showPalDetailModal"
-    preset="card"
-    :style="{ width: '90%', maxWidth: '400px' }"
-    header-style="padding:12px 20px;"
-    content-style="padding:12px 20px;margin:0;"
-    size="huge"
-    :bordered="false"
-    :segmented="{ content: 'soft', footer: 'soft' }"
-  >
-    <template #header-extra>
-      <div class="flex pr-3 space-x-2">
-        <n-tag type="primary" round> Lv.{{ palDetail.level }} </n-tag>
-        <n-tag :type="palDetail.gender === 'Male' ? 'primary' : 'error'" round>
-          {{ palDetail.gender === "Male" ? "♂" : "♀" }}
-        </n-tag>
-      </div>
-    </template>
-    <template #header>
-      {{
-        palDetail.nickname == ""
-          ? getPalName(palDetail.type)
-          : palDetail.nickname + "(" + getPalName(palDetail.type) + ")"
-      }}
-    </template>
-    <pal-detail :palDetail="palDetail"></pal-detail>
-  </n-modal>
+    :pal="palDetail"
+    context="player"
+  />
 
   <!-- 添加白名单 modal -->
   <n-modal

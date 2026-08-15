@@ -6,3 +6,4 @@ backups/
 *.log
 .env
 parsers/sav_cli/.venv/
+parsers/sav_cli/__pycache__/

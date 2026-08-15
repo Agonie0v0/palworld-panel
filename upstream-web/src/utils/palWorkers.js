@@ -21,8 +21,11 @@ export const buildPalWorkerRows = (bases = [], palNames = {}) =>
       const conditions = asArray(worker?.conditions || worker?.diseases).filter(
         Boolean,
       );
+      // Worker rows expose hunger as a normalized percentage. Keep the
+      // legacy full_stomach fallback for older save payloads, but never let
+      // it win when a percentage field is present.
       const hunger = clampPercent(
-        worker?.hunger_percent ?? worker?.full_stomach,
+        worker?.hunger_percent ?? worker?.hungerPercent ?? worker?.hunger ?? worker?.full_stomach,
       );
       const sanity = clampPercent(worker?.sanity);
 
@@ -40,8 +43,11 @@ export const buildPalWorkerRows = (bases = [], palNames = {}) =>
         lucky: Boolean(worker?.lucky ?? worker?.is_lucky),
         alpha: Boolean(worker?.alpha ?? worker?.is_boss),
         gender: worker?.gender || "",
-        hp: Number(worker?.hp || 0),
-        maxHp: Number(worker?.max_hp || 0),
+        // `enrichPals` exposes fixed-point save HP as currentHp/maxHp. Keep
+        // those normalized values when building the compact worker row so
+        // the shared inspector does not receive the raw x1000 integers.
+        hp: Number(worker?.currentHp ?? (worker?.hp != null ? Number(worker.hp) / 1000 : 0)),
+        maxHp: Number(worker?.maxHp ?? (worker?.max_hp != null ? Number(worker.max_hp) / 1000 : 0)),
         workSpeed: Number(worker?.workSpeed ?? worker?.workspeed ?? 0),
         iv: worker?.iv || { hp: 0, attack: 0, defense: 0, average: 0 },
         passives: asArray(worker?.passives),

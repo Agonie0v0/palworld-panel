@@ -25,6 +25,68 @@ import datetime
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
 
 
+def _scalar_value(prop, default=None):
+    """Unwrap the ``value`` layers used by palsav scalar properties.
+
+    Property values are normally wrapped once, while Byte/Enum values have an
+    additional typed wrapper.  Keep this deliberately conservative: a dict
+    without a ``value`` member is not a scalar and therefore resolves to the
+    caller's default instead of leaking a parser-internal object into JSON.
+    """
+    value = prop
+    for _ in range(8):
+        if value is None:
+            return default
+        if not isinstance(value, dict):
+            return value
+        if "value" not in value:
+            return default
+        value = value["value"]
+    return default
+
+
+def _optional_int(prop, default=None):
+    value = _scalar_value(prop, default)
+    if value is default or isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _optional_float(prop, default=None):
+    value = _scalar_value(prop, default)
+    if value is default or isinstance(value, bool):
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _optional_bool(prop, default=None):
+    value = _scalar_value(prop, default)
+    if value is default:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1"}:
+            return True
+        if normalized in {"false", "0"}:
+            return False
+    return default
+
+
+def _optional_string(prop, default=None):
+    value = _scalar_value(prop, default)
+    return value if isinstance(value, str) else default
+
+
 def hexuid_to_decimal(uid):
     """First 8 hex chars of a UID -> decimal string.
 
@@ -43,39 +105,60 @@ def _fixed_point(struct):
     if not struct:
         return 0
     try:
-        return int(struct["value"]["Value"]["value"])
+        value_struct = struct["value"]
+        return _optional_int(value_struct["Value"], 0)
     except (KeyError, TypeError):
         return 0
 
 
 def _byte_value(prop, default=0):
     """Extract the number from a ByteProperty (value nested one level)."""
-    if not prop:
-        return default
-    v = prop["value"]
-    if isinstance(v, dict):
-        return int(v["value"])
-    return int(v)
+    return _optional_int(prop, default)
 
 
 def _enum_value(prop, default=""):
-    if not prop:
+    value = _scalar_value(prop, default)
+    if not isinstance(value, str):
         return default
-    value = prop.get("value") if isinstance(prop, dict) else prop
-    while isinstance(value, dict) and "value" in value:
-        value = value["value"]
-    if value is None:
-        return default
-    return str(value).split("::")[-1]
+    return value.split("::")[-1]
 
 
 def _list_values(prop):
     if not prop:
         return []
-    value = prop.get("value") if isinstance(prop, dict) else prop
-    if isinstance(value, dict):
-        value = value.get("values", [])
+    value = prop
+    for _ in range(8):
+        if not isinstance(value, dict):
+            break
+        if "values" in value:
+            value = value["values"]
+            break
+        if "value" not in value:
+            return []
+        value = value["value"]
     return list(value) if isinstance(value, (list, tuple)) else []
+
+
+def _work_suitability_add_ranks(prop):
+    """Return permanent work-suitability bonuses keyed by enum suffix."""
+    result = {}
+    for raw_row in _list_values(prop):
+        row = raw_row
+        for _ in range(8):
+            if not isinstance(row, dict):
+                break
+            if "WorkSuitability" in row or "Rank" in row:
+                break
+            if "value" not in row:
+                break
+            row = row["value"]
+        if not isinstance(row, dict):
+            continue
+        work = _enum_value(row.get("WorkSuitability"), None)
+        rank = _optional_int(row.get("Rank"), None)
+        if work and rank is not None:
+            result[work] = rank
+    return result
 
 
 def tick2local(tick, real_date_time_ticks, filetime):
@@ -173,9 +256,30 @@ class Pal:
         self.ranged = _byte_value(data.get("Talent_Shot"), 0)
         self.defense = _byte_value(data.get("Talent_Defense"), 0)
         self.rank = _byte_value(data.get("Rank"), 1)
+        self.rank_up_exp = _optional_int(data.get("RankUpExp"), None)
+        self.friendship_point = _optional_int(data.get("FriendshipPoint"), None)
+        self.is_awakening = _optional_bool(data.get("bIsAwakening"), None)
         self.rank_attack = _byte_value(data.get("Rank_Attack"), 0)
         self.rank_defence = _byte_value(data.get("Rank_Defence"), 0)
         self.rank_craftspeed = _byte_value(data.get("Rank_CraftSpeed"), 0)
+        self.rank_hp = _optional_int(data.get("Rank_HP"), None)
+        self.favorite_index = _optional_int(data.get("FavoriteIndex"), None)
+        favorite_flags = [
+            value
+            for value in (
+                self.favorite_index > 0 if self.favorite_index is not None else None,
+                _optional_bool(data.get("IsFavoritePal"), None),
+                _optional_bool(data.get("bIsFavoritePal"), None),
+            )
+            if value is not None
+        ]
+        self.is_favorite_pal = any(favorite_flags) if favorite_flags else None
+        self.physical_health = _enum_value(data.get("PhysicalHealth"), None)
+        self.pal_revive_timer = _optional_float(data.get("PalReviveTimer"), None)
+        self.skin_name = _optional_string(data.get("SkinName"), None)
+        self.work_suitability_add_rank = _work_suitability_add_ranks(
+            data.get("GotWorkSuitabilityAddRankList")
+        )
         self.skills = (
             data["PassiveSkillList"]["value"]["values"]
             if data.get("PassiveSkillList")
@@ -226,9 +330,19 @@ class Pal:
             "ranged",
             "defense",
             "rank",
+            "rank_up_exp",
+            "friendship_point",
+            "is_awakening",
+            "rank_hp",
             "rank_attack",
             "rank_defence",
             "rank_craftspeed",
+            "favorite_index",
+            "is_favorite_pal",
+            "physical_health",
+            "pal_revive_timer",
+            "skin_name",
+            "work_suitability_add_rank",
             "skills",
             "equipped_skills",
             "mastered_skills",

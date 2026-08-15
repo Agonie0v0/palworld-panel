@@ -9,14 +9,14 @@ import { useI18n } from "vue-i18n";
 import palMap from "@/assets/pal.json";
 import palItems from "@/assets/items.json";
 import skillMap from "@/assets/skill.json";
-import PalDetail from "./PalDetail.vue";
+import PalDetailInspector from "@/components/PalDetailInspector.vue";
 import userStore from "@/stores/model/user";
 import ApiService from "@/service/api.js";
 import {
   localizedSkillName,
   statusPointTranslationKey,
 } from "@/utils/gameLabels";
-import { palPortrait } from "@/utils/gameData";
+import { enrichPals, palPortrait } from "@/utils/gameData";
 
 const { t, locale } = useI18n();
 
@@ -116,7 +116,7 @@ const showPalDetailModal = ref(false);
 const palDetail = ref({});
 
 const showPalDetail = (pal) => {
-  palDetail.value = pal;
+  palDetail.value = enrichPals([pal])[0] || pal;
   showPalDetailModal.value = true;
 };
 
@@ -421,8 +421,12 @@ onMounted(async () => {
               <n-list-item
                 v-for="pal in currentPlayerPalsList"
                 :key="pal.instance_id || `${pal.type}-${pal.nickname}-${pal.level}`"
-                class="py-2"
+                class="mobile-pal-entry py-2"
+                role="button"
+                tabindex="0"
                 @click="showPalDetail(pal)"
+                @keydown.enter="showPalDetail(pal)"
+                @keydown.space.prevent="showPalDetail(pal)"
               >
                 <div class="flex justify-between items-center">
                   <n-avatar
@@ -502,38 +506,12 @@ onMounted(async () => {
       </n-card>
     </n-layout>
   </div>
-  <!-- 帕鲁详情 modal -->
-  <n-modal
+  <pal-detail-inspector
+    v-if="showPalDetailModal"
     v-model:show="showPalDetailModal"
-    preset="card"
-    :style="{ width: '95%', maxWidth: '400px' }"
-    header-style="padding:12px;"
-    content-style="margin:0;padding:12px;"
-    size="huge"
-    :bordered="false"
-    :segmented="{ content: 'soft', footer: 'soft' }"
-  >
-    <template #header-extra>
-      <n-tag class="mr-2" type="primary" round>
-        Lv.{{ palDetail.level }}
-      </n-tag>
-      <n-tag
-        class="mr-3"
-        :type="palDetail.gender === 'Male' ? 'primary' : 'error'"
-        round
-      >
-        {{ palDetail.gender === "Male" ? "♂" : "♀" }}
-      </n-tag>
-    </template>
-    <template #header>
-      {{
-        palDetail.nickname == ""
-          ? getPalName(palDetail.type)
-          : palDetail.nickname + "(" + getPalName(palDetail.type) + ")"
-      }}
-    </template>
-    <pal-detail :palDetail="palDetail"></pal-detail>
-  </n-modal>
+    :pal="palDetail"
+    context="player"
+  />
 </template>
 
 <style scoped lang="less">
@@ -689,6 +667,15 @@ onMounted(async () => {
 .pal-search {
   width: 100%;
   margin-top: 18px;
+}
+
+.mobile-pal-entry {
+  cursor: pointer;
+}
+
+.mobile-pal-entry:focus-visible {
+  outline: 3px solid var(--app-accent);
+  outline-offset: -3px;
 }
 
 .mobile-detail-tabs {

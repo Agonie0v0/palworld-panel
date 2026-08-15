@@ -2,6 +2,8 @@ import gameIndex from "@/assets/game-data/game_index.json";
 import palWorkIndex from "@/assets/game-data/pal_work_index.json";
 import palDetailIndex from "@/assets/game-data/pal_detail_index.json";
 import palPartnerIndex from "@/assets/game-data/pal_partner_index.json";
+import palSpeciesIndex from "@/assets/game-data/pal_species_index.json";
+import workerPalIndex from "@/assets/game-data/worker_pal_index.json";
 import { makeMetadataContext, normalizeInventory, normalizePal } from "./gameDataCore";
 
 export const gameDataContext = makeMetadataContext({
@@ -9,6 +11,8 @@ export const gameDataContext = makeMetadataContext({
   work: palWorkIndex,
   detail: palDetailIndex,
   partner: palPartnerIndex,
+  species: palSpeciesIndex,
+  workers: workerPalIndex,
 });
 
 export const enrichPals = (pals) => pals.map((pal) => normalizePal(pal, gameDataContext));

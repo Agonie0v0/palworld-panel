@@ -19,10 +19,9 @@ import {
   Server,
   ShieldCheck,
   Tools,
-  X,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
-import PalPassiveBadge from "@/components/PalPassiveBadge.vue";
+import PalDetailInspector from "@/components/PalDetailInspector.vue";
 import PalWorkBadge from "@/components/PalWorkBadge.vue";
 import { enrichPals, palPortrait } from "@/utils/gameData";
 import { passiveTier } from "@/utils/palPresentation";
@@ -557,54 +556,21 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <n-modal v-if="selectedWorker" :show="true" :mask-closable="true" @update:show="$event || (selectedWorker = null)">
-      <article class="pal-focus" role="dialog" aria-modal="true" :aria-label="copy.focusTitle">
-        <button type="button" class="pal-focus__close" :aria-label="copy.close" @click="selectedWorker = null"><n-icon><X /></n-icon></button>
-        <div class="pal-focus__hero">
-          <div class="pal-focus__portrait"><span /><img :src="palPortrait(selectedWorker.assetKey)" :alt="selectedWorker.speciesName" @error="useFallback" /></div>
-          <div class="pal-focus__identity">
-            <span>{{ copy.focusTitle }}</span>
-            <h2>{{ selectedWorker.name }}</h2>
-            <p>{{ selectedWorker.speciesName }} · Lv.{{ selectedWorker.level || '—' }} · {{ selectedWorker.baseName }}</p>
-            <div><i :class="`is-${workerTone(selectedWorker)}`" />{{ workerState(selectedWorker) }}</div>
-          </div>
-        </div>
-        <div class="pal-focus__grid">
-          <section class="pal-focus__assignment">
-            <span>{{ copy.task }}</span><strong>{{ workerState(selectedWorker) }}</strong>
-            <dl><div><dt><n-icon><BuildingCommunity /></n-icon>{{ copy.base }}</dt><dd>{{ selectedWorker.baseName }}</dd></div><div><dt><n-icon><MapPin /></n-icon>{{ copy.facility }}</dt><dd>{{ facilityLabel(selectedWorker) }}</dd></div><div><dt><n-icon><Activity /></n-icon>{{ copy.workSpeed }}</dt><dd>{{ selectedWorker.workSpeed || '—' }}</dd></div></dl>
-          </section>
-          <section class="pal-focus__wellbeing">
-            <span>{{ copy.wellbeing }}</span>
-            <div><n-icon><Apple /></n-icon><strong>{{ copy.hunger }}</strong><em>{{ rounded(selectedWorker.hunger) }}</em><i class="pal-focus__meter"><b :style="{ width: `${selectedWorker.hunger ?? 0}%` }" /></i></div>
-            <div><n-icon><Heart /></n-icon><strong>{{ copy.sanity }}</strong><em>{{ rounded(selectedWorker.sanity) }}</em><i class="pal-focus__meter"><b :style="{ width: `${selectedWorker.sanity ?? 0}%` }" /></i></div>
-          </section>
-          <section class="pal-focus__capabilities">
-            <span>{{ copy.workAbility }}</span>
-            <div>
-              <pal-work-badge
-                v-for="work in selectedWorker.workSuitabilities"
-                :key="work.id"
-                :work="work"
-                :label="workLabel(work)"
-              />
-              <em v-if="!selectedWorker.workSuitabilities.length">—</em>
-            </div>
-          </section>
-          <section class="pal-focus__passives">
-            <span>{{ copy.passives }}</span>
-            <div v-if="selectedWorker.passives.length">
-              <pal-passive-badge
-                v-for="skill in selectedWorker.passives"
-                :key="skill.id"
-                :skill="skill"
-              />
-            </div>
-            <em v-else>{{ copy.noPassives }}</em>
-          </section>
-        </div>
-      </article>
-    </n-modal>
+    <pal-detail-inspector
+      v-if="selectedWorker"
+      :show="true"
+      :pal="{
+        ...selectedWorker.raw,
+        ...selectedWorker,
+        species: selectedWorker.raw?.species,
+        ownerName: selectedWorker.baseName,
+        locationLabel: facilityLabel(selectedWorker),
+        currentWork: workerState(selectedWorker),
+        hungerPercent: selectedWorker.hunger,
+      }"
+      context="overview"
+      @update:show="$event || (selectedWorker = null)"
+    />
   </div>
 </template>
 

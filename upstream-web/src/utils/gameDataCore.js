@@ -1,10 +1,49 @@
 const asArray = (value) => (Array.isArray(value) ? value : []);
 const number = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+const optionalNumber = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+};
+const lastToken = (value) => String(value || "").split("::").at(-1);
+const arrayValue = (value) => value == null || value === "" ? [] : (Array.isArray(value) ? value : [value]);
+const WORK_NAME_TO_ID = {
+  "\u751f\u706b": "EmitFlame",
+  "\u6d47\u6c34": "Watering",
+  "\u64ad\u79cd": "Seeding",
+  "\u53d1\u7535": "GenerateElectricity",
+  "\u624b\u5de5\u4f5c\u4e1a": "Handcraft",
+  "\u91c7\u96c6": "Collection",
+  "\u4f10\u6728": "Deforest",
+  "\u91c7\u77ff": "Mining",
+  "\u5236\u836f": "ProductMedicine",
+  "\u51b7\u5374": "Cool",
+  "\u642c\u8fd0": "Transport",
+  "\u7267\u573a": "MonsterFarm",
+  Kindling: "EmitFlame",
+  Watering: "Watering",
+  Planting: "Seeding",
+  Electricity: "GenerateElectricity",
+  Handiwork: "Handcraft",
+  Gathering: "Collection",
+  Lumbering: "Deforest",
+  Mining: "Mining",
+  Medicine: "ProductMedicine",
+  Cooling: "Cool",
+  Transporting: "Transport",
+  Farming: "MonsterFarm",
+};
 
 export const normalizePalId = (value = "") =>
   String(value).replace(/^boss_/i, "").trim();
 
-export const makeMetadataContext = ({ game = {}, work = {}, detail = {}, partner = {} } = {}) => {
+export const makeMetadataContext = ({
+  game = {},
+  work = {},
+  detail = {},
+  partner = {},
+  species = {},
+  workers = {},
+} = {}) => {
   const palMeta = new Map(
     Object.entries(game.pals || {}).map(([id, value]) => [id.toLowerCase(), { id, ...value }]),
   );
@@ -19,6 +58,13 @@ export const makeMetadataContext = ({ game = {}, work = {}, detail = {}, partner
     passiveDetails: detail.passives || {},
     palDetails: new Map(Object.entries(detail.pals || {}).map(([id, value]) => [id.toLowerCase(), value])),
     partners: new Map(Object.entries(partner).map(([id, value]) => [id.toLowerCase(), value])),
+    species: new Map(
+      Object.entries(species.pals || species).map(([id, value]) => [id.toLowerCase(), { id, ...value }]),
+    ),
+    speciesAliases: new Map(
+      Object.entries(species.aliases || {}).map(([id, value]) => [id.toLowerCase(), String(value).toLowerCase()]),
+    ),
+    workers: new Map(Object.entries(workers).map(([id, value]) => [id.toLowerCase(), value])),
   };
 };
 
@@ -36,8 +82,14 @@ export const normalizePal = (pal = {}, context) => {
   const rawId = String(pal.type || pal.pal_id || "");
   const palId = normalizePalId(rawId);
   const key = palId.toLowerCase();
-  const meta = context.palMeta.get(key) || {};
-  const details = context.palDetails.get(key) || {};
+  const speciesKey = context.speciesAliases?.get(rawId.toLowerCase()) ||
+    context.speciesAliases?.get(key) || key;
+  const speciesMeta = context.species?.get(speciesKey) || {};
+  const resolvedId = speciesMeta.id || context.palMeta.get(speciesKey)?.id || palId;
+  const resolvedKey = String(resolvedId).toLowerCase();
+  const meta = context.palMeta.get(resolvedKey) || context.palMeta.get(key) || {};
+  const details = context.palDetails.get(resolvedKey) || context.palDetails.get(key) || {};
+  const worker = context.workers?.get(resolvedKey) || context.workers?.get(key) || {};
   const passiveIds = asArray(pal.skills || pal.passives).map((skill) =>
     typeof skill === "string" ? skill.split("::").at(-1) : skill.id,
   );
@@ -48,34 +100,123 @@ export const normalizePal = (pal = {}, context) => {
     const id = typeof skill === "string" ? skill.split("::").at(-1) : skill.id;
     return skillInfo(id, {}, context.activeDetails);
   });
-  const workSuitabilities = Object.entries(context.work.get(key) || {})
+  const catalogWork = speciesMeta.workSuitabilities || speciesMeta.work ||
+    context.work.get(resolvedKey) || context.work.get(key) || {};
+  const workEntries = Array.isArray(catalogWork)
+    ? catalogWork.map((item) => [item.id || WORK_NAME_TO_ID[item.name] || item.name, item.level, item.name])
+    : Object.entries(catalogWork);
+  const workSuitabilities = workEntries
     .filter(([, level]) => number(level) > 0)
-    .map(([id, level]) => ({ id, level: number(level) }));
+    .map(([id, level, name]) => ({ id, name: name || "", level: number(level) }));
   const iv = {
-    hp: number(pal.iv?.hp ?? pal.melee),
-    attack: number(pal.iv?.attack ?? pal.ranged),
-    defense: number(pal.iv?.defense ?? pal.defense),
+    hp: optionalNumber(pal.iv?.hp ?? pal.melee),
+    attack: optionalNumber(pal.iv?.attack ?? pal.ranged),
+    defense: optionalNumber(pal.iv?.defense ?? pal.defense),
   };
-  iv.average = Math.round((iv.hp + iv.attack + iv.defense) / 3);
+  iv.average = Object.values(iv).every((value) => value !== null)
+    ? Math.round((iv.hp + iv.attack + iv.defense) / 3)
+    : null;
+  const rawHp = optionalNumber(pal.hp);
+  const maxHpRaw = optionalNumber(pal.max_hp ?? pal.maxHp);
+  const normalizedMaxHp = pal.max_hp != null
+    ? (maxHpRaw === null ? null : maxHpRaw / 1000)
+    : maxHpRaw;
+  const foodCapacity = optionalNumber(
+    speciesMeta.maxFullStomach ?? speciesMeta.max_full_stomach ?? worker.max_full_stomach,
+  );
+  const fullStomach = optionalNumber(pal.full_stomach ?? pal.fullStomach ?? pal.hunger);
+  const partnerSource = speciesMeta.partnerSkill ||
+    context.partners.get(resolvedKey) || context.partners.get(key) || null;
+  const partnerSkill = partnerSource ? {
+    ...partnerSource,
+    description: partnerSource.description || partnerSource.summary || "",
+  } : null;
+  const speciesBaseStats = speciesMeta.baseStats || {};
+  const speciesMovement = speciesMeta.movement || {};
+  const species = {
+    ...speciesMeta,
+    id: resolvedId,
+    no: speciesMeta.no ?? speciesMeta.paldexNumber ?? null,
+    name: speciesMeta.name || meta.name || resolvedId || "-",
+    englishName: speciesMeta.englishName || "",
+    elements: arrayValue(speciesMeta.elements || speciesMeta.element),
+    rarity: optionalNumber(speciesMeta.rarity ?? meta.rarity),
+    description: speciesMeta.description || "",
+    food: optionalNumber(speciesMeta.food),
+    maxFullStomach: foodCapacity,
+    baseStats: {
+      hp: optionalNumber(speciesBaseStats.hp ?? speciesMeta.hp),
+      attack: optionalNumber(speciesBaseStats.attack ?? speciesMeta.attack ?? details.attack),
+      defense: optionalNumber(speciesBaseStats.defense ?? speciesMeta.defense ?? details.defense),
+      workSpeed: optionalNumber(
+        speciesBaseStats.workSpeed ?? speciesBaseStats.work_speed ??
+        speciesMeta.workSpeed ?? speciesMeta.work_speed,
+      ),
+    },
+    movement: {
+      walk: optionalNumber(speciesMovement.walk ?? speciesMeta.walk),
+      run: optionalNumber(speciesMovement.run ?? speciesMeta.runSpeed ?? speciesMeta.run),
+      ride: optionalNumber(speciesMovement.ride ?? speciesMeta.rideSpeed),
+      swim: optionalNumber(speciesMovement.swim ?? speciesMeta.swimSpeed),
+      transport: optionalNumber(speciesMovement.transport ?? speciesMeta.transportSpeed),
+      stamina: optionalNumber(speciesMovement.stamina ?? speciesMeta.stamina),
+    },
+    partnerSkill,
+    workSuitabilities,
+    levelSkills: asArray(speciesMeta.levelSkills || speciesMeta.skills),
+    drops: asArray(speciesMeta.drops),
+  };
   return {
     ...pal,
     palId,
-    name: pal.nickname || meta.name || palId || "-",
-    speciesName: meta.name || palId || "-",
+    speciesId: resolvedId,
+    name: pal.nickname || species.name,
+    speciesName: species.name,
+    species,
     lucky: Boolean(pal.lucky ?? pal.is_lucky),
     alpha: Boolean(pal.alpha ?? pal.is_boss ?? /^boss_/i.test(rawId)),
+    tower: Boolean(pal.tower ?? pal.is_tower ?? /^gym_/i.test(rawId)),
     stars: Math.max(0, number(pal.stars ?? pal.rank) - (pal.stars == null ? 1 : 0)),
-    attack: number(pal.attack ?? details.attack),
-    defenseStat: number(pal.defense_stat ?? details.defense),
-    workSpeed: number(pal.work_speed ?? pal.workspeed ?? 70),
+    currentHp: rawHp === null ? null : rawHp / 1000,
+    maxHp: normalizedMaxHp && normalizedMaxHp > 0 ? normalizedMaxHp : null,
+    attack: optionalNumber(pal.attack),
+    defenseStat: optionalNumber(pal.defense_stat),
+    workSpeed: optionalNumber(pal.work_speed ?? pal.workspeed),
+    fullStomach,
+    maxFullStomach: foodCapacity,
+    hungerPercent: fullStomach === null || !foodCapacity
+      ? null
+      : Math.max(0, Math.min(100, (fullStomach / foodCapacity) * 100)),
+    sanity: optionalNumber(pal.sanity),
+    rankBoosts: {
+      hp: optionalNumber(pal.rank_hp),
+      attack: optionalNumber(pal.rank_attack),
+      defense: optionalNumber(pal.rank_defence ?? pal.rank_defense),
+      workSpeed: optionalNumber(pal.rank_craftspeed),
+    },
+    rankUpExp: optionalNumber(pal.rank_up_exp),
+    friendshipPoint: optionalNumber(pal.friendship_point),
+    awakening: pal.is_awakening ?? null,
+    favorite: pal.is_favorite_pal ?? null,
+    favoriteIndex: optionalNumber(pal.favorite_index),
+    physicalHealth: pal.physical_health || null,
+    reviveTimer: optionalNumber(pal.pal_revive_timer),
+    skinName: pal.skin_name || null,
+    workSuitabilityAddRank: pal.work_suitability_add_rank || {},
     iv,
     passives,
     equippedSkills: active(pal.equipped_skills),
     masteredSkills: active(pal.mastered_skills),
     workSuitabilities,
-    partnerSkill: context.partners.get(key) || null,
+    partnerSkill,
+    currentWork: lastToken(pal.current_work_suitability),
+    workerEvent: lastToken(pal.base_worker_event),
+    sickness: lastToken(pal.worker_sick),
+    disabledWork: asArray(pal.disabled_work).map(lastToken).filter(Boolean),
     ownerName: pal.base_name || pal.owner_name || pal.owner_uid || "-",
     ownerKind: pal.location_kind === "base" ? "base" : "player",
+    locationKind: pal.location_kind || "player",
+    locationLabel: pal.facility || pal.activity?.label || pal.base_name || pal.owner_name || "-",
   };
 };
 

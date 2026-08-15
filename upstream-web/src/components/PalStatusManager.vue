@@ -14,9 +14,9 @@ import {
   Search,
   Tools,
   TrendingUp,
-  X,
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
+import PalDetailInspector from "@/components/PalDetailInspector.vue";
 import PalPassiveBadge from "@/components/PalPassiveBadge.vue";
 import PalWorkBadge from "@/components/PalWorkBadge.vue";
 import ToolSurface from "@/components/ToolSurface.vue";
@@ -504,58 +504,20 @@ onBeforeUnmount(() => clearInterval(statusRefreshTimer));
     </n-tabs>
   </tool-surface>
 
-  <n-modal v-if="selected" :show="true" :mask-closable="true" @update:show="$event || (selected = null)">
-    <article class="pal-inspector" role="dialog" aria-modal="true" :aria-label="copy.detail">
-      <button type="button" class="pal-inspector__close" :aria-label="zh ? '关闭详情' : 'Close details'" @click="selected = null"><n-icon><X /></n-icon></button>
-      <header class="detail-hero">
-        <div class="detail-portrait"><span /><img :src="palPortrait(selected.type)" :alt="selected.speciesName" @error="useFallback" /></div>
-        <div><small>{{ copy.detail }}</small><h2>{{ selected.name }}</h2><p>{{ selected.speciesName }} · Lv.{{ selected.level }} · {{ '★'.repeat(selected.stars) || (zh ? '零星' : 'No stars') }}</p><n-flex><n-tag v-if="selected.lucky" type="warning">Lucky</n-tag><n-tag v-if="selected.alpha" type="error">Alpha</n-tag></n-flex></div>
-      </header>
-      <div class="pal-inspector__body">
-        <section class="detail-facts">
-          <n-descriptions :column="2" bordered label-placement="top">
-            <n-descriptions-item :label="copy.owner">{{ selected.baseName }}</n-descriptions-item>
-            <n-descriptions-item :label="copy.currentTask">{{ activityLabel(selected) }}</n-descriptions-item>
-            <n-descriptions-item :label="copy.facility">{{ facilityLabel(selected) }}</n-descriptions-item>
-            <n-descriptions-item :label="copy.workSpeed">{{ selected.workSpeed || '-' }}</n-descriptions-item>
-            <n-descriptions-item label="HP">{{ selected.hp || '-' }} / {{ selected.maxHp || '-' }}</n-descriptions-item>
-            <n-descriptions-item :label="copy.wellbeing">{{ copy.hunger }} {{ rounded(selected.hunger) }} · {{ copy.sanity }} {{ rounded(selected.sanity) }}</n-descriptions-item>
-            <n-descriptions-item label="HP IV">{{ selected.iv.hp }}</n-descriptions-item>
-            <n-descriptions-item label="Attack / Defense IV">{{ selected.iv.attack }} / {{ selected.iv.defense }}</n-descriptions-item>
-          </n-descriptions>
-          <section class="detail-section">
-            <h3>{{ copy.work }}</h3>
-            <div class="work-suitability-grid">
-              <pal-work-badge
-                v-for="work in selected.workSuitabilities"
-                :key="work.id"
-                :work="work"
-                :label="workLabel(work)"
-              />
-              <span v-if="!selected.workSuitabilities.length">-</span>
-            </div>
-          </section>
-          <section v-if="selected.disabledWork.length" class="detail-section"><h3>{{ copy.disabledWork }}</h3><div class="detail-tags"><n-tag v-for="work in selected.disabledWork" :key="work" type="warning">{{ workLabels[work] || humanizeToken(work) }}</n-tag></div></section>
-        </section>
-        <section class="detail-skills">
-          <section class="detail-section">
-            <h3>{{ copy.passives }}</h3>
-            <div class="passive-list">
-              <pal-passive-badge
-                v-for="skill in selected.passives"
-                :key="skill.id"
-                :skill="skill"
-              />
-              <span v-if="!selected.passives.length">-</span>
-            </div>
-          </section>
-          <section class="detail-section"><h3>{{ copy.partner }}</h3><div v-if="selected.partnerSkill" class="skill-list"><div><strong>{{ selected.partnerSkill.name }}</strong><p>{{ selected.partnerSkill.description }}</p></div></div><span v-else>-</span></section>
-          <section class="detail-section"><h3>{{ copy.skills }}</h3><div class="skill-list"><div v-for="skill in selected.equippedSkills" :key="skill.id"><strong>{{ skill.name }}</strong><p>{{ [skill.element, skill.power != null ? `Power ${skill.power}` : '', skill.cooldown != null ? `CD ${skill.cooldown}s` : ''].filter(Boolean).join(' · ') }}</p></div><span v-if="!selected.equippedSkills.length">-</span></div></section>
-          <section class="detail-section"><h3>{{ copy.masteredSkills }}</h3><div class="skill-list"><div v-for="skill in selected.masteredSkills" :key="skill.id"><strong>{{ skill.name }}</strong><p>{{ [skill.element, skill.power != null ? `Power ${skill.power}` : '', skill.cooldown != null ? `CD ${skill.cooldown}s` : ''].filter(Boolean).join(' · ') }}</p></div><span v-if="!selected.masteredSkills.length">-</span></div></section>
-        </section>
-      </div>
-    </article>
-  </n-modal>
+  <pal-detail-inspector
+    v-if="selected"
+    :show="true"
+    :pal="{
+      ...selected.raw,
+      ...selected,
+      ownerName: selected.baseName,
+      locationLabel: facilityLabel(selected),
+      currentWork: activityLabel(selected),
+      hungerPercent: selected.hunger,
+    }"
+    context="status"
+    @update:show="$event || (selected = null)"
+  />
 </template>
 
 <style scoped>
