@@ -34,6 +34,10 @@ test("merges catalog data without presenting species stats as current stats", ()
     sanity: 88,
     rank_hp: 2,
     rank_attack: 3,
+    attack: 142,
+    defense_stat: 119,
+    workspeed: 137,
+    work_suitability_add_rank: { Mining: 2, Collection: 1 },
     current_work_suitability: "EPalWorkSuitability::Mining",
     disabled_work: ["EPalWorkSuitability::Transport"],
   }, context);
@@ -42,11 +46,20 @@ test("merges catalog data without presenting species stats as current stats", ()
   assert.equal(pal.species.no, "139");
   assert.deepEqual(pal.species.elements, ["Earth"]);
   assert.equal(pal.species.baseStats.attack, 130);
-  assert.equal(pal.attack, null);
   assert.equal(pal.currentHp, 123.45);
   assert.equal(pal.maxHp, null);
   assert.equal(pal.hungerPercent, 50);
   assert.equal(pal.rankBoosts.hp, 2);
+  assert.equal(pal.attack, 142);
+  assert.equal(pal.defenseStat, 119);
+  assert.equal(pal.workSpeed, 137);
+  assert.deepEqual(
+    pal.workSuitabilities.map(({ id, level }) => ({ id, level })),
+    [{ id: "Handcraft", level: 4 }, { id: "Mining", level: 5 }, { id: "Collection", level: 1 }],
+  );
+  assert.deepEqual(pal.species.workSuitabilities.map(({ id, level }) => ({ id, level })), [
+    { id: "Handcraft", level: 4 }, { id: "Mining", level: 3 },
+  ]);
   assert.equal(pal.currentWork, "Mining");
   assert.deepEqual(pal.disabledWork, ["Transport"]);
   assert.equal(pal.species.levelSkills[0].level, 1);

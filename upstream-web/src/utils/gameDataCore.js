@@ -32,6 +32,10 @@ const WORK_NAME_TO_ID = {
   Transporting: "Transport",
   Farming: "MonsterFarm",
 };
+const normalizeWorkId = (value) => {
+  const token = String(value || "").replace(/^EPalWorkSuitability::/i, "");
+  return WORK_NAME_TO_ID[token] || token;
+};
 
 export const normalizePalId = (value = "") =>
   String(value).replace(/^boss_/i, "").trim();
@@ -103,11 +107,34 @@ export const normalizePal = (pal = {}, context) => {
   const catalogWork = speciesMeta.workSuitabilities || speciesMeta.work ||
     context.work.get(resolvedKey) || context.work.get(key) || {};
   const workEntries = Array.isArray(catalogWork)
-    ? catalogWork.map((item) => [item.id || WORK_NAME_TO_ID[item.name] || item.name, item.level, item.name])
-    : Object.entries(catalogWork);
-  const workSuitabilities = workEntries
+    ? catalogWork.map((item) => [normalizeWorkId(item.id || item.name), item.level, item.name])
+    : Object.entries(catalogWork).map(([id, level]) => [normalizeWorkId(id), level, ""]);
+  const speciesWorkSuitabilities = workEntries
     .filter(([, level]) => number(level) > 0)
     .map(([id, level, name]) => ({ id, name: name || "", level: number(level) }));
+  // WorkSuitabilityOptionInfo/GotWorkSuitabilityAddRankList is persisted on
+  // each Pal. Merge those individual rank bonuses into the catalog baseline;
+  // the catalog remains available separately as species reference data.
+  const individualWork = new Map(speciesWorkSuitabilities.map((item) => [item.id, { ...item }]));
+  const individualWorkSource = pal.work_suitabilities || pal.workSuitabilities;
+  if (Array.isArray(individualWorkSource) && individualWorkSource.length) {
+    individualWork.clear();
+    individualWorkSource.forEach((item) => {
+      const id = normalizeWorkId(item?.id || item?.name);
+      const level = number(item?.level);
+      if (id && level > 0) individualWork.set(id, { id, name: item?.name || "", level });
+    });
+  } else {
+    Object.entries(pal.work_suitability_add_rank || pal.workSuitabilityAddRank || {}).forEach(([rawId, rawBonus]) => {
+      const id = normalizeWorkId(rawId);
+      const bonus = number(rawBonus);
+      if (!id || bonus <= 0) return;
+      const item = individualWork.get(id);
+      if (item) item.level += bonus;
+      else individualWork.set(id, { id, name: "", level: bonus });
+    });
+  }
+  const workSuitabilities = [...individualWork.values()];
   const iv = {
     hp: optionalNumber(pal.iv?.hp ?? pal.melee),
     attack: optionalNumber(pal.iv?.attack ?? pal.ranged),
@@ -162,7 +189,7 @@ export const normalizePal = (pal = {}, context) => {
       stamina: optionalNumber(speciesMovement.stamina ?? speciesMeta.stamina),
     },
     partnerSkill,
-    workSuitabilities,
+    workSuitabilities: speciesWorkSuitabilities,
     levelSkills: asArray(speciesMeta.levelSkills || speciesMeta.skills),
     drops: asArray(speciesMeta.drops),
   };

@@ -43,7 +43,7 @@ const copy = computed(() => zh.value ? {
   passives: "被动词条", equipped: "已装备主动技能", mastered: "已掌握主动技能", disabledWork: "已禁用工作",
   number: "图鉴编号", rarity: "稀有度", elements: "属性", food: "食量", description: "图鉴描述",
   baseStats: "物种基础数据", movement: "移动与耐力", walk: "步行", run: "奔跑", ride: "骑乘", swim: "游泳", transport: "搬运", stamina: "耐力",
-  work: "工作适应性", partner: "伙伴技能", levelSkills: "等级技能", drops: "掉落物",
+  work: "存档工作能力", workHint: "等级已合并存档中的个体工作加成", partner: "伙伴技能", levelSkills: "等级技能", drops: "掉落物",
   power: "威力", cooldown: "冷却", unlockLevel: "解锁等级", rate: "概率", amount: "数量",
   lucky: "闪光", alpha: "头目", tower: "高塔", male: "雄性", female: "雌性", unknown: "未知", empty: "暂无记录",
   instanceId: "实例 ID", copyId: "复制实例 ID", copied: "已复制", friendship: "好感度", favorite: "收藏", awakening: "觉醒", skin: "外观",
@@ -58,7 +58,7 @@ const copy = computed(() => zh.value ? {
   passives: "Passives", equipped: "Equipped active skills", mastered: "Mastered active skills", disabledWork: "Disabled work",
   number: "Paldeck number", rarity: "Rarity", elements: "Elements", food: "Food", description: "Paldeck description",
   baseStats: "Species base stats", movement: "Movement and stamina", walk: "Walk", run: "Run", ride: "Ride", swim: "Swim", transport: "Transport", stamina: "Stamina",
-  work: "Work suitability", partner: "Partner skill", levelSkills: "Level-up skills", drops: "Drops",
+  work: "Save work suitability", workHint: "Levels include individual bonuses persisted in the save", partner: "Partner skill", levelSkills: "Level-up skills", drops: "Drops",
   power: "Power", cooldown: "Cooldown", unlockLevel: "Unlock level", rate: "Rate", amount: "Amount",
   lucky: "Lucky", alpha: "Alpha", tower: "Tower", male: "Male", female: "Female", unknown: "Unknown", empty: "No record",
   instanceId: "Instance ID", copyId: "Copy instance ID", copied: "Copied", friendship: "Friendship", favorite: "Favorite", awakening: "Awakening", skin: "Skin",
@@ -99,6 +99,9 @@ const model = computed(() => {
     ownerName: firstValue(raw.ownerName, raw.owner_name, raw.baseName, raw.base_name, raw.owner_uid),
     locationLabel: firstValue(raw.locationLabel, raw.location_label, raw.location),
     currentWork: firstValue(raw.currentWork, raw.activityLabel, raw.activity?.label, raw.current_work_suitability),
+    attack: numberOrNull(raw.attack),
+    defense: numberOrNull(raw.defenseStat, raw.defense_stat, raw.defense),
+    workSpeed: numberOrNull(raw.workSpeed, raw.workspeed, raw.work_speed),
     fullStomach,
     maxFullStomach,
     hungerPercent: numberOrNull(raw.hungerPercent, raw.hunger_percent, raw.hunger),
@@ -119,7 +122,9 @@ const model = computed(() => {
     equippedSkills: asArray(firstValue(raw.equippedSkills, raw.equipped_skills, [])),
     masteredSkills: asArray(firstValue(raw.masteredSkills, raw.mastered_skills, [])),
     disabledWork: asArray(firstValue(raw.disabledWork, raw.disabled_work, [])).map(humanize),
-    workSuitabilities: asArray(firstValue(species.workSuitabilities, raw.workSuitabilities, [])),
+    // The individual save record must win. Species metadata is only a
+    // fallback for legacy payloads that predate per-Pal work fields.
+    workSuitabilities: asArray(firstValue(raw.workSuitabilities, raw.work_suitabilities, species.workSuitabilities, [])),
     partnerSkill: (() => {
       const partner = firstValue(species.partnerSkill, raw.partnerSkill);
       return partner ? { ...partner, description: partner.description || partner.summary || "" } : null;
@@ -144,6 +149,9 @@ const individualFacts = computed(() => [
   { label: copy.value.owner, value: model.value.ownerName },
   { label: copy.value.location, value: model.value.locationLabel },
   { label: copy.value.status, value: model.value.currentWork },
+  { label: copy.value.attack, value: model.value.attack },
+  { label: copy.value.defense, value: model.value.defense },
+  { label: copy.value.workSpeed, value: model.value.workSpeed },
   { label: copy.value.friendship, value: model.value.friendship },
   { label: copy.value.favorite, value: model.value.favorite === undefined ? undefined : (model.value.favorite ? copy.value.yes : copy.value.no) },
   { label: copy.value.favoriteIndex, value: model.value.favoriteIndex },
@@ -154,21 +162,8 @@ const individualFacts = computed(() => [
   { label: copy.value.reviveTimer, value: model.value.reviveTimer == null ? null : `${model.value.reviveTimer}s` },
 ].filter((item) => item.value !== undefined && item.value !== null && item.value !== ""));
 const speciesFacts = computed(() => [
-  { label: copy.value.number, value: model.value.number },
-  { label: copy.value.rarity, value: model.value.rarity },
   { label: copy.value.elements, value: model.value.elements.join(" / ") },
-  { label: copy.value.food, value: model.value.food },
 ].filter((item) => item.value !== undefined && item.value !== null && item.value !== ""));
-const statRows = computed(() => [
-  { label: copy.value.hp, value: numberOrNull(model.value.baseStats.hp) },
-  { label: copy.value.attack, value: numberOrNull(model.value.baseStats.attack) },
-  { label: copy.value.defense, value: numberOrNull(model.value.baseStats.defense) },
-  { label: copy.value.workSpeed, value: numberOrNull(model.value.baseStats.workSpeed) },
-].filter((item) => item.value !== null));
-const movementRows = computed(() => [
-  [copy.value.walk, "walk"], [copy.value.run, "run"], [copy.value.ride, "ride"],
-  [copy.value.swim, "swim"], [copy.value.transport, "transport"], [copy.value.stamina, "stamina"],
-].map(([label, key]) => ({ label, value: numberOrNull(model.value.movement[key]) })).filter((item) => item.value !== null));
 const rankRows = computed(() => [
   { label: copy.value.hp, value: numberOrNull(model.value.rankBoosts.hp) },
   { label: copy.value.attack, value: numberOrNull(model.value.rankBoosts.attack) },
@@ -180,18 +175,6 @@ const workBonusRows = computed(() => Object.entries(model.value.workSuitabilityA
   .filter((item) => item.value !== null && item.value !== 0));
 const workLabel = (work) => work?.name || humanize(work?.id) || "-";
 const skillName = (skill) => typeof skill === "string" ? humanize(skill) : firstValue(skill?.name, skill?.id, "-");
-const skillMeta = (skill) => typeof skill === "string" ? "" : [
-  skill?.element,
-  skill?.power != null ? `${copy.value.power} ${skill.power}` : "",
-  skill?.cooldown != null ? `${copy.value.cooldown} ${skill.cooldown}s` : "",
-].filter(Boolean).join(" · ");
-const dropMeta = (drop) => {
-  const amount = drop?.amount ?? (drop?.min != null || drop?.max != null
-    ? `${drop?.min ?? drop?.max}-${drop?.max ?? drop?.min}` : null);
-  const chance = drop?.chance ?? (drop?.rate != null ? `${drop.rate}%` : null);
-  return [amount != null ? `${copy.value.amount} ${amount}` : "", chance != null ? `${copy.value.rate} ${chance}` : ""]
-    .filter(Boolean).join(" · ");
-};
 const percent = (value, max = 100) => value == null ? null : Math.min(100, Math.max(0, (Number(value) / Math.max(1, Number(max || 100))) * 100));
 const healthText = computed(() => model.value.currentHp == null ? "-" : model.value.maxHp == null
   ? `${Math.round(model.value.currentHp).toLocaleString()} · ${copy.value.maxHpUnavailable}`
@@ -252,7 +235,7 @@ const useFallback = (event) => {
       <div class="pal-detail-inspector__columns">
         <section class="pal-detail-pane" aria-labelledby="pal-individual-title">
           <header><span>{{ copy.individual }}</span><h3 id="pal-individual-title">{{ model.name }}</h3></header>
-          <section class="pal-detail-section"><h4>{{ copy.work }}</h4><div v-if="model.workSuitabilities.length" class="pal-detail-work"><pal-work-badge v-for="work in model.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.work }}</h4><p class="pal-detail-source-note">{{ copy.workHint }}</p><div v-if="model.workSuitabilities.length" class="pal-detail-work"><pal-work-badge v-for="work in model.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
           <dl v-if="individualFacts.length" class="pal-detail-facts"><div v-for="item in individualFacts" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
 
           <section class="pal-detail-section"><h4>{{ copy.hp }}</h4><strong class="pal-detail-health">{{ healthText }}</strong></section>
@@ -268,8 +251,8 @@ const useFallback = (event) => {
           <section v-if="rankRows.length" class="pal-detail-section"><h4>{{ copy.rankBoosts }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in rankRows" :key="item.label"><dt>{{ item.label }}</dt><dd>+{{ item.value }}</dd></div></dl></section>
           <section v-if="workBonusRows.length" class="pal-detail-section"><h4>{{ copy.workBonus }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in workBonusRows" :key="item.id"><dt>{{ item.label }}</dt><dd>+{{ item.value }}</dd></div></dl></section>
           <section class="pal-detail-section"><h4>{{ copy.passives }}</h4><div v-if="model.passives.length" class="pal-detail-passives"><pal-passive-badge v-for="skill in model.passives" :key="skill.id || skill.name" :skill="skill" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.equipped }}</h4><div v-if="model.equippedSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.equippedSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><small v-if="skillMeta(skill)">{{ skillMeta(skill) }}</small><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.mastered }}</h4><div v-if="model.masteredSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.masteredSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><small v-if="skillMeta(skill)">{{ skillMeta(skill) }}</small><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.equipped }}</h4><div v-if="model.equippedSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.equippedSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.mastered }}</h4><div v-if="model.masteredSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.masteredSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
           <section v-if="model.disabledWork.length" class="pal-detail-section"><h4>{{ copy.disabledWork }}</h4><div class="pal-detail-tags"><n-tag v-for="work in model.disabledWork" :key="work" type="warning">{{ work }}</n-tag></div></section>
         </section>
 
@@ -284,11 +267,9 @@ const useFallback = (event) => {
           <header><span>{{ copy.species }}</span><h3 id="pal-species-title">{{ model.speciesName }}</h3><p v-if="model.englishName">{{ model.englishName }}</p></header>
           <dl v-if="speciesFacts.length" class="pal-detail-facts"><div v-for="item in speciesFacts" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
           <section v-if="model.description" class="pal-detail-section"><h4>{{ copy.description }}</h4><p class="pal-detail-description" :class="{ 'is-clamped': hasLongDescription && !descriptionExpanded }">{{ model.description }}</p><button v-if="hasLongDescription" type="button" class="pal-detail-text-toggle" :aria-expanded="descriptionExpanded" @click="descriptionExpanded = !descriptionExpanded">{{ descriptionExpanded ? copy.showLess : copy.showMore }}</button></section>
-          <section v-if="statRows.length" class="pal-detail-section"><h4>{{ copy.baseStats }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in statRows" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></section>
-          <section v-if="movementRows.length" class="pal-detail-section"><h4>{{ copy.movement }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in movementRows" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></section>
           <section class="pal-detail-section"><h4>{{ copy.partner }}</h4><article v-if="model.partnerSkill" class="pal-detail-partner"><strong>{{ model.partnerSkill.name || model.partnerSkill.id }}</strong><p v-if="model.partnerSkill.description">{{ model.partnerSkill.description }}</p></article><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.levelSkills }}</h4><div v-if="model.levelSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.levelSkills" :key="`${skill.level}-${skill.id}`"><strong>{{ skill.name || skill.id }}</strong><small>{{ copy.unlockLevel }} {{ skill.level }}<template v-if="skillMeta(skill)"> · {{ skillMeta(skill) }}</template></small><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.drops }}</h4><div v-if="model.drops.length" class="pal-detail-drop-list"><article v-for="drop in model.drops" :key="drop.id || drop.name"><strong>{{ drop.name || drop.id }}</strong><small v-if="dropMeta(drop)">{{ dropMeta(drop) }}</small></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.levelSkills }}</h4><div v-if="model.levelSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.levelSkills" :key="skill.id"><strong>{{ skill.name || skill.id }}</strong><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.drops }}</h4><div v-if="model.drops.length" class="pal-detail-drop-list"><article v-for="drop in model.drops" :key="drop.id || drop.name"><strong>{{ drop.name || drop.id }}</strong></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
         </section>
       </div>
     </article>
@@ -309,6 +290,7 @@ const useFallback = (event) => {
 .pal-detail-pane { min-width: 0; }.pal-detail-pane > header { padding: 0 2px 12px; border-bottom: 1px solid var(--app-border); }.pal-detail-pane > header h3 { margin: 3px 0 0; font-size: 20px; }.pal-detail-pane > header p { margin: 3px 0 0; color: var(--app-ink-muted); font-size: 12px; }
 .pal-detail-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0 0; overflow: hidden; background: var(--app-border); border: 1px solid var(--app-border); border-radius: 10px; gap: 1px; }.pal-detail-facts > div { min-width: 0; padding: 10px 12px; background: var(--app-surface); }.pal-detail-facts dt,.pal-detail-inline-stats dt { color: var(--app-ink-muted); font-size: 10px; }.pal-detail-facts dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; }
 .pal-detail-section { min-width: 0; margin-top: 10px; padding: 14px; background: var(--app-surface-muted); border-radius: 10px; }.pal-detail-section h4 { margin: 0 0 10px; font-size: 13px; }.pal-detail-health { display: block; overflow-wrap: anywhere; font: 700 13px var(--app-font-data); }
+.pal-detail-source-note { margin: -4px 0 9px; color: var(--app-ink-muted); font-size: 10px; line-height: 1.45; }
 .pal-detail-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; background: var(--app-border); border-radius: 8px; gap: 1px; }.pal-detail-stat-grid > div { min-width: 0; padding: 9px; background: var(--app-surface); text-align: center; }.pal-detail-stat-grid span,.pal-detail-stat-grid strong { display: block; }.pal-detail-stat-grid span { color: var(--app-ink-muted); font-size: 9px; }.pal-detail-stat-grid strong { margin-top: 3px; font: 700 16px var(--app-font-data); }
 .pal-detail-inline-stats { display: flex; flex-wrap: wrap; gap: 1px; overflow: hidden; background: var(--app-border); border-radius: 8px; }.pal-detail-inline-stats > div { min-width: 86px; flex: 1 1 86px; padding: 9px 10px; background: var(--app-surface); }.pal-detail-inline-stats dd { margin: 3px 0 0; font: 700 14px var(--app-font-data); }
 .pal-detail-meters { display: grid; gap: 10px; }.pal-detail-meters > div > span { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }.pal-detail-meters em { font: 700 10px var(--app-font-data); font-style: normal; }.pal-detail-meters i { display: block; height: 6px; margin-top: 5px; overflow: hidden; background: var(--app-surface); border-radius: 6px; }.pal-detail-meters i b { display: block; height: 100%; background: var(--app-accent); border-radius: inherit; }
