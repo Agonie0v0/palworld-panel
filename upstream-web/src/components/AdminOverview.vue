@@ -209,7 +209,7 @@ const enrichedBases = computed(() => bases.value.map((base) => ({
     ...worker,
     base_name: base.display_name || base.name || base.id,
     location_kind: "base",
-  }))),
+  })), { baseAuras: true }),
 })));
 const workers = computed(() => buildPalWorkerRows(enrichedBases.value));
 const workingCount = computed(() => workers.value.filter((row) => ["working", "assigned"].includes(row.activityKind)).length);

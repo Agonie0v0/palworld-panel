@@ -4,7 +4,12 @@ import palDetailIndex from "@/assets/game-data/pal_detail_index.json";
 import palPartnerIndex from "@/assets/game-data/pal_partner_index.json";
 import palSpeciesIndex from "@/assets/game-data/pal_species_index.json";
 import workerPalIndex from "@/assets/game-data/worker_pal_index.json";
-import { makeMetadataContext, normalizeInventory, normalizePal } from "./gameDataCore";
+import {
+  applyBaseWorkSuitabilityAuras,
+  makeMetadataContext,
+  normalizeInventory,
+  normalizePal,
+} from "./gameDataCore";
 
 export const gameDataContext = makeMetadataContext({
   game: gameIndex,
@@ -15,7 +20,10 @@ export const gameDataContext = makeMetadataContext({
   workers: workerPalIndex,
 });
 
-export const enrichPals = (pals) => pals.map((pal) => normalizePal(pal, gameDataContext));
+export const enrichPals = (pals, { baseAuras = false } = {}) => {
+  const normalized = pals.map((pal) => normalizePal(pal, gameDataContext));
+  return baseAuras ? applyBaseWorkSuitabilityAuras(normalized) : normalized;
+};
 export const enrichInventory = (items) => normalizeInventory(items, gameDataContext);
 const hdPalPortraits = import.meta.glob("../assets/pals-hd/*.webp", {
   eager: true,
