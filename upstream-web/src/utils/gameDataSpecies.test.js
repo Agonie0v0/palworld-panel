@@ -53,6 +53,7 @@ test("merges catalog data without presenting species stats as current stats", ()
   assert.equal(pal.attack, 142);
   assert.equal(pal.defenseStat, 119);
   assert.equal(pal.workSpeed, 137);
+  assert.equal(pal.workSuitabilitySource, "save-bonus");
   assert.deepEqual(
     pal.workSuitabilities.map(({ id, level }) => ({ id, level })),
     [{ id: "Handcraft", level: 4 }, { id: "Mining", level: 5 }, { id: "Collection", level: 1 }],
@@ -83,6 +84,7 @@ test("prefers explicit saved work levels over the species baseline", () => {
     pal.workSuitabilities.map(({ id, level }) => ({ id, level })),
     [{ id: "Mining", level: 5 }, { id: "Handcraft", level: 2 }],
   );
+  assert.equal(pal.workSuitabilitySource, "save-explicit");
 });
 
 test("does not rescale an already normalized maxHp value", () => {

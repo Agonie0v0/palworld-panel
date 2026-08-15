@@ -118,6 +118,7 @@ export const normalizePal = (pal = {}, context) => {
   const individualWork = new Map(speciesWorkSuitabilities.map((item) => [item.id, { ...item }]));
   const individualWorkSource = pal.work_suitabilities || pal.workSuitabilities;
   const explicitWork = new Map();
+  let appliedSavedWorkBonus = false;
   if (Array.isArray(individualWorkSource)) {
     individualWorkSource.forEach((item) => {
       const id = normalizeWorkId(item?.id || item?.name);
@@ -139,12 +140,20 @@ export const normalizePal = (pal = {}, context) => {
       const id = normalizeWorkId(rawId);
       const bonus = number(rawBonus);
       if (!id || bonus <= 0) return;
+      appliedSavedWorkBonus = true;
       const item = individualWork.get(id);
       if (item) item.level += bonus;
       else individualWork.set(id, { id, name: "", level: bonus });
     });
   }
   const workSuitabilities = [...individualWork.values()];
+  const workSuitabilitySource = explicitWork.size
+    ? "save-explicit"
+    : appliedSavedWorkBonus
+      ? "save-bonus"
+      : speciesWorkSuitabilities.length
+        ? "species-base"
+        : "unknown";
   const iv = {
     hp: optionalNumber(pal.iv?.hp ?? pal.melee),
     attack: optionalNumber(pal.iv?.attack ?? pal.ranged),
@@ -254,6 +263,7 @@ export const normalizePal = (pal = {}, context) => {
     ownerKind: pal.location_kind === "base" ? "base" : "player",
     locationKind: pal.location_kind || "player",
     locationLabel: pal.facility || pal.activity?.label || pal.base_name || pal.owner_name || "-",
+    workSuitabilitySource,
   };
 };
 

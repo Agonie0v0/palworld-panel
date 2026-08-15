@@ -43,7 +43,7 @@ const copy = computed(() => zh.value ? {
   passives: "被动词条", equipped: "已装备主动技能", mastered: "已掌握主动技能", disabledWork: "已禁用工作",
   number: "图鉴编号", rarity: "稀有度", elements: "属性", food: "食量", description: "图鉴描述",
   baseStats: "物种基础数据", movement: "移动与耐力", walk: "步行", run: "奔跑", ride: "骑乘", swim: "游泳", transport: "搬运", stamina: "耐力",
-  work: "存档工作能力", workHint: "等级已合并存档中的个体工作加成", partner: "伙伴技能", levelSkills: "等级技能", drops: "掉落物",
+  work: "存档工作能力", workExplicitHint: "读取存档中该只帕鲁直接记录的工作等级", workBonusHint: "物种基础等级 + 存档记录的个体工作加成", workBaseHint: "存档未记录个体加成，显示该物种的实际基础工作等级", workUnknownHint: "存档未提供工作能力数据", partner: "伙伴技能", levelSkills: "等级技能", drops: "掉落物",
   power: "威力", cooldown: "冷却", unlockLevel: "解锁等级", rate: "概率", amount: "数量",
   lucky: "闪光", alpha: "头目", tower: "高塔", male: "雄性", female: "雌性", unknown: "未知", empty: "暂无记录",
   instanceId: "实例 ID", copyId: "复制实例 ID", copied: "已复制", friendship: "好感度", favorite: "收藏", awakening: "觉醒", skin: "外观",
@@ -58,7 +58,7 @@ const copy = computed(() => zh.value ? {
   passives: "Passives", equipped: "Equipped active skills", mastered: "Mastered active skills", disabledWork: "Disabled work",
   number: "Paldeck number", rarity: "Rarity", elements: "Elements", food: "Food", description: "Paldeck description",
   baseStats: "Species base stats", movement: "Movement and stamina", walk: "Walk", run: "Run", ride: "Ride", swim: "Swim", transport: "Transport", stamina: "Stamina",
-  work: "Save work suitability", workHint: "Levels include individual bonuses persisted in the save", partner: "Partner skill", levelSkills: "Level-up skills", drops: "Drops",
+  work: "Save work suitability", workExplicitHint: "Read directly from this Pal's saved work levels", workBonusHint: "Species base level plus individual bonuses persisted in the save", workBaseHint: "No individual bonus was persisted; showing this species' actual base work level", workUnknownHint: "The save does not provide work suitability data", partner: "Partner skill", levelSkills: "Level-up skills", drops: "Drops",
   power: "Power", cooldown: "Cooldown", unlockLevel: "Unlock level", rate: "Rate", amount: "Amount",
   lucky: "Lucky", alpha: "Alpha", tower: "Tower", male: "Male", female: "Female", unknown: "Unknown", empty: "No record",
   instanceId: "Instance ID", copyId: "Copy instance ID", copied: "Copied", friendship: "Friendship", favorite: "Favorite", awakening: "Awakening", skin: "Skin",
@@ -116,6 +116,7 @@ const model = computed(() => {
     physicalHealth: firstValue(raw.physicalHealth, raw.physical_health),
     reviveTimer: numberOrNull(raw.reviveTimer, raw.pal_revive_timer),
     workSuitabilityAddRank: raw.workSuitabilityAddRank || raw.work_suitability_add_rank || {},
+    workSuitabilitySource: firstValue(raw.workSuitabilitySource, raw.work_suitability_source, "unknown"),
     rankBoosts: raw.rankBoosts || { hp: numberOrNull(raw.rank_hp), attack: numberOrNull(raw.rank_attack), defense: numberOrNull(raw.rank_defence), workSpeed: numberOrNull(raw.rank_craftspeed) },
     iv: { hp: ivValues[0], attack: ivValues[1], defense: ivValues[2], average: ivAverage },
     passives: asArray(firstValue(raw.passives, raw.skills, [])).map((skill) => typeof skill === "string" ? { id: skill, name: skill, description: "" } : skill),
@@ -187,6 +188,12 @@ const workBonusRows = computed(() => Object.entries(model.value.workSuitabilityA
   .map(([id, value]) => ({ id, label: humanize(id), value: numberOrNull(value) }))
   .filter((item) => item.value !== null && item.value !== 0));
 const workLabel = (work) => work?.name || humanize(work?.id) || "-";
+const workHint = computed(() => ({
+  "save-explicit": copy.value.workExplicitHint,
+  "save-bonus": copy.value.workBonusHint,
+  "species-base": copy.value.workBaseHint,
+  unknown: copy.value.workUnknownHint,
+}[model.value.workSuitabilitySource] || copy.value.workUnknownHint));
 const skillName = (skill) => typeof skill === "string" ? humanize(skill) : firstValue(skill?.name, skill?.id, "-");
 const skillMeta = (skill) => typeof skill === "string" ? "" : [
   skill?.element,
@@ -260,7 +267,7 @@ const useFallback = (event) => {
       <div class="pal-detail-inspector__columns">
         <section class="pal-detail-pane" aria-labelledby="pal-individual-title">
           <header><span>{{ copy.individual }}</span><h3 id="pal-individual-title">{{ model.name }}</h3></header>
-          <section class="pal-detail-section"><h4>{{ copy.work }}</h4><p class="pal-detail-source-note">{{ copy.workHint }}</p><div v-if="model.workSuitabilities.length" class="pal-detail-work"><pal-work-badge v-for="work in model.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.work }}</h4><p class="pal-detail-source-note">{{ workHint }}</p><div v-if="model.workSuitabilities.length" class="pal-detail-work"><pal-work-badge v-for="work in model.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
           <dl v-if="individualFacts.length" class="pal-detail-facts"><div v-for="item in individualFacts" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
 
           <section class="pal-detail-section"><h4>{{ copy.hp }}</h4><strong class="pal-detail-health">{{ healthText }}</strong></section>

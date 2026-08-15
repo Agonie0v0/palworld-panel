@@ -16,6 +16,7 @@ test("normalizes Pal metadata and archive fields", () => {
   assert.equal(pal.stars, 3);
   assert.equal(pal.iv.average, 80);
   assert.equal(pal.workSuitabilities[0].level, 4);
+  assert.equal(pal.workSuitabilitySource, "species-base");
   assert.equal(pal.partnerSkill.name, "沙漠守护神");
 });
 
