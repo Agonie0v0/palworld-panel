@@ -162,8 +162,21 @@ const individualFacts = computed(() => [
   { label: copy.value.reviveTimer, value: model.value.reviveTimer == null ? null : `${model.value.reviveTimer}s` },
 ].filter((item) => item.value !== undefined && item.value !== null && item.value !== ""));
 const speciesFacts = computed(() => [
+  { label: copy.value.number, value: model.value.number },
+  { label: copy.value.rarity, value: model.value.rarity },
   { label: copy.value.elements, value: model.value.elements.join(" / ") },
+  { label: copy.value.food, value: model.value.food },
 ].filter((item) => item.value !== undefined && item.value !== null && item.value !== ""));
+const statRows = computed(() => [
+  { label: copy.value.hp, value: numberOrNull(model.value.baseStats.hp) },
+  { label: copy.value.attack, value: model.value.attack ?? numberOrNull(model.value.baseStats.attack) },
+  { label: copy.value.defense, value: model.value.defense ?? numberOrNull(model.value.baseStats.defense) },
+  { label: copy.value.workSpeed, value: model.value.workSpeed ?? numberOrNull(model.value.baseStats.workSpeed) },
+].filter((item) => item.value !== null));
+const movementRows = computed(() => [
+  [copy.value.walk, "walk"], [copy.value.run, "run"], [copy.value.ride, "ride"],
+  [copy.value.swim, "swim"], [copy.value.transport, "transport"], [copy.value.stamina, "stamina"],
+].map(([label, key]) => ({ label, value: numberOrNull(model.value.movement[key]) })).filter((item) => item.value !== null));
 const rankRows = computed(() => [
   { label: copy.value.hp, value: numberOrNull(model.value.rankBoosts.hp) },
   { label: copy.value.attack, value: numberOrNull(model.value.rankBoosts.attack) },
@@ -175,6 +188,18 @@ const workBonusRows = computed(() => Object.entries(model.value.workSuitabilityA
   .filter((item) => item.value !== null && item.value !== 0));
 const workLabel = (work) => work?.name || humanize(work?.id) || "-";
 const skillName = (skill) => typeof skill === "string" ? humanize(skill) : firstValue(skill?.name, skill?.id, "-");
+const skillMeta = (skill) => typeof skill === "string" ? "" : [
+  skill?.element,
+  skill?.power != null ? `${copy.value.power} ${skill.power}` : "",
+  skill?.cooldown != null ? `${copy.value.cooldown} ${skill.cooldown}s` : "",
+].filter(Boolean).join(" · ");
+const dropMeta = (drop) => {
+  const amount = drop?.amount ?? (drop?.min != null || drop?.max != null
+    ? `${drop?.min ?? drop?.max}-${drop?.max ?? drop?.min}` : null);
+  const chance = drop?.chance ?? (drop?.rate != null ? `${drop.rate}%` : null);
+  return [amount != null ? `${copy.value.amount} ${amount}` : "", chance != null ? `${copy.value.rate} ${chance}` : ""]
+    .filter(Boolean).join(" · ");
+};
 const percent = (value, max = 100) => value == null ? null : Math.min(100, Math.max(0, (Number(value) / Math.max(1, Number(max || 100))) * 100));
 const healthText = computed(() => model.value.currentHp == null ? "-" : model.value.maxHp == null
   ? `${Math.round(model.value.currentHp).toLocaleString()} · ${copy.value.maxHpUnavailable}`
@@ -251,8 +276,8 @@ const useFallback = (event) => {
           <section v-if="rankRows.length" class="pal-detail-section"><h4>{{ copy.rankBoosts }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in rankRows" :key="item.label"><dt>{{ item.label }}</dt><dd>+{{ item.value }}</dd></div></dl></section>
           <section v-if="workBonusRows.length" class="pal-detail-section"><h4>{{ copy.workBonus }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in workBonusRows" :key="item.id"><dt>{{ item.label }}</dt><dd>+{{ item.value }}</dd></div></dl></section>
           <section class="pal-detail-section"><h4>{{ copy.passives }}</h4><div v-if="model.passives.length" class="pal-detail-passives"><pal-passive-badge v-for="skill in model.passives" :key="skill.id || skill.name" :skill="skill" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.equipped }}</h4><div v-if="model.equippedSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.equippedSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.mastered }}</h4><div v-if="model.masteredSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.masteredSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.equipped }}</h4><div v-if="model.equippedSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.equippedSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><small v-if="skillMeta(skill)">{{ skillMeta(skill) }}</small><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.mastered }}</h4><div v-if="model.masteredSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.masteredSkills" :key="skill.id || skill.name || skill"><strong>{{ skillName(skill) }}</strong><small v-if="skillMeta(skill)">{{ skillMeta(skill) }}</small><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
           <section v-if="model.disabledWork.length" class="pal-detail-section"><h4>{{ copy.disabledWork }}</h4><div class="pal-detail-tags"><n-tag v-for="work in model.disabledWork" :key="work" type="warning">{{ work }}</n-tag></div></section>
         </section>
 
@@ -267,9 +292,11 @@ const useFallback = (event) => {
           <header><span>{{ copy.species }}</span><h3 id="pal-species-title">{{ model.speciesName }}</h3><p v-if="model.englishName">{{ model.englishName }}</p></header>
           <dl v-if="speciesFacts.length" class="pal-detail-facts"><div v-for="item in speciesFacts" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
           <section v-if="model.description" class="pal-detail-section"><h4>{{ copy.description }}</h4><p class="pal-detail-description" :class="{ 'is-clamped': hasLongDescription && !descriptionExpanded }">{{ model.description }}</p><button v-if="hasLongDescription" type="button" class="pal-detail-text-toggle" :aria-expanded="descriptionExpanded" @click="descriptionExpanded = !descriptionExpanded">{{ descriptionExpanded ? copy.showLess : copy.showMore }}</button></section>
+          <section v-if="statRows.length" class="pal-detail-section"><h4>{{ copy.baseStats }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in statRows" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></section>
+          <section v-if="movementRows.length" class="pal-detail-section"><h4>{{ copy.movement }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in movementRows" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl></section>
           <section class="pal-detail-section"><h4>{{ copy.partner }}</h4><article v-if="model.partnerSkill" class="pal-detail-partner"><strong>{{ model.partnerSkill.name || model.partnerSkill.id }}</strong><p v-if="model.partnerSkill.description">{{ model.partnerSkill.description }}</p></article><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.levelSkills }}</h4><div v-if="model.levelSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.levelSkills" :key="skill.id"><strong>{{ skill.name || skill.id }}</strong><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
-          <section class="pal-detail-section"><h4>{{ copy.drops }}</h4><div v-if="model.drops.length" class="pal-detail-drop-list"><article v-for="drop in model.drops" :key="drop.id || drop.name"><strong>{{ drop.name || drop.id }}</strong></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.levelSkills }}</h4><div v-if="model.levelSkills.length" class="pal-detail-skill-list"><article v-for="skill in model.levelSkills" :key="`${skill.level}-${skill.id}`"><strong>{{ skill.name || skill.id }}</strong><small>{{ copy.unlockLevel }} {{ skill.level }}<template v-if="skillMeta(skill)"> · {{ skillMeta(skill) }}</template></small><p v-if="skill.description">{{ skill.description }}</p></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
+          <section class="pal-detail-section"><h4>{{ copy.drops }}</h4><div v-if="model.drops.length" class="pal-detail-drop-list"><article v-for="drop in model.drops" :key="drop.id || drop.name"><strong>{{ drop.name || drop.id }}</strong><small v-if="dropMeta(drop)">{{ dropMeta(drop) }}</small></article></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
         </section>
       </div>
     </article>
