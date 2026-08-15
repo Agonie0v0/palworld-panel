@@ -7,6 +7,7 @@ import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
 import itemCatalog from "@/assets/items.json";
 import palCatalog from "@/assets/pal.json";
+import { requestCached } from "@/utils/requestCache";
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -100,11 +101,14 @@ const textMatch = (row) =>
   !search.value.trim() ||
   JSON.stringify(row).toLowerCase().includes(search.value.trim().toLowerCase());
 
-const load = async () => {
+const load = async ({ force = false } = {}) => {
   loading.value = true;
   try {
-    const response = await api.getWorldData();
-    const data = result(response).data || {};
+    const payload = await requestCached("world-data", async () => {
+      const response = await api.getWorldData();
+      return result(response);
+    }, { force });
+    const data = payload.data || {};
     world.value = {
       players: data.players || [],
       guilds: data.guilds || [],
@@ -251,7 +255,7 @@ watch(
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
-      <n-button quaternary :loading="loading" @click="load">
+      <n-button quaternary :loading="loading" @click="load({ force: true })">
         <template #icon
           ><n-icon><Refresh /></n-icon></template
         >{{ copy.refresh }}

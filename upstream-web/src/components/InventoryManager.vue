@@ -6,6 +6,7 @@ import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
 import unknownItem from "@/assets/pals/unknown.png";
 import { enrichInventory, itemIcon } from "@/utils/gameData";
+import { requestCached } from "@/utils/requestCache";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
@@ -45,11 +46,14 @@ const locationText = (location) => [
   location.x != null && location.y != null ? `${location.x}, ${location.y}` : "",
 ].filter(Boolean).join(" · ");
 const useFallback = (event) => { if (event.target.src !== unknownItem) event.target.src = unknownItem; };
-const load = async () => {
+const load = async ({ force = false } = {}) => {
   loading.value = true; error.value = "";
   try {
-    const response = await api.getWorldData();
-    const data = response?.data?.value?.data || {};
+    const payload = await requestCached("world-data", async () => {
+      const response = await api.getWorldData();
+      return response?.data?.value || {};
+    }, { force });
+    const data = payload?.data || {};
     items.value = enrichInventory(Array.isArray(data.inventory) ? data.inventory : []);
   } catch (reason) {
     items.value = []; error.value = reason?.message || "Save data unavailable";
@@ -61,7 +65,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
 <template>
   <tool-surface :show="show" class="inventory-modal" :title="copy.title" width="min(96vw, 1240px)" :embedded="embedded" @update:show="emit('update:show', $event)">
     <template #description>{{ copy.subtitle }}</template>
-    <template #header-extra><n-button quaternary :loading="loading" @click="load"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
+    <template #header-extra><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
     <div class="inventory-summary">
       <div><n-icon><Package /></n-icon><span>{{ copy.types }}</span><strong>{{ items.length }}</strong></div>
       <div><n-icon><Stack2 /></n-icon><span>{{ copy.total }}</span><strong>{{ totalCount.toLocaleString() }}</strong></div>

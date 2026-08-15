@@ -13,6 +13,7 @@ import {
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
+import { clearCached } from "@/utils/requestCache";
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -104,6 +105,7 @@ const fail = (response, fallback) => {
   const data = result(response);
   message.error(data.error || fallback);
 };
+const invalidateWorldDataCache = () => clearCached("world-data");
 const formatSize = (bytes) => {
   const value = Number(bytes || 0);
   if (!value) return "-";
@@ -137,6 +139,7 @@ const linkPath = async () => {
     if (response.statusCode?.value >= 400)
       return fail(response, "Import failed");
     pathForm.value = { path: "", name: "" };
+    invalidateWorldDataCache();
     message.success(copy.value.linkedSuccess);
     await load();
   } finally {
@@ -155,6 +158,7 @@ const upload = async (event) => {
     if (response.statusCode?.value >= 400)
       return fail(response, "Upload failed");
     uploadName.value = "";
+    invalidateWorldDataCache();
     message.success(copy.value.uploadedSuccess);
     await load();
   } finally {
@@ -168,6 +172,7 @@ const activate = async (source) => {
     const response = await api.activateSaveSource(source.id);
     if (response.statusCode?.value >= 400)
       return fail(response, "Activation failed");
+    invalidateWorldDataCache();
     message.success(copy.value.activatedSuccess);
     await load();
   } finally {
@@ -216,6 +221,7 @@ const remove = (source) => {
         const response = await api.deleteSaveSource(source.id);
         if (response.statusCode?.value >= 400)
           return fail(response, "Delete failed");
+        invalidateWorldDataCache();
         message.success(copy.value.removedSuccess);
         await load();
       } finally {

@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { ChevronDown, ChevronUp, MapPin, Paw, Refresh, Search, User } from "@vicons/tabler";
 import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
+import { requestCached } from "@/utils/requestCache";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
@@ -33,11 +34,14 @@ const visible = computed(() => {
 const palTotal = computed(() => players.value.reduce((sum, player) => sum + Number(player.pal_count || player.pals?.length || 0), 0));
 const highestLevel = computed(() => Math.max(0, ...players.value.map((player) => Number(player.level || 0))));
 const formatDate = (value) => value ? new Intl.DateTimeFormat(zh.value ? "zh-CN" : "en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-";
-const load = async () => {
+const load = async ({ force = false } = {}) => {
   loading.value = true; error.value = "";
   try {
-    const response = await api.getWorldData();
-    const data = response?.data?.value?.data || {};
+    const payload = await requestCached("world-data", async () => {
+      const response = await api.getWorldData();
+      return response?.data?.value || {};
+    }, { force });
+    const data = payload?.data || {};
     players.value = Array.isArray(data.players) ? data.players : [];
   } catch (reason) {
     players.value = []; error.value = reason?.message || "Save data unavailable";
@@ -49,7 +53,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
 <template>
   <tool-surface :show="show" class="player-data-modal" :title="copy.title" width="min(96vw, 1240px)" :embedded="embedded" @update:show="emit('update:show', $event)">
     <template #description>{{ copy.subtitle }}</template>
-    <template #header-extra><n-button quaternary :loading="loading" @click="load"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
+    <template #header-extra><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
 
     <div class="data-summary">
       <div><n-icon><User /></n-icon><span>{{ copy.players }}</span><strong>{{ players.length }}</strong></div>

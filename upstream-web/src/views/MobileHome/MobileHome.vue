@@ -454,8 +454,11 @@ const getGuildList = async ({ force = false } = {}) => {
 };
 
 const getPlayerInfo = async (player_uid) => {
-  const { data } = await new ApiService().getPlayer({ playerUid: player_uid });
-  playerInfo.value = data.value || {};
+  const value = await requestCached(`player:${player_uid}`, async () => {
+    const { data } = await new ApiService().getPlayer({ playerUid: player_uid });
+    return data.value || {};
+  });
+  playerInfo.value = value || {};
   playerPalsList.value = Array.isArray(playerInfo.value.pals)
     ? JSON.parse(JSON.stringify(playerInfo.value.pals))
     : [];
@@ -465,10 +468,13 @@ const getPlayerInfo = async (player_uid) => {
 };
 
 const getGuildInfo = async (admin_player_uid) => {
-  const { data } = await new ApiService().getGuild({
-    adminPlayerUid: admin_player_uid,
+  const value = await requestCached(`guild:${admin_player_uid}`, async () => {
+    const { data } = await new ApiService().getGuild({
+      adminPlayerUid: admin_player_uid,
+    });
+    return data.value || {};
   });
-  guildInfo.value = data.value;
+  guildInfo.value = value || {};
   isShowDetail.value = true;
   contentRef.value.scrollTo(0, 0);
 };

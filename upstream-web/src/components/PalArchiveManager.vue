@@ -8,6 +8,7 @@ import ToolSurface from "@/components/ToolSurface.vue";
 import unknownPal from "@/assets/pals/unknown.png";
 import { enrichPals, palPortrait } from "@/utils/gameData";
 import { filterAndSortPals } from "@/utils/gameDataCore";
+import { requestCached } from "@/utils/requestCache";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
@@ -76,11 +77,14 @@ const useFallback = (event) => {
   image.dataset.fallback = "true";
   image.src = unknownPal;
 };
-const load = async () => {
+const load = async ({ force = false } = {}) => {
   loading.value = true; error.value = "";
   try {
-    const response = await api.getWorldData();
-    const data = response?.data?.value?.data || {};
+    const payload = await requestCached("world-data", async () => {
+      const response = await api.getWorldData();
+      return response?.data?.value || {};
+    }, { force });
+    const data = payload?.data || {};
     pals.value = enrichPals(Array.isArray(data.pals) ? data.pals : []);
     limit.value = 60;
   } catch (reason) { pals.value = []; error.value = reason?.message || "Save data unavailable"; }
@@ -93,7 +97,7 @@ watch([query, owner, flag, sort, selectedWork, selectedPassives, criteria], () =
 <template>
   <tool-surface :show="show" class="pal-archive-modal" :title="copy.title" width="min(97vw, 1380px)" :embedded="embedded" @update:show="emit('update:show', $event)">
     <template #description>{{ copy.subtitle }}</template>
-    <template #header-extra><n-button quaternary :loading="loading" @click="load"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
+    <template #header-extra><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
     <div class="pal-summary">
       <div><n-icon><Paw /></n-icon><span>{{ copy.total }}</span><strong>{{ pals.length }}</strong></div>
       <div><n-icon><Dna /></n-icon><span>{{ copy.species }}</span><strong>{{ speciesCount }}</strong></div>
