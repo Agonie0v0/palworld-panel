@@ -91,15 +91,61 @@ test("applies omitted condensation work bonuses to natural suitabilities", () =>
   const maxRank = normalizePal({ type: "Anubis", rank: 5 }, context);
   assert.deepEqual(
     maxRank.workSuitabilities.map(({ id, level }) => ({ id, level })),
-    [{ id: "Handcraft", level: 5 }, { id: "Mining", level: 4 }],
+    [{ id: "Handcraft", level: 7 }, { id: "Mining", level: 5 }],
   );
-  assert.deepEqual(maxRank.workSuitabilityRankBonus, { Handcraft: 1, Mining: 1 });
+  assert.deepEqual(maxRank.workSuitabilityRankBonus, { Handcraft: 3, Mining: 2 });
 
   const midRank = normalizePal({ type: "Anubis", rank: 3 }, context);
   assert.deepEqual(
     midRank.workSuitabilities.map(({ id, level }) => ({ id, level })),
     [{ id: "Handcraft", level: 5 }, { id: "Mining", level: 4 }],
   );
+});
+
+test("accepts direct stars, preserves camelCase values, and caps combined bonuses", () => {
+  const directStars = normalizePal({ type: "Anubis", stars: 3 }, context);
+  assert.deepEqual(
+    directStars.workSuitabilities.map(({ id, level }) => ({ id, level })),
+    [{ id: "Handcraft", level: 6 }, { id: "Mining", level: 4 }],
+  );
+
+  const camelExplicit = normalizePal({
+    type: "Anubis",
+    work_suitabilities: {},
+    workSuitabilities: [{ id: "Mining", level: 8 }],
+  }, context);
+  assert.deepEqual(
+    camelExplicit.workSuitabilities.map(({ id, level }) => ({ id, level })),
+    [{ id: "Mining", level: 8 }],
+  );
+
+  const combined = normalizePal({
+    type: "Anubis",
+    rank: 5,
+    work_suitability_add_rank: {},
+    workSuitabilityAddRank: { Handcraft: 8, Mining: 6 },
+  }, context);
+  assert.deepEqual(
+    combined.workSuitabilities.map(({ id, level }) => ({ id, level })),
+    [{ id: "Handcraft", level: 10 }, { id: "Mining", level: 10 }],
+  );
+});
+
+test("detects a work-suitability aura from the partner skill description", () => {
+  const auraContext = makeMetadataContext({
+    species: {
+      pals: {
+        Provider: {
+          name: "Provider",
+          partnerSkill: {
+            description: "若它在据点里，其他据点帕鲁的采矿工作适应性等级+1。（不可叠加）",
+          },
+          workSuitabilities: [{ id: "Mining", level: 4 }],
+        },
+      },
+    },
+  });
+  assert.equal(normalizePal({ type: "Provider" }, auraContext).workSuitabilityAura, "Mining");
 });
 
 test("does not rescale an already normalized maxHp value", () => {

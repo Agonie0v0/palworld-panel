@@ -195,6 +195,7 @@ const enrichedBases = computed(() =>
         base_name: base.display_name || base.name || base.id,
         location_kind: "base",
       })),
+      { baseAuras: true },
     ),
   })),
 );

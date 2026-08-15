@@ -37,6 +37,164 @@ const normalizeWorkId = (value) => {
   return WORK_NAME_TO_ID[token] || token;
 };
 
+const MAX_WORK_SUITABILITY_LEVEL = 10;
+const WORK_SUITABILITY_TIE_ORDER = [
+  "MonsterFarm",
+  "EmitFlame",
+  "Watering",
+  "Seeding",
+  "GenerateElectricity",
+  "Handcraft",
+  "Collection",
+  "Deforest",
+  "Mining",
+  "OilExtraction",
+  "ProductMedicine",
+  "Cool",
+  "Transport",
+];
+const WORK_SUITABILITY_TIE_RANK = new Map(
+  WORK_SUITABILITY_TIE_ORDER.map((id, index) => [id, index]),
+);
+const WORK_SUITABILITY_AURA_NAMES = {
+  EmitFlame: ["生火", "Kindling"],
+  Watering: ["浇水", "Watering"],
+  Seeding: ["播种", "Planting"],
+  GenerateElectricity: ["发电", "Generating Electricity"],
+  Handcraft: ["手工作业", "Handiwork"],
+  Collection: ["采集", "Gathering"],
+  Deforest: ["伐木", "Lumbering"],
+  Mining: ["采矿", "Mining"],
+  ProductMedicine: ["制药", "Medicine Production"],
+  Cool: ["冷却", "Cooling"],
+  Transport: ["搬运", "Transporting"],
+  MonsterFarm: ["牧场", "Farming", "Ranch"],
+};
+
+const firstPopulatedWorkValue = (...values) => {
+  const populated = values.find((value) => {
+    if (Array.isArray(value)) return value.length > 0;
+    return value && typeof value === "object" && Object.keys(value).length > 0;
+  });
+  return populated ?? values.find((value) => value !== null && value !== undefined);
+};
+
+const detectWorkSuitabilityAura = (...sources) => {
+  for (const source of sources.filter(Boolean)) {
+    const structured = normalizeWorkId(
+      source.workSuitabilityAura || source.work_suitability_aura,
+    );
+    if (structured) return structured;
+  }
+  const description = sources
+    .filter(Boolean)
+    .map((source) => source.description || source.summary || "")
+    .join(" ");
+  if (!/(?:其他据点帕鲁|other\s+(?:base\s+)?pals?)/i.test(description)) return "";
+  const match = Object.entries(WORK_SUITABILITY_AURA_NAMES)
+    .find(([, names]) => names.some((name) => description.toLowerCase().includes(name.toLowerCase())));
+  return match?.[0] || "";
+};
+
+// Palworld 1.0 grants one work point on each of the first three condensation
+// ranks, then grants one point to every natural suitability at maximum rank.
+// The first three points are selected in cycles: Farming catches up first;
+// otherwise the first two turns choose the highest unused suitability and the
+// third chooses the lowest. Ties prefer Farming, then the in-game work order.
+export const workSuitabilityCondensationBonus = (workSuitabilities = [], rawStars = 0) => {
+  const natural = asArray(workSuitabilities)
+    .map((item, index) => ({
+      id: normalizeWorkId(item?.id || item?.name),
+      level: number(item?.level ?? item?.rank),
+      index,
+    }))
+    .filter((item) => item.id && item.level > 0);
+  const stars = Math.max(0, Math.min(4, number(rawStars)));
+  if (!natural.length || !stars) return {};
+
+  const levels = new Map(natural.map((item) => [item.id, item.level]));
+  const originalIndex = new Map(natural.map((item) => [item.id, item.index]));
+  const bonuses = {};
+  const usedThisCycle = new Set();
+  let cycleTurn = 0;
+
+  const tieRank = (id) => WORK_SUITABILITY_TIE_RANK.get(id) ??
+    WORK_SUITABILITY_TIE_ORDER.length + (originalIndex.get(id) ?? natural.length);
+  const choose = (ids, lowest) => ids.reduce((best, id) => {
+    if (!best) return id;
+    const level = levels.get(id) || 0;
+    const bestLevel = levels.get(best) || 0;
+    if (level !== bestLevel) return lowest
+      ? (level < bestLevel ? id : best)
+      : (level > bestLevel ? id : best);
+    return tieRank(id) < tieRank(best) ? id : best;
+  }, "");
+  const addPoint = (id) => {
+    levels.set(id, (levels.get(id) || 0) + 1);
+    bonuses[id] = (bonuses[id] || 0) + 1;
+  };
+
+  for (let star = 0; star < Math.min(3, stars); star += 1) {
+    const ids = natural.map((item) => item.id);
+    const farmingLevel = levels.get("MonsterFarm");
+    const highestLevel = Math.max(...levels.values());
+    if (farmingLevel !== undefined && farmingLevel < highestLevel) {
+      // Catch-up points do not consume Farming's normal turn in this cycle.
+      addPoint("MonsterFarm");
+    } else {
+      let candidates = ids.filter((id) => !usedThisCycle.has(id));
+      if (!candidates.length) {
+        usedThisCycle.clear();
+        candidates = ids;
+      }
+      const chosen = choose(candidates, cycleTurn === 2);
+      addPoint(chosen);
+      usedThisCycle.add(chosen);
+    }
+    cycleTurn += 1;
+    if (cycleTurn >= natural.length) {
+      cycleTurn = 0;
+      usedThisCycle.clear();
+    }
+  }
+
+  if (stars >= 4) natural.forEach(({ id }) => addPoint(id));
+  return bonuses;
+};
+
+export const applyBaseWorkSuitabilityAuras = (pals = []) => {
+  const rows = asArray(pals);
+  const providers = new Map();
+  rows.forEach((pal, index) => {
+    const id = normalizeWorkId(pal?.workSuitabilityAura);
+    if (!id) return;
+    providers.set(id, [...(providers.get(id) || []), index]);
+  });
+
+  return rows.map((pal, index) => {
+    const previousBonuses = pal?.workSuitabilityBaseAuraBonus || {};
+    const bonuses = {};
+    const workSuitabilities = asArray(pal?.workSuitabilities).map((item) => {
+      const personalLevel = Math.max(0, number(item?.level) - number(previousBonuses[item?.id]));
+      const active = asArray(providers.get(item?.id)).some((provider) => provider !== index);
+      if (active && personalLevel < MAX_WORK_SUITABILITY_LEVEL) bonuses[item.id] = 1;
+      return {
+        ...item,
+        level: Math.min(MAX_WORK_SUITABILITY_LEVEL, personalLevel + (active ? 1 : 0)),
+      };
+    });
+    const hasAura = Object.keys(bonuses).length > 0;
+    const personalSource = pal.workSuitabilityPersonalSource || pal.workSuitabilitySource;
+    return {
+      ...pal,
+      workSuitabilities,
+      workSuitabilityBaseAuraBonus: bonuses,
+      workSuitabilityPersonalSource: personalSource,
+      workSuitabilitySource: hasAura ? "base-current" : personalSource,
+    };
+  });
+};
+
 export const normalizePalId = (value = "") =>
   String(value).replace(/^boss_/i, "").trim();
 
@@ -112,11 +270,18 @@ export const normalizePal = (pal = {}, context) => {
   const speciesWorkSuitabilities = workEntries
     .filter(([, level]) => number(level) > 0)
     .map(([id, level, name]) => ({ id, name: name || "", level: number(level) }));
-  // WorkSuitabilityOptionInfo/GotWorkSuitabilityAddRankList is persisted on
-  // each Pal. Merge those individual rank bonuses into the catalog baseline;
-  // the catalog remains available separately as species reference data.
+  // GotWorkSuitabilityAddRankList contains permanent individual bonuses, not
+  // the final levels. Merge those deltas into the catalog baseline; the
+  // catalog remains available separately as species reference data.
   const individualWork = new Map(speciesWorkSuitabilities.map((item) => [item.id, { ...item }]));
-  const individualWorkSource = pal.work_suitabilities || pal.workSuitabilities;
+  const individualWorkSource = firstPopulatedWorkValue(
+    pal.work_suitabilities,
+    pal.workSuitabilities,
+  );
+  const savedWorkBonuses = firstPopulatedWorkValue(
+    pal.work_suitability_add_rank,
+    pal.workSuitabilityAddRank,
+  ) || {};
   const explicitWork = new Map();
   let appliedSavedWorkBonus = false;
   if (Array.isArray(individualWorkSource)) {
@@ -136,7 +301,7 @@ export const normalizePal = (pal = {}, context) => {
     individualWork.clear();
     explicitWork.forEach((item, id) => individualWork.set(id, item));
   } else {
-    Object.entries(pal.work_suitability_add_rank || pal.workSuitabilityAddRank || {}).forEach(([rawId, rawBonus]) => {
+    Object.entries(savedWorkBonuses).forEach(([rawId, rawBonus]) => {
       const id = normalizeWorkId(rawId);
       const bonus = number(rawBonus);
       if (!id || bonus <= 0) return;
@@ -146,26 +311,27 @@ export const normalizePal = (pal = {}, context) => {
       else individualWork.set(id, { id, name: "", level: bonus });
     });
   }
-  // Palworld stores the natural work levels in the species data and may omit
-  // the rank-derived work bonus from the individual save record. Rank 2-4
-  // raise one natural suitability per star (in the saved order); rank 5 is
-  // the fully condensed state and raises every natural suitability by one.
-  // Do this only when no complete per-Pal list was persisted: an explicit list
-  // is already the game's final value and must win unchanged.
-  const condensationStars = Math.max(0, Math.min(4, number(pal.rank) - 1));
-  const condensationWorkBonus = {};
+  // Rank is persisted separately from GotWorkSuitabilityAddRankList. Rebuild
+  // its deterministic 1.0 work-point allocation only when the save did not
+  // already provide a complete final list.
+  const condensationStars = Math.max(
+    0,
+    Math.min(4, pal.stars == null ? number(pal.rank) - 1 : number(pal.stars)),
+  );
+  const condensationWorkBonus = explicitWork.size
+    ? {}
+    : workSuitabilityCondensationBonus(speciesWorkSuitabilities, condensationStars);
   if (!explicitWork.size && condensationStars > 0) {
-    const boosted = condensationStars >= 4
-      ? speciesWorkSuitabilities
-      : speciesWorkSuitabilities.slice(0, condensationStars);
-    boosted.forEach(({ id }) => {
+    Object.entries(condensationWorkBonus).forEach(([id, bonus]) => {
       const item = individualWork.get(id);
       if (!item) return;
-      item.level += 1;
-      condensationWorkBonus[id] = 1;
+      item.level += bonus;
     });
   }
-  const workSuitabilities = [...individualWork.values()];
+  const workSuitabilities = [...individualWork.values()].map((item) => ({
+    ...item,
+    level: Math.min(MAX_WORK_SUITABILITY_LEVEL, item.level),
+  }));
   const workSuitabilitySource = explicitWork.size
     ? "save-explicit"
     : appliedSavedWorkBonus || Object.keys(condensationWorkBonus).length
@@ -196,6 +362,11 @@ export const normalizePal = (pal = {}, context) => {
     ...partnerSource,
     description: partnerSource.description || partnerSource.summary || "",
   } : null;
+  const workSuitabilityAura = detectWorkSuitabilityAura(
+    speciesMeta,
+    speciesMeta.partnerSkill,
+    partnerSource,
+  );
   const speciesBaseStats = speciesMeta.baseStats || {};
   const speciesMovement = speciesMeta.movement || {};
   const species = {
@@ -241,7 +412,7 @@ export const normalizePal = (pal = {}, context) => {
     lucky: Boolean(pal.lucky ?? pal.is_lucky),
     alpha: Boolean(pal.alpha ?? pal.is_boss ?? /^boss_/i.test(rawId)),
     tower: Boolean(pal.tower ?? pal.is_tower ?? /^gym_/i.test(rawId)),
-    stars: Math.max(0, number(pal.stars ?? pal.rank) - (pal.stars == null ? 1 : 0)),
+    stars: condensationStars,
     currentHp: rawHp === null ? null : rawHp / 1000,
     maxHp: normalizedMaxHp && normalizedMaxHp > 0 ? normalizedMaxHp : null,
     attack: optionalNumber(pal.attack),
@@ -267,7 +438,7 @@ export const normalizePal = (pal = {}, context) => {
     physicalHealth: pal.physical_health || null,
     reviveTimer: optionalNumber(pal.pal_revive_timer),
     skinName: pal.skin_name || null,
-    workSuitabilityAddRank: pal.work_suitability_add_rank || {},
+    workSuitabilityAddRank: savedWorkBonuses,
     iv,
     passives,
     equippedSkills: active(pal.equipped_skills),
@@ -282,7 +453,9 @@ export const normalizePal = (pal = {}, context) => {
     ownerKind: pal.location_kind === "base" ? "base" : "player",
     locationKind: pal.location_kind || "player",
     locationLabel: pal.facility || pal.activity?.label || pal.base_name || pal.owner_name || "-",
+    workSuitabilityAura,
     workSuitabilitySource,
+    workSuitabilityPersonalSource: pal.workSuitabilityPersonalSource || workSuitabilitySource,
     workSuitabilityRankBonus: condensationWorkBonus,
   };
 };
