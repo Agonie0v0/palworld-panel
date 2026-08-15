@@ -17,9 +17,7 @@
 <div align="center">
   <img src="docs/screenshots/desktop-overview.png" alt="桌面端概览与据点生态" width="49%" />
   <img src="docs/screenshots/desktop-pal-status.png" alt="桌面端帕鲁状态" width="49%" />
-  <br />
   <img src="docs/screenshots/desktop-inventory.png" alt="桌面端全服库存" width="49%" />
-  <img src="docs/screenshots/desktop-operations.png" alt="桌面端服务器运维" width="49%" />
 </div>
 
 ### 移动端
