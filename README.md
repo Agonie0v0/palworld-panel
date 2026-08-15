@@ -6,11 +6,11 @@
 
 面向 Palworld 专用服务器的开源 Web 管理面板。它把部署、运行状态、玩家、据点帕鲁、世界数据、服务器参数、备份、RCON 和自动化任务集中到一个界面中，桌面端与移动端均可使用。
 
-当前正式版本：**1.0.0**
+当前版本：**1.1.0**
 
 ## 界面预览
 
-以下截图来自当前正式版 `v1.0.0`，覆盖桌面端和移动端的主要工作区。
+以下截图来自当前版本 `v1.1.0`，覆盖桌面端和移动端的主要工作区。
 
 ### 桌面端
 
@@ -27,6 +27,7 @@
 <div align="center">
   <img src="docs/screenshots/mobile-overview.png" alt="移动端概览" width="260" />
   <img src="docs/screenshots/mobile-pal-status.png" alt="移动端帕鲁状态" width="260" />
+  <img src="docs/screenshots/mobile-inventory.png" alt="移动端全服库存与工具" width="260" />
 </div>
 
 ## 核心功能
