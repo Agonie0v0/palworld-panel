@@ -420,8 +420,8 @@ onBeforeUnmount(() => {
         <div class="command-deck__world-state"><n-icon><Activity /></n-icon><strong>{{ copy.worldActive }}</strong><span>{{ worldMessage }}</span></div>
       </div>
       <div class="command-deck__actions">
-        <n-button type="primary" :loading="loading" @click="refresh({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
         <DataFreshness :timestamp="lastUpdatedAt" :label="copy.updated" />
+        <n-button type="primary" :loading="loading" @click="refresh({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
         <button type="button" class="deck-link" @click="emit('navigate', 'pal-status')">{{ copy.allPals }}<n-icon><ArrowRight /></n-icon></button>
       </div>
     </header>
