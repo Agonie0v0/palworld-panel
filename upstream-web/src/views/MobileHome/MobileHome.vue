@@ -109,7 +109,8 @@ const currentViewLabel = computed(() => {
     guilds: "button.guilds",
     map: "button.map",
   };
-  return t(labels[currentDisplay.value] || labels.players);
+  return mobileNavigationCatalog.value[currentDisplay.value]?.label
+    || t(labels[currentDisplay.value] || labels.players);
 });
 
 const MOBILE_NAV_STORAGE_KEY = "palworld_mobile_bottom_nav_v1";
@@ -140,6 +141,26 @@ const mobileNavOrderDefaults = [
   "broadcast",
   "shutdown",
 ];
+// Tool entries selected into the mobile bottom navigation are rendered as
+// full-width workspace pages. Destructive/one-shot actions keep their modal
+// treatment and are intentionally excluded from this set.
+const mobileInlineToolIds = new Set([
+  "operations",
+  "game-settings",
+  "advanced",
+  "save-sources",
+  "mods",
+  "access",
+  "world-data",
+  "pal-status",
+  "player-data",
+  "pal-archive",
+  "inventory",
+  "rcon",
+  "backup",
+  "whitelist",
+  "broadcast",
+]);
 const mobileNavSelection = ref([...mobileNavDefaults]);
 const mobileNavOrder = ref([...mobileNavOrderDefaults]);
 const mobileNavDraft = ref([]);
@@ -147,6 +168,7 @@ const mobileNavDraftOrder = ref([]);
 const isEditingMobileNav = ref(false);
 const mobileNavDragState = ref(null);
 const mobileNavPointerState = ref(null);
+const mobilePreviousDisplay = ref("players");
 
 const mobileNavigationCatalog = computed(() => ({
   overview: { icon: DashboardOutlined, label: t("button.overview"), gate: "operate", kind: "view" },
@@ -232,6 +254,7 @@ const mobileNavEditorItems = computed(() => mobileNavDraftOrder.value
 const mobileToolItems = computed(() => mobileNavOrder.value
   .map((id) => ({ id, ...mobileNavigationCatalog.value[id] }))
   .filter((item) => item.label && item.kind !== "view" && isMobileNavAvailable(item)));
+const isMobileToolView = computed(() => mobileInlineToolIds.has(currentDisplay.value));
 
 const contentRef = ref(null);
 
@@ -366,6 +389,21 @@ const handleMobileNavigation = (id) => {
     if (id === "players") toPlayers();
     if (id === "guilds") toGuilds();
     if (id === "map") toMap();
+    return;
+  }
+  if (mobileInlineToolIds.has(id)) {
+    if (!checkAuthToken()) {
+      message.error(t("message.requireauth"));
+      showLoginModal.value = true;
+      return;
+    }
+    if (!mobileInlineToolIds.has(currentDisplay.value)) {
+      mobilePreviousDisplay.value = currentDisplay.value;
+    }
+    currentDisplay.value = id;
+    isShowDetail.value = false;
+    showMobileTools.value = false;
+    contentRef.value?.scrollTo(0, 0);
     return;
   }
   executeAdminAction(id);
@@ -710,6 +748,9 @@ watch(
   },
 );
 const returnList = () => {
+  if (isMobileToolView.value) {
+    currentDisplay.value = mobilePreviousDisplay.value || "players";
+  }
   isShowDetail.value = false;
 
   palsLoading.value = false;
@@ -875,7 +916,7 @@ onBeforeUnmount(() => {
     </header>
 
     <main ref="contentRef" class="mobile-content" @scroll="onContentScroll">
-      <div v-if="isShowDetail" class="mobile-context-bar">
+      <div v-if="isShowDetail || isMobileToolView" class="mobile-context-bar">
         <n-button
           circle
           quaternary
@@ -901,7 +942,7 @@ onBeforeUnmount(() => {
           :players="playerList"
         />
         <map-view v-if="currentDisplay === 'map'" />
-        <div v-if="!isShowDetail">
+        <div v-if="!isShowDetail && !isMobileToolView">
           <player-list
             v-if="currentDisplay === 'players'"
             :playerList="playerList"
@@ -913,7 +954,7 @@ onBeforeUnmount(() => {
             @onGetInfo="getChooseGuild"
           />
         </div>
-        <div v-else class="relative">
+        <div v-else-if="isShowDetail" class="relative">
           <player-detail
             v-if="currentDisplay === 'players'"
             :playerInfo="playerInfo"
@@ -925,6 +966,81 @@ onBeforeUnmount(() => {
             v-if="currentDisplay === 'guilds'"
             :guildInfo="guildInfo"
             @view-player="viewPlayerFromGuild"
+          />
+        </div>
+        <div v-else class="mobile-tool-page">
+          <server-operations
+            v-if="currentDisplay === 'operations'"
+            :show="true"
+            embedded
+            @server-changed="refreshManagedServerData"
+          />
+          <game-settings-manager
+            v-if="currentDisplay === 'game-settings'"
+            :show="true"
+            embedded
+          />
+          <operations-center
+            v-if="currentDisplay === 'advanced'"
+            :show="true"
+            embedded
+          />
+          <save-source-manager
+            v-if="currentDisplay === 'save-sources'"
+            :show="true"
+            embedded
+          />
+          <mod-manager v-if="currentDisplay === 'mods'" :show="true" embedded />
+          <access-manager
+            v-if="currentDisplay === 'access'"
+            :show="true"
+            embedded
+          />
+          <world-data-manager
+            v-if="currentDisplay === 'world-data'"
+            :show="true"
+            embedded
+          />
+          <pal-status-manager
+            v-if="currentDisplay === 'pal-status'"
+            :show="true"
+            embedded
+          />
+          <player-data-manager
+            v-if="currentDisplay === 'player-data'"
+            :show="true"
+            embedded
+          />
+          <pal-archive-manager
+            v-if="currentDisplay === 'pal-archive'"
+            :show="true"
+            embedded
+          />
+          <inventory-manager
+            v-if="currentDisplay === 'inventory'"
+            :show="true"
+            embedded
+          />
+          <rcon-manager
+            v-if="currentDisplay === 'rcon'"
+            :show="true"
+            embedded
+          />
+          <backup-manager
+            v-if="currentDisplay === 'backup'"
+            :show="true"
+            embedded
+          />
+          <whitelist-manager
+            v-if="currentDisplay === 'whitelist'"
+            :show="true"
+            embedded
+            :players="playerList"
+          />
+          <broadcast-composer
+            v-if="currentDisplay === 'broadcast'"
+            :show="true"
+            embedded
           />
         </div>
       </template>
@@ -1119,5 +1235,21 @@ onBeforeUnmount(() => {
 <style scoped>
 .mobile-content :deep(.map-view) {
   min-height: 100%;
+}
+
+.mobile-tool-page {
+  min-width: 0;
+  padding: 10px 10px 24px;
+}
+
+.mobile-tool-page :deep(.tool-surface) {
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+@media (max-width: 420px) {
+  .mobile-tool-page {
+    padding-inline: 8px;
+  }
 }
 </style>
