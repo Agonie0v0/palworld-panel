@@ -2122,4 +2122,50 @@ onBeforeUnmount(() => {
     column-gap: 3px;
   }
 }
+
+/* Keep the work-ability and passive-trait sections in a real vertical flow.
+   The card used to combine several grid layouts with fixed rows, so wrapped
+   work badges could paint over the passive list. Cards grow to the content
+   needed by the busiest worker in each grid row while retaining a compact
+   minimum height for the normal case. */
+.pal-constellation {
+  grid-auto-rows: minmax(244px, auto);
+}
+.pal-node {
+  height: auto;
+  min-height: 244px;
+}
+.pal-node__details {
+  display: flex;
+  min-height: 0;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  grid-template-columns: none;
+  grid-template-rows: none;
+  overflow: visible;
+}
+.pal-node__work,
+.pal-node__passives {
+  min-height: 0;
+  flex: 0 0 auto;
+}
+.pal-node__work-list,
+.pal-node__passive-list {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.pal-node__passive-list {
+  grid-template-rows: none;
+}
+
+@media (max-width: 719px) {
+  .pal-constellation {
+    grid-auto-rows: auto;
+  }
+  .pal-node {
+    height: auto;
+    min-height: 0;
+  }
+}
 </style>
