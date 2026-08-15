@@ -161,6 +161,34 @@ def _work_suitability_add_ranks(prop):
     return result
 
 
+def _work_suitability_passive_add_ranks(prop):
+    """Extract work-level bonuses granted by applied work-suitability books.
+
+    Palworld stores these as passive identifiers such as
+    ``WorkSuitabilityAddRank_MonsterFarm_2`` rather than in
+    ``GotWorkSuitabilityAddRankList``.
+    """
+    result = {}
+    prefix = "WorkSuitabilityAddRank_"
+    for raw_skill in _list_values(prop):
+        skill = raw_skill if isinstance(raw_skill, str) else _optional_string(raw_skill, "")
+        if not skill:
+            continue
+        token = skill.split("::")[-1]
+        if not token.startswith(prefix):
+            continue
+        work, separator, raw_rank = token[len(prefix):].rpartition("_")
+        if not separator or not work:
+            continue
+        try:
+            rank = int(raw_rank)
+        except (TypeError, ValueError):
+            continue
+        if rank > 0:
+            result[work] = result.get(work, 0) + rank
+    return result
+
+
 def _work_suitability_levels(*props):
     """Extract an explicit per-Pal work-suitability level map when present.
 
@@ -317,6 +345,8 @@ class Pal:
         self.work_suitability_add_rank = _work_suitability_add_ranks(
             data.get("GotWorkSuitabilityAddRankList")
         )
+        for work, rank in _work_suitability_passive_add_ranks(data.get("PassiveSkillList")).items():
+            self.work_suitability_add_rank[work] = self.work_suitability_add_rank.get(work, 0) + rank
         work_options = data.get("WorkSuitabilityOptionInfo")
         option_value = work_options.get("value", {}) if isinstance(work_options, dict) else {}
         self.work_suitabilities = _work_suitability_levels(

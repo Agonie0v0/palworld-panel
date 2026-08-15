@@ -87,6 +87,21 @@ test("prefers explicit saved work levels over the species baseline", () => {
   assert.equal(pal.workSuitabilitySource, "save-explicit");
 });
 
+test("applies omitted condensation work bonuses to natural suitabilities", () => {
+  const maxRank = normalizePal({ type: "Anubis", rank: 5 }, context);
+  assert.deepEqual(
+    maxRank.workSuitabilities.map(({ id, level }) => ({ id, level })),
+    [{ id: "Handcraft", level: 5 }, { id: "Mining", level: 4 }],
+  );
+  assert.deepEqual(maxRank.workSuitabilityRankBonus, { Handcraft: 1, Mining: 1 });
+
+  const midRank = normalizePal({ type: "Anubis", rank: 3 }, context);
+  assert.deepEqual(
+    midRank.workSuitabilities.map(({ id, level }) => ({ id, level })),
+    [{ id: "Handcraft", level: 5 }, { id: "Mining", level: 4 }],
+  );
+});
+
 test("does not rescale an already normalized maxHp value", () => {
   const pal = normalizePal({ type: "Anubis", maxHp: 987.5 }, context);
   assert.equal(pal.maxHp, 987.5);

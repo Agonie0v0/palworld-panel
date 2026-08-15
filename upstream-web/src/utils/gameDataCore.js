@@ -146,10 +146,29 @@ export const normalizePal = (pal = {}, context) => {
       else individualWork.set(id, { id, name: "", level: bonus });
     });
   }
+  // Palworld stores the natural work levels in the species data and may omit
+  // the rank-derived work bonus from the individual save record. Rank 2-4
+  // raise one natural suitability per star (in the saved order); rank 5 is
+  // the fully condensed state and raises every natural suitability by one.
+  // Do this only when no complete per-Pal list was persisted: an explicit list
+  // is already the game's final value and must win unchanged.
+  const condensationStars = Math.max(0, Math.min(4, number(pal.rank) - 1));
+  const condensationWorkBonus = {};
+  if (!explicitWork.size && condensationStars > 0) {
+    const boosted = condensationStars >= 4
+      ? speciesWorkSuitabilities
+      : speciesWorkSuitabilities.slice(0, condensationStars);
+    boosted.forEach(({ id }) => {
+      const item = individualWork.get(id);
+      if (!item) return;
+      item.level += 1;
+      condensationWorkBonus[id] = 1;
+    });
+  }
   const workSuitabilities = [...individualWork.values()];
   const workSuitabilitySource = explicitWork.size
     ? "save-explicit"
-    : appliedSavedWorkBonus
+    : appliedSavedWorkBonus || Object.keys(condensationWorkBonus).length
       ? "save-bonus"
       : speciesWorkSuitabilities.length
         ? "species-base"
@@ -264,6 +283,7 @@ export const normalizePal = (pal = {}, context) => {
     locationKind: pal.location_kind || "player",
     locationLabel: pal.facility || pal.activity?.label || pal.base_name || pal.owner_name || "-",
     workSuitabilitySource,
+    workSuitabilityRankBonus: condensationWorkBonus,
   };
 };
 

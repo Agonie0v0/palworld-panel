@@ -168,6 +168,24 @@ class PalDetailParsingTests(unittest.TestCase):
 
         self.assertEqual(pal["work_suitabilities"], {"Cooling": 2, "Mining": 5})
 
+    def test_parses_work_suitability_book_passives(self):
+        data = {
+            "PassiveSkillList": {
+                "type": "ArrayProperty",
+                "value": {
+                    "values": [
+                        "WorkSuitabilityAddRank_MonsterFarm_2",
+                        "WorkSuitabilityAddRank_MonsterFarm_1",
+                        "CraftSpeed_up2",
+                    ]
+                },
+            }
+        }
+
+        pal = Pal(data, 0, 0).to_dict()
+
+        self.assertEqual(pal["work_suitability_add_rank"], {"MonsterFarm": 3})
+
     def test_false_favorite_flags_are_not_treated_as_missing(self):
         pal = Pal(
             {
