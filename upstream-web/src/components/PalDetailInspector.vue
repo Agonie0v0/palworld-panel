@@ -252,6 +252,7 @@ const useFallback = (event) => {
       <div class="pal-detail-inspector__columns">
         <section class="pal-detail-pane" aria-labelledby="pal-individual-title">
           <header><span>{{ copy.individual }}</span><h3 id="pal-individual-title">{{ model.name }}</h3></header>
+          <section class="pal-detail-section"><h4>{{ copy.work }}</h4><div v-if="model.workSuitabilities.length" class="pal-detail-work"><pal-work-badge v-for="work in model.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
           <dl v-if="individualFacts.length" class="pal-detail-facts"><div v-for="item in individualFacts" :key="item.label"><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div></dl>
 
           <section class="pal-detail-section"><h4>{{ copy.hp }}</h4><strong class="pal-detail-health">{{ healthText }}</strong></section>
@@ -263,7 +264,6 @@ const useFallback = (event) => {
             </div>
             <div v-if="model.sickness.length" class="pal-detail-tags"><n-tag v-for="condition in model.sickness" :key="condition" type="warning">{{ condition }}</n-tag></div>
           </section>
-          <section class="pal-detail-section"><h4>{{ copy.work }}</h4><div v-if="model.workSuitabilities.length" class="pal-detail-work"><pal-work-badge v-for="work in model.workSuitabilities" :key="work.id" :work="work" :label="workLabel(work)" /></div><p v-else class="pal-detail-empty">{{ copy.empty }}</p></section>
           <section class="pal-detail-section"><h4>{{ copy.iv }}</h4><div class="pal-detail-stat-grid"><div><span>{{ copy.hpIv }}</span><strong>{{ model.iv.hp ?? '-' }}</strong></div><div><span>{{ copy.attackIv }}</span><strong>{{ model.iv.attack ?? '-' }}</strong></div><div><span>{{ copy.defenseIv }}</span><strong>{{ model.iv.defense ?? '-' }}</strong></div><div><span>{{ copy.averageIv }}</span><strong>{{ model.iv.average ?? '-' }}</strong></div></div></section>
           <section v-if="rankRows.length" class="pal-detail-section"><h4>{{ copy.rankBoosts }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in rankRows" :key="item.label"><dt>{{ item.label }}</dt><dd>+{{ item.value }}</dd></div></dl></section>
           <section v-if="workBonusRows.length" class="pal-detail-section"><h4>{{ copy.workBonus }}</h4><dl class="pal-detail-inline-stats"><div v-for="item in workBonusRows" :key="item.id"><dt>{{ item.label }}</dt><dd>+{{ item.value }}</dd></div></dl></section>
