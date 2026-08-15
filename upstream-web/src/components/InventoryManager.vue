@@ -6,13 +6,15 @@ import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
 import unknownItem from "@/assets/pals/unknown.png";
 import { enrichInventory, itemIcon } from "@/utils/gameData";
-import { requestCached } from "@/utils/requestCache";
+import { readCachedEntry, requestCached } from "@/utils/requestCache";
+import DataFreshness from "@/components/DataFreshness.vue";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
+const lastUpdatedAt = ref(0);
 const error = ref("");
 const items = ref([]);
 const query = ref("");
@@ -20,11 +22,11 @@ const category = ref("all");
 const expanded = ref("");
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() => zh.value ? {
-  title: "全服库存", subtitle: "汇总玩家背包、据点仓库和公会箱，并定位到具体容器与槽位。", refresh: "重新解析",
+  title: "全服库存", subtitle: "汇总玩家背包、据点仓库和公会箱，并定位到具体容器与槽位。", refresh: "重新解析", updated: "更新时间:",
   search: "搜索物品名称或内部 ID", all: "全部分类", types: "物品种类", total: "物品总数", containers: "涉及容器",
   item: "物品", category: "分类", count: "总数量", locations: "存放位置", empty: "没有符合条件的物品",
 } : {
-  title: "Global inventory", subtitle: "Aggregate player, base, and guild storage with exact container and slot locations.", refresh: "Parse again",
+  title: "Global inventory", subtitle: "Aggregate player, base, and guild storage with exact container and slot locations.", refresh: "Parse again", updated: "Updated:",
   search: "Search item name or internal ID", all: "All categories", types: "Item types", total: "Total items", containers: "Containers",
   item: "Item", category: "Category", count: "Total", locations: "Locations", empty: "No matching items",
 });
@@ -53,6 +55,7 @@ const load = async ({ force = false } = {}) => {
       const response = await api.getWorldData();
       return response?.data?.value || {};
     }, { force });
+    lastUpdatedAt.value = readCachedEntry("world-data")?.fetchedAt || 0;
     const data = payload?.data || {};
     items.value = enrichInventory(Array.isArray(data.inventory) ? data.inventory : []);
   } catch (reason) {
@@ -65,7 +68,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
 <template>
   <tool-surface :show="show" class="inventory-modal" :title="copy.title" width="min(96vw, 1240px)" :embedded="embedded" @update:show="emit('update:show', $event)">
     <template #description>{{ copy.subtitle }}</template>
-    <template #header-extra><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
+    <template #header-extra><DataFreshness :timestamp="lastUpdatedAt" :label="copy.updated" /><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
     <div class="inventory-summary">
       <div><n-icon><Package /></n-icon><span>{{ copy.types }}</span><strong>{{ items.length }}</strong></div>
       <div><n-icon><Stack2 /></n-icon><span>{{ copy.total }}</span><strong>{{ totalCount.toLocaleString() }}</strong></div>

@@ -20,6 +20,7 @@ import PalDetailInspector from "@/components/PalDetailInspector.vue";
 import PalPassiveBadge from "@/components/PalPassiveBadge.vue";
 import PalWorkBadge from "@/components/PalWorkBadge.vue";
 import ToolSurface from "@/components/ToolSurface.vue";
+import DataFreshness from "@/components/DataFreshness.vue";
 import unknownAsset from "@/assets/pals/unknown.png";
 import {
   enrichInventory,
@@ -38,6 +39,7 @@ const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
+const lastUpdatedAt = ref(0);
 const loadError = ref("");
 const bases = ref([]);
 const production = ref({ current: null, history: [] });
@@ -60,6 +62,7 @@ const copy = computed(() =>
         title: "帕鲁状态",
         subtitle: "查看据点帕鲁的当前任务、设施、工作能力、被动词条、身体状态与离线物资增量。",
         refresh: "重新解析",
+        updated: "更新时间:",
         workersTab: "工作状态",
         productionTab: "离线产出",
         allBases: "全部据点",
@@ -106,6 +109,7 @@ const copy = computed(() =>
         title: "Pal status",
         subtitle: "Inspect current tasks, facilities, work levels, passives, wellbeing, and estimated offline production.",
         refresh: "Parse again",
+        updated: "Updated:",
         workersTab: "Work status",
         productionTab: "Offline production",
         allBases: "All bases",
@@ -288,6 +292,7 @@ const load = async ({ force = false } = {}) => {
   loading.value = true;
   try {
     hydrateStatus(await statusRequest);
+    lastUpdatedAt.value = readCachedEntry("world-data")?.fetchedAt || 0;
   } finally {
     loading.value = false;
   }
@@ -380,6 +385,7 @@ onBeforeUnmount(() => clearInterval(statusRefreshTimer));
   >
     <template #description>{{ copy.subtitle }}</template>
     <template #header-extra>
+      <DataFreshness :timestamp="lastUpdatedAt" :label="copy.updated" />
       <n-button quaternary :loading="loading" @click="load({ force: true })">
         <template #icon><n-icon><Refresh /></n-icon></template>
         {{ copy.refresh }}

@@ -7,7 +7,8 @@ import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
 import itemCatalog from "@/assets/items.json";
 import palCatalog from "@/assets/pal.json";
-import { requestCached } from "@/utils/requestCache";
+import { readCachedEntry, requestCached } from "@/utils/requestCache";
+import DataFreshness from "@/components/DataFreshness.vue";
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -17,6 +18,7 @@ const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
+const lastUpdatedAt = ref(0);
 const activeTab = ref("bases");
 const search = ref("");
 const world = ref({
@@ -55,6 +57,7 @@ const copy = computed(() =>
         gender: "性别",
         traits: "被动技能",
         refresh: "重新解析",
+        updated: "更新时间:",
       }
     : {
         title: "World data",
@@ -81,6 +84,7 @@ const copy = computed(() =>
         gender: "Gender",
         traits: "Passive skills",
         refresh: "Parse again",
+        updated: "Updated:",
       },
 );
 
@@ -108,6 +112,7 @@ const load = async ({ force = false } = {}) => {
       const response = await api.getWorldData();
       return result(response);
     }, { force });
+    lastUpdatedAt.value = readCachedEntry("world-data")?.fetchedAt || 0;
     const data = payload.data || {};
     world.value = {
       players: data.players || [],
@@ -255,6 +260,7 @@ watch(
     @update:show="emit('update:show', $event)"
   >
     <template #header-extra>
+      <DataFreshness :timestamp="lastUpdatedAt" :label="copy.updated" />
       <n-button quaternary :loading="loading" @click="load({ force: true })">
         <template #icon
           ><n-icon><Refresh /></n-icon></template

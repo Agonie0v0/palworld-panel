@@ -4,24 +4,26 @@ import { useI18n } from "vue-i18n";
 import { ChevronDown, ChevronUp, MapPin, Paw, Refresh, Search, User } from "@vicons/tabler";
 import ApiService from "@/service/api";
 import ToolSurface from "@/components/ToolSurface.vue";
-import { requestCached } from "@/utils/requestCache";
+import { readCachedEntry, requestCached } from "@/utils/requestCache";
+import DataFreshness from "@/components/DataFreshness.vue";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
+const lastUpdatedAt = ref(0);
 const error = ref("");
 const players = ref([]);
 const search = ref("");
 const expanded = ref("");
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() => zh.value ? {
-  title: "玩家数据", subtitle: "查看玩家等级、帕鲁图鉴、探索、头目与科技进度。", refresh: "重新解析",
+  title: "玩家数据", subtitle: "查看玩家等级、帕鲁图鉴、探索、头目与科技进度。", refresh: "重新解析", updated: "更新时间:",
   search: "搜索玩家名称或 UID", players: "存档玩家", pals: "持有帕鲁", highest: "最高等级",
   player: "玩家", exploration: "探索进度", bosses: "头目进度", last: "末次上线", empty: "没有符合条件的玩家数据",
 } : {
-  title: "Player data", subtitle: "Inspect player levels, Paldeck, exploration, bosses, and technology progress.", refresh: "Parse again",
+  title: "Player data", subtitle: "Inspect player levels, Paldeck, exploration, bosses, and technology progress.", refresh: "Parse again", updated: "Updated:",
   search: "Search player name or UID", players: "Saved players", pals: "Owned Pals", highest: "Highest level",
   player: "Player", exploration: "Exploration", bosses: "Boss progress", last: "Last online", empty: "No matching player data",
 });
@@ -41,6 +43,7 @@ const load = async ({ force = false } = {}) => {
       const response = await api.getWorldData();
       return response?.data?.value || {};
     }, { force });
+    lastUpdatedAt.value = readCachedEntry("world-data")?.fetchedAt || 0;
     const data = payload?.data || {};
     players.value = Array.isArray(data.players) ? data.players : [];
   } catch (reason) {
@@ -53,7 +56,7 @@ watch(() => props.show, (show) => show && load(), { immediate: true });
 <template>
   <tool-surface :show="show" class="player-data-modal" :title="copy.title" width="min(96vw, 1240px)" :embedded="embedded" @update:show="emit('update:show', $event)">
     <template #description>{{ copy.subtitle }}</template>
-    <template #header-extra><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
+    <template #header-extra><DataFreshness :timestamp="lastUpdatedAt" :label="copy.updated" /><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
 
     <div class="data-summary">
       <div><n-icon><User /></n-icon><span>{{ copy.players }}</span><strong>{{ players.length }}</strong></div>

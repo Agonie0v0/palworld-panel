@@ -8,13 +8,15 @@ import ToolSurface from "@/components/ToolSurface.vue";
 import unknownPal from "@/assets/pals/unknown.png";
 import { enrichPals, palPortrait } from "@/utils/gameData";
 import { filterAndSortPals } from "@/utils/gameDataCore";
-import { requestCached } from "@/utils/requestCache";
+import { readCachedEntry, requestCached } from "@/utils/requestCache";
+import DataFreshness from "@/components/DataFreshness.vue";
 
 const props = defineProps({ show: Boolean, embedded: { type: Boolean, default: false } });
 const emit = defineEmits(["update:show"]);
 const { locale } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
+const lastUpdatedAt = ref(0);
 const error = ref("");
 const pals = ref([]);
 const query = ref("");
@@ -30,13 +32,13 @@ const limit = ref(60);
 const selected = ref(null);
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() => zh.value ? {
-  title: "帕鲁仓库", subtitle: "按归属、工作适应性、被动技能、星级和个体值筛选全服帕鲁。", refresh: "重新解析",
+  title: "帕鲁仓库", subtitle: "按归属、工作适应性、被动技能、星级和个体值筛选全服帕鲁。", refresh: "重新解析", updated: "更新时间:",
   total: "全部帕鲁", species: "帕鲁种类", lucky: "闪光", alpha: "头目", highest: "最高等级", search: "搜索帕鲁、昵称、归属或 ID",
   allOwners: "全部归属", all: "全部", sortWork: "工作适应性", sortLevel: "等级", sortIv: "平均个体", work: "工作技能", minWork: "最低工作等级",
   advanced: "高级筛选", passive: "被动技能", minLevel: "最低等级", minStars: "最低星级", ivHp: "生命个体", ivAttack: "攻击个体", ivDefense: "防御个体", ivAverage: "平均个体",
   clear: "清空筛选", empty: "没有符合条件的帕鲁", loadMore: "加载更多", detail: "帕鲁详情", owner: "归属", location: "位置", stats: "基础数据", partner: "伙伴技能", equipped: "已装备主动技能", mastered: "已掌握主动技能",
 } : {
-  title: "Pal archive", subtitle: "Filter every Pal by owner, work suitability, passives, stars, and IVs.", refresh: "Parse again",
+  title: "Pal archive", subtitle: "Filter every Pal by owner, work suitability, passives, stars, and IVs.", refresh: "Parse again", updated: "Updated:",
   total: "All Pals", species: "Species", lucky: "Lucky", alpha: "Alpha", highest: "Highest level", search: "Search Pal, nickname, owner, or ID",
   allOwners: "All owners", all: "All", sortWork: "Work suitability", sortLevel: "Level", sortIv: "Average IV", work: "Work skills", minWork: "Minimum work level",
   advanced: "Advanced filters", passive: "Passive skills", minLevel: "Minimum level", minStars: "Minimum stars", ivHp: "HP IV", ivAttack: "Attack IV", ivDefense: "Defense IV", ivAverage: "Average IV",
@@ -84,6 +86,7 @@ const load = async ({ force = false } = {}) => {
       const response = await api.getWorldData();
       return response?.data?.value || {};
     }, { force });
+    lastUpdatedAt.value = readCachedEntry("world-data")?.fetchedAt || 0;
     const data = payload?.data || {};
     pals.value = enrichPals(Array.isArray(data.pals) ? data.pals : []);
     limit.value = 60;
@@ -97,7 +100,7 @@ watch([query, owner, flag, sort, selectedWork, selectedPassives, criteria], () =
 <template>
   <tool-surface :show="show" class="pal-archive-modal" :title="copy.title" width="min(97vw, 1380px)" :embedded="embedded" @update:show="emit('update:show', $event)">
     <template #description>{{ copy.subtitle }}</template>
-    <template #header-extra><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
+    <template #header-extra><DataFreshness :timestamp="lastUpdatedAt" :label="copy.updated" /><n-button quaternary :loading="loading" @click="load({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button></template>
     <div class="pal-summary">
       <div><n-icon><Paw /></n-icon><span>{{ copy.total }}</span><strong>{{ pals.length }}</strong></div>
       <div><n-icon><Dna /></n-icon><span>{{ copy.species }}</span><strong>{{ speciesCount }}</strong></div>

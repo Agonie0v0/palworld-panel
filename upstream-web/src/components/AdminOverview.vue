@@ -22,6 +22,7 @@ import {
 } from "@vicons/tabler";
 import ApiService from "@/service/api";
 import PalDetailInspector from "@/components/PalDetailInspector.vue";
+import DataFreshness from "@/components/DataFreshness.vue";
 import PalWorkBadge from "@/components/PalWorkBadge.vue";
 import { enrichPals, palPortrait } from "@/utils/gameData";
 import { passiveTier } from "@/utils/palPresentation";
@@ -38,6 +39,7 @@ const emit = defineEmits(["navigate"]);
 const { locale } = useI18n();
 const api = new ApiService();
 const loading = ref(false);
+const lastUpdatedAt = ref(0);
 const onlinePlayers = ref([]);
 const backups = ref([]);
 const tasks = ref([]);
@@ -60,6 +62,7 @@ const copy = computed(() => zh.value ? {
   title: "持续运行的帕鲁世界",
   subtitle: "玩家离开不等于世界暂停。这里呈现每个据点此刻真正发生的工作、休整与异常。",
   refresh: "同步世界",
+  updated: "更新时间:",
   online: "世界在线",
   offline: "世界离线",
   fps: "世界帧率",
@@ -119,6 +122,7 @@ const copy = computed(() => zh.value ? {
   title: "A Pal world that never stops",
   subtitle: "Players leaving does not pause the world. See the real work, recovery, and risks unfolding across every base.",
   refresh: "Sync world",
+  updated: "Updated:",
   online: "World online",
   offline: "World offline",
   fps: "World FPS",
@@ -384,6 +388,7 @@ const refresh = async ({ force = false } = {}) => {
   loading.value = true;
   try {
     hydrateOverview(await overviewRequest);
+    lastUpdatedAt.value = readCachedEntry("world-data")?.fetchedAt || 0;
   } finally {
     loading.value = false;
   }
@@ -416,6 +421,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="command-deck__actions">
         <n-button type="primary" :loading="loading" @click="refresh({ force: true })"><template #icon><n-icon><Refresh /></n-icon></template>{{ copy.refresh }}</n-button>
+        <DataFreshness :timestamp="lastUpdatedAt" :label="copy.updated" />
         <button type="button" class="deck-link" @click="emit('navigate', 'pal-status')">{{ copy.allPals }}<n-icon><ArrowRight /></n-icon></button>
       </div>
     </header>
