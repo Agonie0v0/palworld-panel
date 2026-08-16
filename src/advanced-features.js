@@ -970,8 +970,16 @@ function createAdvancedFeatures(deps) {
     return detail;
   }
 
+  function safeWorkshopId(id) {
+    const value = String(id || "");
+    if (!/^\d{5,20}$/.test(value)) {
+      throw new Error("Workshop item ID must be a 5-20 digit number.");
+    }
+    return value;
+  }
+
   function workshopTarget(config, id) {
-    return path.join(path.resolve(config.server.installDir), "Mods", "Workshop", String(id));
+    return path.join(path.resolve(config.server.installDir), "Mods", "Workshop", safeWorkshopId(id));
   }
 
   async function listWorkshopMods(config) {
@@ -984,7 +992,8 @@ function createAdvancedFeatures(deps) {
   }
 
   async function installWorkshopMod(config, id) {
-    const detail = await workshopDetails(id);
+    const safeId = safeWorkshopId(id);
+    const detail = await workshopDetails(safeId);
     const workshopConfig = await load("workshop.json", {});
     const appId = workshopConfig.appId || "1623730";
     const steamcmd = config.server.steamcmdPath || "steamcmd";
@@ -997,7 +1006,7 @@ function createAdvancedFeatures(deps) {
         "anonymous",
         "+workshop_download_item",
         appId,
-        String(id),
+        safeId,
         "validate",
         "+quit",
       ],
@@ -1005,13 +1014,13 @@ function createAdvancedFeatures(deps) {
     );
     if (!result.ok) throw new Error(result.stderr || result.stdout || "SteamCMD Workshop download failed.");
     const candidates = [
-      path.join(path.dirname(steamcmd), "steamapps", "workshop", "content", appId, String(id)),
-      path.join(path.resolve(config.server.installDir), "steamapps", "workshop", "content", appId, String(id)),
-      path.join(os.homedir(), ".steam", "steam", "steamapps", "workshop", "content", appId, String(id)),
+      path.join(path.dirname(steamcmd), "steamapps", "workshop", "content", appId, safeId),
+      path.join(path.resolve(config.server.installDir), "steamapps", "workshop", "content", appId, safeId),
+      path.join(os.homedir(), ".steam", "steam", "steamapps", "workshop", "content", appId, safeId),
     ];
     const source = candidates.find((candidate) => fs.existsSync(candidate));
     if (!source) throw new Error("SteamCMD completed, but the downloaded Workshop directory could not be located.");
-    const target = workshopTarget(config, id);
+    const target = workshopTarget(config, safeId);
     const staging = `${target}.staging-${Date.now()}`;
     await fsp.mkdir(path.dirname(target), { recursive: true });
     await fsp.cp(source, staging, { recursive: true, force: true });
@@ -1019,14 +1028,14 @@ function createAdvancedFeatures(deps) {
     await fsp.rename(staging, target);
     const rows = await load("workshop-mods.json", []);
     const record = {
-      id: String(id),
+      id: safeId,
       title: detail.title || String(id),
       previewUrl: detail.preview_url || "",
       updatedAt: nowIso(),
       installedAt: nowIso(),
       pendingRestart: true,
     };
-    await save("workshop-mods.json", [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.id !== String(id))]);
+    await save("workshop-mods.json", [record, ...(Array.isArray(rows) ? rows : []).filter((row) => row.id !== safeId)]);
     return record;
   }
 
@@ -1293,9 +1302,16 @@ function createAdvancedFeatures(deps) {
 
     if (req.method === "POST" && pathname === "/api/advanced/workshop/install") {
       const body = await deps.readBody(req);
+      let safeId;
+      try {
+        safeId = safeWorkshopId(body.id);
+      } catch (error) {
+        deps.sendError(res, 400, error.message);
+        return true;
+      }
       const job = await auditRequest(req, principal, "workshop.install", body.id, () =>
         queueJob("workshop-install", `Install Workshop ${body.id}`, () =>
-          deps.managedCall("advancedWorkshopInstall", { id: body.id }, () => installWorkshopMod(config, body.id)),
+          deps.managedCall("advancedWorkshopInstall", { id: safeId }, () => installWorkshopMod(config, safeId)),
         ),
       );
       deps.sendJson(res, 202, { ok: true, job });
@@ -1304,7 +1320,13 @@ function createAdvancedFeatures(deps) {
 
     const workshopAction = pathname.match(/^\/api\/advanced\/workshop\/([^/]+)\/(enable|disable)$/);
     if (req.method === "POST" && workshopAction) {
-      const id = decodeURIComponent(workshopAction[1]);
+      let id;
+      try {
+        id = safeWorkshopId(decodeURIComponent(workshopAction[1]));
+      } catch (error) {
+        deps.sendError(res, 400, error.message);
+        return true;
+      }
       const enabled = workshopAction[2] === "enable";
       const mods = await auditRequest(req, principal, `workshop.${workshopAction[2]}`, id, () =>
         deps.managedCall("advancedWorkshopEnable", { id, enabled }, () => setWorkshopModEnabled(config, id, enabled)),
@@ -1315,7 +1337,13 @@ function createAdvancedFeatures(deps) {
 
     const workshopDelete = pathname.match(/^\/api\/advanced\/workshop\/([^/]+)$/);
     if (req.method === "DELETE" && workshopDelete) {
-      const id = decodeURIComponent(workshopDelete[1]);
+      let id;
+      try {
+        id = safeWorkshopId(decodeURIComponent(workshopDelete[1]));
+      } catch (error) {
+        deps.sendError(res, 400, error.message);
+        return true;
+      }
       const mods = await auditRequest(req, principal, "workshop.delete", id, () =>
         deps.managedCall("advancedWorkshopDelete", { id }, () => deleteWorkshopMod(config, id)),
       );
@@ -1621,6 +1649,7 @@ function createAdvancedFeatures(deps) {
       assertModPath,
       inspectZip,
       normalizeWorkshopConfig,
+      safeWorkshopId,
     },
   };
 }

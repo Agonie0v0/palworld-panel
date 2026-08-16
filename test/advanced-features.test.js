@@ -153,3 +153,11 @@ test("failed background jobs preserve deployment logs and result details", async
   assert.deepEqual(failed.logs, ["[1/2] Prepare", "[2/2] Install", "disk full"]);
   assert.equal(failed.result.stderr, "disk full");
 });
+
+test("Workshop item IDs must be numeric and cannot traverse paths", () => {
+  const { safeWorkshopId } = helpers();
+  assert.equal(safeWorkshopId("123456"), "123456");
+  assert.throws(() => safeWorkshopId("../../etc"), /5-20 digit number/i);
+  assert.throws(() => safeWorkshopId("abc"), /5-20 digit number/i);
+  assert.throws(() => safeWorkshopId(""), /5-20 digit number/i);
+});

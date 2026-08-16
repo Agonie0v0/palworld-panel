@@ -32,6 +32,8 @@ const {
   readInstalledServerBuild,
   resolveInstalledServerBuild,
   staticCacheControl,
+  safeDeployServiceName,
+  safeUpdaterPath,
   systemdUpdaterInvocation,
   testSaveSource,
   testRestConnection,
@@ -68,6 +70,20 @@ test("backup publication is atomic and failed archives are removed", async () =>
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("deployment parameters reject unsafe service names and updaters", () => {
+  assert.equal(safeDeployServiceName("palworld"), "palworld");
+  assert.throws(() => safeDeployServiceName("../../evil"), /systemd unit name/i);
+  assert.throws(() => safeDeployServiceName("a b"), /systemd unit name/i);
+  assert.equal(
+    safeUpdaterPath("/opt/steamcmd/steamcmd.sh", "/opt/steamcmd/steamcmd.sh"),
+    path.resolve("/opt/steamcmd/steamcmd.sh"),
+  );
+  assert.throws(
+    () => safeUpdaterPath("/bin/sh", "/opt/steamcmd/steamcmd.sh"),
+    /SteamCMD or DepotDownloader/i,
+  );
 });
 
 test("server settings can be rewritten after the game process has stopped", async () => {

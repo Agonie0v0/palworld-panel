@@ -467,6 +467,15 @@ function createUpstreamCompatibility(deps) {
         deps.sendError(res, 400, "Password must be at least 8 characters.");
         return true;
       }
+      const setupToken = deps.effectivePanelToken ? deps.effectivePanelToken(config) : "";
+      if (!setupToken) {
+        deps.sendError(res, 400, "Panel token is not configured. Set PANEL_TOKEN before initializing.");
+        return true;
+      }
+      if (String(body.token || "") !== setupToken) {
+        deps.sendError(res, 401, "Invalid panel token.");
+        return true;
+      }
       const password = deps.hashPassword(body.password);
       const staticToken = process.env.PANEL_TOKEN && process.env.PANEL_TOKEN !== "change-me"
         ? process.env.PANEL_TOKEN
@@ -579,7 +588,14 @@ function createUpstreamCompatibility(deps) {
     }
     if (req.method === "PUT" && pathname === "/api/config") {
       const body = await deps.readBody(req);
-      if (!body.settings) return false;
+      if (!body.settings || typeof body.settings !== "object") {
+        deps.sendError(res, 400, "Configuration updates must include a settings payload.");
+        return true;
+      }
+      if (body.new_password && String(body.new_password).length < 8) {
+        deps.sendError(res, 400, "New administrator password must be at least 8 characters.");
+        return true;
+      }
       const settings = body.settings;
       const managedConfig = await deps.managedCall("config", {}, () => config);
       const effectiveConfig = { ...config, ...managedConfig, panel: config.panel };

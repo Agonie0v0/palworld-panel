@@ -80,7 +80,7 @@ const defaultConfig = {
   panel: {
     host: process.env.HOST || "0.0.0.0",
     port: Number(process.env.PORT || 19090),
-    token: process.env.PANEL_TOKEN || "change-me",
+    token: process.env.PANEL_TOKEN || "",
     adminInitialized: false,
     adminUser: "",
     adminPasswordHash: "",
@@ -147,7 +147,7 @@ const defaultConfig = {
   settings: {
     ServerName: "Palworld 1.0 Oracle ARM",
     ServerDescription: "Managed by palworld-oneclick-panel",
-    AdminPassword: "change-admin-password",
+    AdminPassword: "",
     ServerPassword: "",
     PublicPort: 8211,
     RCONEnabled: true,
@@ -398,6 +398,9 @@ function requiredPermission(req) {
   if (
     pathname.startsWith("/api/access/") ||
     pathname.startsWith("/api/security/") ||
+    pathname.startsWith("/api/agent/config") ||
+    pathname === "/api/config" ||
+    pathname.startsWith("/api/config/") ||
     pathname.includes("/workshop/config")
   ) return "security:write";
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return "read";
@@ -406,6 +409,18 @@ function requiredPermission(req) {
   if (pathname.includes("schedule") || pathname.includes("rcon/task")) return "schedules:write";
   if (pathname.includes("player") || pathname.includes("whitelist") || pathname.includes("broadcast")) return "players:write";
   return "server:write";
+}
+
+function publicManagedServer(server = {}) {
+  const copy = { ...server };
+  delete copy.restPassword;
+  return copy;
+}
+
+function publicManagedSettings(settings = {}) {
+  const copy = { ...settings };
+  delete copy.AdminPassword;
+  return copy;
 }
 
 function principalCan(principal, permission) {
@@ -625,34 +640,46 @@ async function deployServer(config, body = {}, onProgress = () => {}) {
     };
   }
 
+  const currentAdminPassword = body.adminPassword || config.settings.AdminPassword;
+  const generatedAdminPassword = !currentAdminPassword || currentAdminPassword === "change-admin-password"
+    ? crypto.randomBytes(12).toString("hex")
+    : currentAdminPassword;
   const nextSettings = {
     ...config.settings,
     ServerName: body.serverName || config.settings.ServerName,
     ServerDescription: body.serverDescription || config.settings.ServerDescription,
-    AdminPassword: body.adminPassword || config.settings.AdminPassword,
+    AdminPassword: generatedAdminPassword,
     ServerPassword: body.serverPassword ?? config.settings.ServerPassword,
-    PublicPort: Number(body.publicPort || config.settings.PublicPort || 8211),
+    PublicPort: safePortValue(body.publicPort || config.settings.PublicPort || 8211, "Public port"),
     RCONEnabled: true,
-    RCONPort: Number(body.rconPort || config.settings.RCONPort || 25575),
+    RCONPort: safePortValue(body.rconPort || config.settings.RCONPort || 25575, "RCON port"),
     RESTAPIEnabled: true,
-    RESTAPIPort: Number(body.restPort || config.settings.RESTAPIPort || 8212)
+    RESTAPIPort: safePortValue(body.restPort || config.settings.RESTAPIPort || 8212, "REST API port")
   };
-  const installDir = body.installDir || config.server.installDir;
+  const installDir = safeDeployDirectory(body.installDir || config.server.installDir, "Server install directory");
   const appRoot = path.dirname(installDir);
   const freshInstall = !fs.existsSync(path.join(installDir, "Pal", "Saved", "SaveGames"));
-  const updaterPath = body.steamcmdPath
-    || (hostProfile().runner === "box64" ? "/opt/depotdownloader/DepotDownloader" : config.server.steamcmdPath)
-    || "/opt/steamcmd/steamcmd.sh";
+  const defaultUpdater = hostProfile().runner === "box64"
+    ? "/opt/depotdownloader/DepotDownloader"
+    : "/opt/steamcmd/steamcmd.sh";
+  const requestedUpdater = body.steamcmdPath
+    || (hostProfile().runner === "box64" ? defaultUpdater : config.server.steamcmdPath)
+    || defaultUpdater;
+  const updaterPath = safeUpdaterPath(requestedUpdater, defaultUpdater);
+  const backupDir = safeDeployDirectory(body.backupDir || path.join(appRoot, "backups"), "Server backup directory");
+  if (backupDir === installDir || backupDir.startsWith(`${installDir}${path.sep}`)) {
+    throw new Error("Server backup directory must be outside the install directory.");
+  }
   const nextConfig = mergeConfig(defaultConfig, {
     ...config,
     server: {
       ...config.server,
       mode: "systemd",
-      serviceName: body.serviceName || config.server.serviceName || "palworld",
+      serviceName: safeDeployServiceName(body.serviceName || config.server.serviceName || "palworld"),
       installDir,
       settingsPath: path.join(installDir, "Pal", "Saved", "Config", "LinuxServer", "PalWorldSettings.ini"),
       saveDir: path.join(installDir, "Pal", "Saved"),
-      backupDir: body.backupDir || path.join(appRoot, "backups"),
+      backupDir,
       steamcmdPath: updaterPath,
       rconHost: "127.0.0.1",
       rconPort: nextSettings.RCONPort,
@@ -1655,6 +1682,40 @@ function safeManagedDirectory(target, label) {
   return resolved;
 }
 
+function safeDeployDirectory(target, label) {
+  const resolved = safeManagedDirectory(target, label);
+  const unsafeRoots = ["/bin", "/boot", "/dev", "/etc", "/root", "/tmp", "/usr", "/var"];
+  if (unsafeRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))) {
+    throw new Error(`${label} must not be inside a system directory.`);
+  }
+  return resolved;
+}
+
+function safeDeployServiceName(value) {
+  const name = String(value || "");
+  if (!/^[A-Za-z0-9_.@-]{1,64}$/.test(name)) {
+    throw new Error("Service name is not a safe systemd unit name.");
+  }
+  return name;
+}
+
+function safeUpdaterPath(value, fallback) {
+  const resolved = path.resolve(String(value || fallback || ""));
+  const base = path.basename(resolved);
+  if (base !== "steamcmd.sh" && base !== "DepotDownloader") {
+    throw new Error("Server updater must be SteamCMD or DepotDownloader.");
+  }
+  return resolved;
+}
+
+function safePortValue(value, label) {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${label} must be between 1 and 65535.`);
+  }
+  return port;
+}
+
 function serverMaintenancePlan(config, operation) {
   const installDir = safeManagedDirectory(config.server.installDir, "Server install directory");
   const saveDir = safeManagedDirectory(config.server.saveDir, "Server save directory");
@@ -2595,6 +2656,9 @@ async function handleApi(req, res, config) {
     const body = await readBody(req);
     if (!body.username || !body.password) return sendError(res, 400, "Username and password are required.");
     if (String(body.password).length < 8) return sendError(res, 400, "Password must be at least 8 characters.");
+    const setupToken = effectivePanelToken(config);
+    if (!setupToken) return sendError(res, 400, "Panel token is not configured. Set PANEL_TOKEN before initializing.");
+    if (String(body.token || "") !== setupToken) return sendError(res, 401, "Invalid panel token.");
     const password = hashPassword(body.password);
     const configuredToken = process.env.PANEL_TOKEN && process.env.PANEL_TOKEN !== "change-me"
       ? process.env.PANEL_TOKEN
@@ -2832,9 +2896,9 @@ async function handleApi(req, res, config) {
       status: managed.status,
       config: {
         panel: { host: config.panel.host, port: config.panel.port },
-        server: managed.server,
+        server: publicManagedServer(managed.server),
         automation: config.automation,
-        settings: managed.settings
+        settings: publicManagedSettings(managed.settings)
       },
       host: managed.host
     });
@@ -2850,7 +2914,7 @@ async function handleApi(req, res, config) {
         rconPort: config.settings.RCONPort,
         restPort: config.settings.RESTAPIPort,
         serverName: config.settings.ServerName,
-        adminPassword: config.settings.AdminPassword
+        adminPassword: ""
       }
     }));
     return sendJson(res, 200, {
@@ -3046,7 +3110,25 @@ async function handleApi(req, res, config) {
 
   if (req.method === "PUT" && req.url === "/api/agent/config") {
     const body = await readBody(req);
-    return sendJson(res, 200, { ok: true, agent: await saveJsonFile("agent.json", body.agent || {}) });
+    const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
+    if (agent.enabled && agent.mode === "remote") {
+      let endpoint;
+      try {
+        endpoint = new URL(String(agent.endpoint || ""));
+      } catch {
+        return sendError(res, 400, "Agent endpoint must be a valid URL.");
+      }
+      if (!["http:", "https:"].includes(endpoint.protocol)) {
+        return sendError(res, 400, "Agent endpoint must use http:// or https://.");
+      }
+      if (endpoint.username || endpoint.password) {
+        return sendError(res, 400, "Agent endpoint cannot contain credentials.");
+      }
+      if (!String(agent.token || "").trim()) {
+        return sendError(res, 400, "Agent token is required when remote Agent mode is enabled.");
+      }
+    }
+    return sendJson(res, 200, { ok: true, agent: await saveJsonFile("agent.json", agent) });
   }
 
   if (req.method === "POST" && req.url === "/api/agent/test") {
@@ -3152,8 +3234,7 @@ async function handleApi(req, res, config) {
 
   if (req.method === "PUT" && req.url === "/api/config") {
     const body = await readBody(req);
-    const next = await saveConfig({ ...config, ...body });
-    return sendJson(res, 200, { ok: true, config: next });
+    return sendError(res, 400, "Configuration updates must include a settings payload.");
   }
 
   if (req.method === "GET" && req.url === "/api/panel/navigation") {
@@ -3522,6 +3603,9 @@ module.exports = {
   readInstalledServerBuild,
   resolveInstalledServerBuild,
   staticCacheControl,
+  safeDeployDirectory,
+  safeDeployServiceName,
+  safeUpdaterPath,
   systemdUpdaterInvocation,
   normalizeServerUpdateCheckIntervalHours,
   normalizeNetServerMaxTickRate,

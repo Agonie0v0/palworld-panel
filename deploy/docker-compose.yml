@@ -8,7 +8,7 @@ services:
     ports:
       - "19090:19090"
     environment:
-      PANEL_TOKEN: "${PANEL_TOKEN:-change-me-now}"
+      PANEL_TOKEN: "${PANEL_TOKEN:-}"
       PAL_PANEL_CONFIG: /data/config.json
     volumes:
       - panel-data:/data

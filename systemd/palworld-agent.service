@@ -10,7 +10,8 @@ WorkingDirectory=/opt/palworld-agent
 Environment=NODE_ENV=production
 Environment=AGENT_MODE=1
 Environment=AGENT_PORT=8081
-Environment=PAL_AGENT_TOKEN=change-me
+# PAL_AGENT_TOKEN must be set to a strong random value before starting.
+Environment=PAL_AGENT_TOKEN=
 ExecStart=/usr/bin/node src/server.js
 Restart=always
 RestartSec=5

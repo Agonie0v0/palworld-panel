@@ -12,6 +12,7 @@ const PALWORLD_TOKEN = "palworld_token";
 const pageWidth = computed(() => pageStore().getScreenWidth());
 const configReady = ref(false);
 const initialized = ref(false);
+const tokenEnabled = ref(false);
 const showConfig = ref(false);
 
 onMounted(async () => {
@@ -31,6 +32,7 @@ onMounted(async () => {
   const { data, statusCode } = await new ApiService().getConfigStatus();
   initialized.value =
     statusCode.value === 200 && data.value?.initialized === true;
+  tokenEnabled.value = data.value?.tokenEnabled === true;
   configReady.value = true;
 });
 
@@ -46,7 +48,11 @@ const handleInitialized = () => {
       <pc-home v-if="pageWidth >= 768" />
       <mobile-home v-else @open-config="showConfig = true" />
     </template>
-    <first-run-setup :show="!initialized" @initialized="handleInitialized" />
+    <first-run-setup
+      :show="!initialized"
+      :token-enabled="tokenEnabled"
+      @initialized="handleInitialized"
+    />
     <config-manager v-model:show="showConfig" />
   </div>
   <div v-else class="app-boot">

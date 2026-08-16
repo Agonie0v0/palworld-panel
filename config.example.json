@@ -2,7 +2,7 @@
   "panel": {
     "host": "0.0.0.0",
     "port": 19090,
-    "token": "change-me",
+    "token": "",
     "adminInitialized": false,
     "adminUser": "",
     "adminPasswordHash": "",
@@ -68,7 +68,7 @@
   "settings": {
     "ServerName": "Palworld 1.0 Oracle ARM",
     "ServerDescription": "Managed by palworld-oneclick-panel",
-    "AdminPassword": "change-admin-password",
+    "AdminPassword": "",
     "ServerPassword": "",
     "PublicPort": 8211,
     "RCONEnabled": true,

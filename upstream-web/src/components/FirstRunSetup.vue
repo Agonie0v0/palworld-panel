@@ -5,15 +5,20 @@ import { useI18n } from "vue-i18n";
 import ApiService from "@/service/api";
 import userStore from "@/stores/model/user";
 
-defineProps({ show: Boolean });
+const props = defineProps({ show: Boolean, tokenEnabled: Boolean });
 const emit = defineEmits(["initialized"]);
 const { t } = useI18n();
 const message = useMessage();
 const password = ref("");
 const confirmation = ref("");
+const panelToken = ref("");
 const saving = ref(false);
 
 const initialize = async () => {
+  if (props.tokenEnabled && !panelToken.value.trim()) {
+    message.error(t("configuration.panelTokenRequired"));
+    return;
+  }
   if (!password.value.trim()) {
     message.error(t("configuration.passwordRequired"));
     return;
@@ -25,6 +30,7 @@ const initialize = async () => {
   saving.value = true;
   const { data, statusCode } = await new ApiService().initializeConfig({
     password: password.value,
+    token: panelToken.value,
   });
   saving.value = false;
   if (statusCode.value !== 200 || !data.value?.token) {
@@ -56,6 +62,16 @@ const initialize = async () => {
       </div>
     </n-alert>
     <n-form label-placement="top" @submit.prevent="initialize">
+      <n-form-item v-if="tokenEnabled" :label="$t('configuration.panelToken')">
+        <n-input
+          v-model:value="panelToken"
+          type="password"
+          show-password-on="click"
+          autocomplete="off"
+          :placeholder="$t('configuration.panelTokenNotice')"
+          @keyup.enter="initialize"
+        />
+      </n-form-item>
       <n-form-item :label="$t('configuration.adminPassword')">
         <n-input
           v-model:value="password"
