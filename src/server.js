@@ -145,8 +145,8 @@ const defaultConfig = {
     maintenanceWarningMessage: "Server maintenance restart in {seconds} seconds."
   },
   settings: {
-    ServerName: "Palworld 1.0 Oracle ARM",
-    ServerDescription: "Managed by palworld-oneclick-panel",
+    ServerName: "Palworld Dedicated Server",
+    ServerDescription: "Managed by palworld-panel",
     AdminPassword: "",
     ServerPassword: "",
     PublicPort: 8211,

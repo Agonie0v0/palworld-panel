@@ -1,4 +1,4 @@
-# Palworld Panel (PalStation) · 先锋世界指挥舱
+# Palworld Panel · 幻兽帕鲁 Web 管理面板
 
 <div align="center">
 
@@ -9,8 +9,8 @@
 [![Security](https://img.shields.io/badge/security-audited%200%20vulns-brightgreen.svg)](#安全加固规范)
 
 <p align="center">
-  <b>面向幻兽帕鲁（Palworld）专用服务器的高性能全功能 Web 运维指挥面板</b><br>
-  整合据点帕鲁生态监控、全服库存与资产检索、实时运维拉起、自动容灾守护、参数可视化调优与跨端移动适配。
+  <b>面向幻兽帕鲁（Palworld）专用服务器的高性能全功能 Web 运维管理面板</b><br>
+  整合服务器实时概览、据点帕鲁状态监控、全服库存与资产检索、自动容灾与自愈守护、参数可视化调优与跨端移动适配。
 </p>
 
 [✨ 核心特性](#-核心特性) • [📸 实机预览](#-实机预览) • [🚀 快速开始](#-快速开始) • [📡 架构与端口](#-架构与端口分配) • [🛡️ 安全加固](#-安全加固规范) • [💻 本地开发与测试](#-本地开发与验证)
@@ -21,13 +21,13 @@
 
 ## 📸 实机预览
 
-> 基于生产环境 Oracle Cloud ARM 实例实机截取，搭载全新 **先锋世界指挥舱 (Vanguard Command Deck)** 极客暗黑主题与微交互动效。
+> 生产环境实机运行截图，采用高对比度暗黑主题与流畅交互设计。
 
-### 🖥️ 桌面端指挥控制台 (Desktop Command Deck)
+### 🖥️ 桌面端管理工作台
 
 <div align="center">
-  <p><b>世界概览与多据点帕鲁生态监控</b></p>
-  <img src="docs/screenshots/desktop-overview.png" alt="桌面端概览与据点生态" width="98%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);" />
+  <p><b>服务器概览与据点帕鲁状态</b></p>
+  <img src="docs/screenshots/desktop-overview.png" alt="桌面端概览与据点帕鲁" width="98%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);" />
 </div>
 
 <br>
@@ -36,7 +36,7 @@
   <table width="100%">
     <tr>
       <td width="50%" align="center">
-        <b>帕鲁状态多维工作适性与被动词条检索</b><br><br>
+        <b>据点帕鲁状态与工作适性检索</b><br><br>
         <img src="docs/screenshots/desktop-pal-status.png" alt="桌面端帕鲁状态" width="100%" style="border-radius: 6px;" />
       </td>
       <td width="50%" align="center">
@@ -47,21 +47,21 @@
   </table>
 </div>
 
-### 📱 移动端便携终端 (Mobile Cockpit)
+### 📱 移动端管理视图
 
 <div align="center">
   <table width="100%">
     <tr>
       <td width="33%" align="center">
-        <b>移动端·实时心跳概览</b><br><br>
+        <b>移动端·服务器概览</b><br><br>
         <img src="docs/screenshots/mobile-overview.png" alt="移动端概览" width="90%" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
       </td>
       <td width="33%" align="center">
-        <b>移动端·据点帕鲁状态</b><br><br>
+        <b>移动端·帕鲁状态</b><br><br>
         <img src="docs/screenshots/mobile-pal-status.png" alt="移动端帕鲁状态" width="90%" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
       </td>
       <td width="33%" align="center">
-        <b>移动端·全服库存中枢</b><br><br>
+        <b>移动端·全服库存</b><br><br>
         <img src="docs/screenshots/mobile-inventory.png" alt="移动端全服库存与工具" width="90%" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
       </td>
     </tr>
@@ -72,28 +72,28 @@
 
 ## ✨ 核心特性
 
-- 🎛️ **先锋指挥座舱 (Vanguard Command Deck)**
-  - 工业级高对比度暗黑界面与拟物化呼吸信号灯，实时监视服务器心跳、FPS、公网延迟与主机负载（CPU / 内存 / 磁盘）。
-  - 基于 Emil Kowalski 交互美学打磨的弹簧动效、微交互感知反馈与毛玻璃面板质感。
-- 🐾 **全维帕鲁生态监护 (Base Pal Ecosystem)**
-  - 实时抓取全地图所有据点的帕鲁工作分布、实时作业/搬运设施、饱食度与 SAN 心理压力预警。
-  - 完整呈现 12 种工作适性等级、主动战斗技能与正/负/彩虹金词条层级展示。
-  - 独家集成**离线物资挂机产出评估**，计算服务离线期间基地设施的物资吞吐。
-- 📦 **全服库存与世界资产检索 (Global Inventory & World Radar)**
-  - 毫秒级深层遍历全图公会箱、个人背包、地面掉落与隐藏容器，支持按类别、关键词与坐标精准追踪。
-  - 世界全景地图：传送点、翠竹林地下城、头目 Boss 刷新、油田钻机点与公会据点领地范围一览无余。
-- 🛡️ **全自动高可用自愈守护 (Autonomous Watchdog & Resilience)**
+- 🎛️ **现代暗黑界面与流畅交互 (Modern Dashboard & UX)**
+  - 工业级高对比度暗黑界面与呼吸状态指示灯，实时监控服务器状态、FPS、网络延迟与主机负载（CPU / 内存 / 磁盘）。
+  - 基于触感微交互美学打磨的弹簧过渡动效与毛玻璃质感，全屏与自适应响应式设计。
+- 🐾 **据点帕鲁状态监控 (Base Pal Monitoring)**
+  - 实时解析全地图所有据点的帕鲁工作分布、设施作业、饱食度与 SAN 心理状态。
+  - 完整呈现 12 种工作适性等级、主动技能与正/负/金/彩虹词条层级展示。
+  - 集成**离线物资产出评估**，计算服务离线期间基地设施的物资吞吐估算。
+- 📦 **全服库存与资产检索 (Global Inventory & World Radar)**
+  - 快速深度遍历全图公会箱、个人背包、地面掉落与容器，支持按分类、关键词与坐标精准追踪。
+  - 世界地图联动：传送点、地下城、头目 Boss 刷新、油田钻机点与公会据点范围清晰标绘。
+- 🛡️ **高可用自愈守护与自动容灾 (Autonomous Watchdog & Resilience)**
   - **内存泄漏熔断预警**：连续多次超额即平滑执行维护备份并热重启。
   - **异常宕机自动拉起**：检测服务端响应中断并自动恢复服务进程。
   - **滚动备份与异地容灾**：自动化计划快照、校验下载、一键恢复，并支持 WebDAV 远程同步。
-  - **游戏内智能广播联动**：玩家进服/离服全局弹幕提示、维护前秒级倒计时通告。
-- ⚙️ **可视化配置生成器 (pal-conf 深度集成)**
+  - **游戏内广播联动**：玩家进服/离服全局提示、维护前秒级倒计时通告。
+- ⚙️ **可视化配置生成器 (Visual Pal Configurator)**
   - 内置带强类型校验、数值安全范围与枚举约束的配置编辑器。
   - 无缝生成与双向转换 `PalWorldSettings.ini` 与 `WorldOption.sav`。
-- 🌐 **三模弹性部署体系 (Universal Deployment)**
-  - **systemd 守护**：原生 Linux 服务管理，零容器开销，轻量高效。
+- 🌐 **多模式弹性部署 (Universal Deployment)**
+  - **systemd 原生守护**：Linux 服务原生管理，零容器开销，轻量高效。
   - **Docker Compose V2**：全隔离容器化交付，持久化卷映射，随拆随建。
-  - **远程 Agent 架构**：面板管理端与游戏服务器跨物理机完全分离，保障管理网零信任。
+  - **远程 Agent 架构**：面板管理端与游戏服务器跨主机分离，保障管理网络零信任。
 
 ---
 
@@ -140,14 +140,14 @@ sudo AGENT_PORT=8081 bash scripts/install-agent.sh
 
 ## 📡 架构与端口分配
 
-PalStation 遵循三维数据源解耦原则：
+Palworld Panel 遵循三维数据源解耦原则：
 1. **REST API**：提供轻量实时的服务器在线状态、帧率与当前在线玩家列表。
 2. **RCON 通道**：提供低延迟管理指令、热踢出/封禁与富文本游戏内广播。
-3. **存档解析引擎**：以零运行时损耗的只读模式解析世界快照，还原据点、帕鲁、公会、背包与地块坐标。
+3. **存档解析引擎**：以只读模式解析世界快照，还原据点、帕鲁、公会、背包与地块坐标。
 
 | 端口 | 协议 | 适用组件 | 网络暴露建议 |
 | :--- | :--- | :--- | :--- |
-| **`19090`** | TCP | PalStation Web 控制台 | 推荐配合 Nginx / Caddy 部署反向代理并启用 HTTPS |
+| **`19090`** | TCP | Web 管理面板 | 推荐配合 Nginx / Caddy 部署反向代理并启用 HTTPS |
 | **`8211`** | UDP | Palworld 游戏客户端连接端口 | 对公网完全开放 |
 | **`25575`** | TCP | Palworld RCON 管理端口 | 仅对 `127.0.0.1` 或内网安全组开放 |
 | **`8212`** | TCP | Palworld 官方 REST API | 仅对 `127.0.0.1` 或内网安全组开放 |
@@ -157,7 +157,7 @@ PalStation 遵循三维数据源解耦原则：
 
 ## 🛡️ 安全加固规范
 
-当前发布版（`v1.2.0`）已完成深度源码级安全合规加固：
+当前发布版（`v1.2.0`）已完成深度源码级安全加固：
 
 1. **常数时间令牌鉴权 (Constant-Time Verification)**
    - 静态管理 Token 及 API 凭证校验全面采用 `crypto.timingSafeEqual` 进行恒定时间比较，彻底阻断时序侧信道（Timing Attack）窃取令牌。
@@ -246,4 +246,4 @@ palworld-panel/
   - [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf)：出色的 Palworld 参数配置生成器 (MIT License)
   - [deafdudecomputers/PalworldSaveTools](https://github.com/deafdudecomputers/PalworldSaveTools)：高效的存档解析核心实现
 
-> **PalStation** 现已进入正式生产发布阶段，感谢所有 Palworld 服主与玩家社区的支持！
+> **Palworld Panel** 现已进入正式发布阶段，感谢所有 Palworld 服主与社区玩家的支持！

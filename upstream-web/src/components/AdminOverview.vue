@@ -58,9 +58,9 @@ let overviewRequest = null;
 
 const zh = computed(() => locale.value === "zh");
 const copy = computed(() => zh.value ? {
-  eyebrow: "WORLD COMMAND / 世界指挥中心",
-  title: "持续运行的帕鲁世界",
-  subtitle: "玩家离开不等于世界暂停。这里呈现每个据点此刻真正发生的工作、休整与异常。",
+  eyebrow: "SERVER OVERVIEW / 运行概览",
+  title: "服务器概览",
+  subtitle: "实时监控服务器运行状态、各据点帕鲁分配与自动化任务。",
   refresh: "同步世界",
   updated: "更新时间:",
   online: "世界在线",
@@ -71,12 +71,12 @@ const copy = computed(() => zh.value ? {
   working: "执行任务",
   attention: "需要照看",
   uptime: "连续运行",
-  bases: "据点生态",
-  basesHint: "选择单个据点，或查看世界中全部据点帕鲁",
+  bases: "据点帕鲁",
+  basesHint: "选择单个据点，或查看全服全部据点帕鲁",
   allBases: "全部据点",
   allBasesHint: "汇总所有据点帕鲁",
   allPals: "打开帕鲁状态中心",
-  worldActive: "无人值守，世界仍在运转",
+  worldActive: "服务端运行正常",
   emptyWorldMessage: (count) => `当前没有玩家在线，${count} 只据点帕鲁仍在生产、运输与维持设施。`,
   onlineWorldMessage: (players, pals) => `${players} 位玩家已连接，${pals} 只据点帕鲁共同维持世界运行。`,
   noWorkers: "这个据点尚未解析到工作帕鲁。",
@@ -91,9 +91,9 @@ const copy = computed(() => zh.value ? {
   restingState: "休息中",
   eatingState: "进食中",
   attentionState: "需要关注",
-  host: "主机生命线",
-  hostHint: "资源余量决定世界运行的稳定性",
-  protection: "守护程序",
+  host: "系统资源",
+  hostHint: "CPU、内存与磁盘实时负载",
+  protection: "自动化与备份",
   activeTasks: "启用任务",
   latestBackup: "最近备份",
   backupCount: "可用快照",
@@ -118,9 +118,9 @@ const copy = computed(() => zh.value ? {
   noFacility: "自主活动区域",
   noPassives: "暂无被动词条记录",
 } : {
-  eyebrow: "WORLD COMMAND / LIVE OPERATIONS",
-  title: "A Pal world that never stops",
-  subtitle: "Players leaving does not pause the world. See the real work, recovery, and risks unfolding across every base.",
+  eyebrow: "SERVER OVERVIEW / LIVE METRICS",
+  title: "Server Overview",
+  subtitle: "Real-time monitoring of server status, base Pal assignments, and automated tasks.",
   refresh: "Sync world",
   updated: "Updated:",
   online: "World online",
@@ -131,14 +131,14 @@ const copy = computed(() => zh.value ? {
   working: "On assignment",
   attention: "Need care",
   uptime: "Continuous uptime",
-  bases: "Base habitats",
-  basesHint: "Choose one base or see every base Pal in the world",
-  allBases: "All bases",
+  bases: "Base Pals",
+  basesHint: "Choose one base or see all base Pals across the server",
+  allBases: "All Bases",
   allBasesHint: "Every base Pal together",
   allPals: "Open Pal status center",
-  worldActive: "Unattended, still running",
-  emptyWorldMessage: (count) => `No players are online. ${count} base Pals are still producing, transporting, and maintaining facilities.`,
-  onlineWorldMessage: (players, pals) => `${players} players and ${pals} base Pals are keeping the world active.`,
+  worldActive: "Server running normally",
+  emptyWorldMessage: (count) => `No players are online. ${count} base Pals are producing, transporting, and maintaining facilities.`,
+  onlineWorldMessage: (players, pals) => `${players} players and ${pals} base Pals are active on the server.`,
   noWorkers: "No worker Pals have been parsed for this base yet.",
   worldUnavailable: "Base data is unavailable. Check the save source or parse the save again.",
   selectBase: "Switch base",
@@ -151,9 +151,9 @@ const copy = computed(() => zh.value ? {
   restingState: "Resting",
   eatingState: "Eating",
   attentionState: "Needs attention",
-  host: "Host lifeline",
-  hostHint: "Resource headroom keeps the world stable",
-  protection: "Safeguards",
+  host: "System Resources",
+  hostHint: "Real-time CPU, memory, and disk utilization",
+  protection: "Automation & Backups",
   activeTasks: "Enabled tasks",
   latestBackup: "Latest backup",
   backupCount: "Snapshots",
@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
 
     <section class="world-intelligence world-intelligence--primary">
       <article class="intelligence-card host-card">
-        <header><span><n-icon><Server /></n-icon></span><div><small>SYSTEM LIFELINE</small><h3>{{ copy.host }}</h3><p>{{ hostMetrics.hostname || copy.hostHint }}</p></div></header>
+        <header><span><n-icon><Server /></n-icon></span><div><small>{{ zh ? '系统资源' : 'SYSTEM RESOURCES' }}</small><h3>{{ copy.host }}</h3><p>{{ copy.hostHint }}</p></div></header>
         <div v-if="!hostMetrics.unavailable" class="resource-radar">
           <div v-for="resource in resourceRows" :key="resource.key" class="resource-radar__item">
             <div class="resource-dial" :style="{ '--value': `${Math.min(100, resource.value) * 3.6}deg` }"><span><n-icon><component :is="resource.icon" /></n-icon><strong>{{ resource.value.toFixed(0) }}%</strong></span></div>
@@ -439,7 +439,7 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="intelligence-card protection-card">
-        <header><span><n-icon><ShieldCheck /></n-icon></span><div><small>AUTOMATION CORE</small><h3>{{ copy.protection }}</h3><p>{{ zh ? '持续守护每一次世界变更' : 'Protecting every world change' }}</p></div></header>
+        <header><span><n-icon><ShieldCheck /></n-icon></span><div><small>{{ zh ? '任务与守护' : 'AUTOMATION' }}</small><h3>{{ copy.protection }}</h3><p>{{ zh ? '定时任务执行与存档保护' : 'Scheduled tasks and backup protection' }}</p></div></header>
         <div class="protection-flow">
           <div><n-icon><Tools /></n-icon><span>{{ copy.activeTasks }}</span><strong>{{ activeTasks.length }}</strong></div>
           <i />
@@ -458,7 +458,7 @@ onBeforeUnmount(() => {
 
     <section class="habitat-deck" aria-labelledby="habitat-title">
       <header class="deck-heading">
-        <div><span>BASE HABITATS</span><h3 id="habitat-title">{{ copy.bases }}</h3><p>{{ copy.basesHint }}</p></div>
+        <div><span>{{ zh ? '据点帕鲁' : 'BASE PALS' }}</span><h3 id="habitat-title">{{ copy.bases }}</h3><p>{{ copy.basesHint }}</p></div>
         <div class="habitat-overview" :aria-label="copy.bases">
           <span><strong>{{ workers.length }}</strong>{{ copy.pals }}</span>
           <span :class="{ alert: attentionCount }"><strong>{{ attentionCount }}</strong>{{ copy.attention }}</span>
