@@ -8,6 +8,12 @@ import {
   MoonOutline,
   PencilOutline,
   SunnyOutline,
+  ChevronBackOutline,
+  ChevronForwardOutline,
+  RadioOutline,
+  ArchiveOutline,
+  TerminalOutline,
+  PowerOutline,
 } from "@vicons/ionicons5";
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { useMessage } from "naive-ui";
@@ -48,6 +54,16 @@ const theme = themeStore();
 
 const loading = ref(false);
 const sidebarNav = ref(null);
+const sidebarCollapsed = ref(
+  localStorage.getItem("palworld_sidebar_collapsed") === "true",
+);
+const toggleSidebarCollapse = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  localStorage.setItem(
+    "palworld_sidebar_collapsed",
+    String(sidebarCollapsed.value),
+  );
+};
 const isFullscreen = ref(false);
 const serverInfo = ref({});
 const serverMetrics = ref({});
@@ -434,13 +450,21 @@ onBeforeUnmount(() =>
 </script>
 
 <template>
-  <div class="ops-shell ops-shell--desktop">
-    <aside class="ops-sidebar">
+  <div
+    class="ops-shell ops-shell--desktop"
+    :class="{ 'has-collapsed-sidebar': sidebarCollapsed }"
+  >
+    <aside class="ops-sidebar" :class="{ 'is-collapsed': sidebarCollapsed }">
       <div class="ops-brand">
-        <div class="ops-brand-mark" aria-hidden="true">
-          <n-icon size="23"><GameController /></n-icon>
+        <div
+          class="ops-brand-mark"
+          aria-hidden="true"
+          :title="locale === 'zh' ? '点击折叠/展开侧栏' : 'Click to collapse/expand'"
+          @click="toggleSidebarCollapse"
+        >
+          <n-icon size="22"><GameController /></n-icon>
         </div>
-        <div class="ops-brand-copy">
+        <div v-if="!sidebarCollapsed" class="ops-brand-copy">
           <div class="ops-brand-title">{{ $t("title") }}</div>
           <button
             v-if="serverToolInfo?.version"
@@ -452,9 +476,24 @@ onBeforeUnmount(() =>
             {{ panelVersionLabel
             }}<span v-if="serverToolInfo.build">
               · {{ serverToolInfo.build }}</span
-            ><span v-if="hasNewVersion"> · new</span>
+            ><span v-if="hasNewVersion" class="ops-badge-new"> · NEW</span>
           </button>
         </div>
+        <n-button
+          quaternary
+          circle
+          size="small"
+          class="ops-collapse-btn"
+          :aria-label="sidebarCollapsed ? '展开侧栏' : '折叠侧栏'"
+          @click="toggleSidebarCollapse"
+        >
+          <template #icon>
+            <n-icon>
+              <ChevronForwardOutline v-if="sidebarCollapsed" />
+              <ChevronBackOutline v-else />
+            </n-icon>
+          </template>
+        </n-button>
       </div>
 
       <sidebar-workspace-nav
@@ -463,6 +502,7 @@ onBeforeUnmount(() =>
         :can-operate="canOperate"
         :is-admin="isAdmin"
         :is-login="isLogin"
+        :collapsed="sidebarCollapsed"
         @select="handleSidebarNavigation"
         @labels-change="navigationLabels = $event"
       />
@@ -499,7 +539,7 @@ onBeforeUnmount(() =>
             ></template>
           </n-button>
           <n-button
-            v-if="isAdmin"
+            v-if="isAdmin && !sidebarCollapsed"
             quaternary
             circle
             class="ops-preference-button"
@@ -514,14 +554,14 @@ onBeforeUnmount(() =>
           <n-button
             quaternary
             circle
-            class="ops-preference-button"
+            class="ops-preference-button ops-theme-toggle"
             :aria-label="
               $t(theme.isDark ? 'button.lightMode' : 'button.darkMode')
             "
             @click="theme.toggle"
           >
             <template #icon>
-              <n-icon>
+              <n-icon class="theme-icon">
                 <SunnyOutline v-if="theme.isDark" />
                 <MoonOutline v-else />
               </n-icon>
@@ -549,14 +589,15 @@ onBeforeUnmount(() =>
           type="primary"
           secondary
           size="small"
+          class="ops-auth-trigger"
           @click="showLoginModal = true"
         >
           <template #icon
             ><n-icon><AdminPanelSettingsOutlined /></n-icon
           ></template>
-          {{ $t("button.auth") }}
+          <span v-if="!sidebarCollapsed">{{ $t("button.auth") }}</span>
         </n-button>
-        <n-tooltip v-else trigger="hover">
+        <n-tooltip v-else trigger="hover" placement="right">
           <template #trigger>
             <div
               class="ops-auth-state"
@@ -567,7 +608,7 @@ onBeforeUnmount(() =>
               <n-icon><AdminPanelSettingsOutlined /></n-icon>
             </div>
           </template>
-          {{ $t("status.authenticated") }}
+          {{ $t("status.authenticated") }} ({{ currentRole.toUpperCase() }})
         </n-tooltip>
       </div>
     </aside>
@@ -578,34 +619,108 @@ onBeforeUnmount(() =>
         :class="{ 'is-tool-view': currentDisplay !== 'overview' }"
       >
         <div class="ops-workspace-heading">
-          <h1 class="ops-workspace-title">
-            {{ serverInfo?.name || $t("status.serverUnavailable") }}
-          </h1>
-          <div class="ops-workspace-context">
-            <strong :title="serverInfo?.version_cached ? $t('operations.currentVersionCached') : ''">
+          <div class="ops-heading-meta">
+            <span
+              class="ops-status-beacon"
+              :class="{ 'is-online': serverAvailable }"
+              :title="serverAvailable ? $t('status.online') : $t('status.serverUnavailable')"
+            >
+              <i class="beacon-ring"></i>
+              <i class="beacon-core"></i>
+            </span>
+            <h1 class="ops-workspace-title">
+              {{ serverInfo?.name || $t("status.serverUnavailable") }}
+            </h1>
+            <span
+              class="ops-version-badge"
+              :title="serverInfo?.version_cached ? $t('operations.currentVersionCached') : ''"
+            >
               {{ currentServerVersion }}
-            </strong>
+            </span>
+            <span class="ops-view-badge">
+              {{ currentViewLabel }}
+            </span>
           </div>
         </div>
+
         <div class="ops-header-telemetry" :aria-label="$t('overview.pulse')">
           <div class="ops-telemetry-item ops-telemetry-item--state">
-            <span
-              class="ops-status-dot"
-              :class="{ 'is-online': serverAvailable }"
-            ></span>
-            <strong>{{
-              serverAvailable
-                ? $t("status.online")
-                : $t("status.serverUnavailable")
-            }}</strong>
+            <span class="ops-telemetry-label">{{ $t("status.server") || '状态' }}</span>
+            <strong :class="{ 'text-emerald': serverAvailable, 'text-coral': !serverAvailable }">
+              {{ serverAvailable ? $t("status.online") : $t("status.serverUnavailable") }}
+            </strong>
           </div>
           <div class="ops-telemetry-item">
-            <span>{{ $t("item.serverFps") }}</span>
-            <strong>{{ serverMetrics?.server_fps ?? 0 }}</strong>
+            <span class="ops-telemetry-label">{{ $t("item.serverFps") }}</span>
+            <strong class="ops-font-data">{{ serverMetrics?.server_fps ?? 0 }}</strong>
           </div>
           <div class="ops-telemetry-item ops-telemetry-item--players">
-            <span>{{ $t("button.players") }}</span>
-            <strong>{{ onlineCount }}/{{ playerList.length }}</strong>
+            <span class="ops-telemetry-label">{{ $t("button.players") }}</span>
+            <strong class="ops-font-data">{{ onlineCount }}<small>/{{ playerList.length }}</small></strong>
+          </div>
+        </div>
+
+        <div class="ops-header-actions">
+          <div class="ops-quick-actions" v-if="canOperate">
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button
+                  type="button"
+                  class="ops-quick-btn"
+                  @click="selectWorkspace('broadcast')"
+                  :aria-label="$t('modal.broadcast')"
+                >
+                  <n-icon><RadioOutline /></n-icon>
+                  <span>{{ $t("modal.broadcast") }}</span>
+                </button>
+              </template>
+              {{ $t("modal.broadcast") }}
+            </n-tooltip>
+
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button
+                  type="button"
+                  class="ops-quick-btn"
+                  @click="selectWorkspace('backup')"
+                  :aria-label="$t('button.backup')"
+                >
+                  <n-icon><ArchiveOutline /></n-icon>
+                  <span>{{ $t("button.backup") }}</span>
+                </button>
+              </template>
+              {{ $t("button.backup") }}
+            </n-tooltip>
+
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button
+                  type="button"
+                  class="ops-quick-btn"
+                  @click="selectWorkspace('rcon')"
+                  :aria-label="$t('modal.rcon')"
+                >
+                  <n-icon><TerminalOutline /></n-icon>
+                  <span>{{ $t("modal.rcon") }}</span>
+                </button>
+              </template>
+              {{ $t("modal.rcon") }}
+            </n-tooltip>
+
+            <n-tooltip trigger="hover" v-if="isAdmin">
+              <template #trigger>
+                <button
+                  type="button"
+                  class="ops-quick-btn ops-quick-btn--danger"
+                  @click="handleShutdown"
+                  :aria-label="$t('button.shutdown')"
+                >
+                  <n-icon><PowerOutline /></n-icon>
+                  <span>{{ $t("button.shutdown") }}</span>
+                </button>
+              </template>
+              {{ $t("button.shutdown") }}
+            </n-tooltip>
           </div>
         </div>
       </header>

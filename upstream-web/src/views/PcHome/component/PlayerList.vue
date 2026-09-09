@@ -349,21 +349,28 @@ const filteredPlayers = computed(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
   cursor: pointer;
   transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
+    transform 140ms var(--ease-out),
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
 
   &:hover {
-    background: color-mix(in srgb, var(--app-accent) 7%, transparent);
+    background: color-mix(in srgb, var(--app-accent) 8%, var(--app-surface));
+    border-color: color-mix(in srgb, var(--app-accent) 35%, var(--app-border));
+  }
+
+  &:active {
+    transform: scale(0.98) !important;
   }
 
   &.is-selected {
-    border-color: color-mix(in srgb, var(--app-accent) 42%, var(--app-border));
+    border-color: color-mix(in srgb, var(--app-accent) 50%, var(--app-border));
     background: var(--app-accent-soft);
+    box-shadow: 0 4px 14px var(--app-accent-glow);
   }
 }
 

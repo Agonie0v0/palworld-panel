@@ -36,6 +36,7 @@ const props = defineProps({
   canOperate: { type: Boolean, default: false },
   isAdmin: { type: Boolean, default: false },
   isLogin: { type: Boolean, default: false },
+  collapsed: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["select", "editing-change", "labels-change"]);
@@ -458,7 +459,7 @@ defineExpose({ toggleEditing, editing });
       @dragover.prevent
       @drop="editing && dropGroup($event, groupIndex)"
     >
-      <div class="workspace-nav__heading">
+      <div v-if="!collapsed" class="workspace-nav__heading">
         <n-icon v-if="editing" class="workspace-nav__handle"
           ><ReorderFourOutline
         /></n-icon>
@@ -493,43 +494,61 @@ defineExpose({ toggleEditing, editing });
             ><n-icon><TrashOutline /></n-icon></template
         ></n-button>
       </div>
+      <div v-else-if="groupIndex > 0" class="workspace-nav__divider" />
       <nav
-        v-show="editing || !isCollapsed(group.id)"
+        v-show="editing || !isCollapsed(group.id) || collapsed"
         class="workspace-nav__list"
         :aria-label="groupName(group)"
         @dragover.prevent
         @drop="editing && dropItem($event, group.id, group.items.length)"
       >
-        <button
-          v-for="(item, itemIndex) in group.items"
-          :key="item.id"
-          type="button"
-          class="ops-menu-button workspace-nav__item"
-          :class="{
-            'is-active': activeKey === item.id,
-            'is-danger': catalog[item.id].danger,
-            'is-dragging':
-              dragState?.type === 'item' && dragState.itemId === item.id,
-          }"
-          :draggable="editing"
-          @click="selectItem(item)"
-          @dragstart.stop="editing && beginItemDrag($event, group.id, item.id)"
-          @dragover.prevent
-          @drop.stop="editing && dropItem($event, group.id, itemIndex)"
-        >
-          <n-icon v-if="editing" class="workspace-nav__handle"
-            ><ReorderFourOutline
-          /></n-icon>
-          <n-icon><component :is="catalog[item.id].icon" /></n-icon>
-          <n-input
-            v-if="editing"
-            :value="itemName(item)"
-            size="small"
-            @click.stop
-            @update:value="item.name = $event"
-          />
-          <span v-else>{{ itemName(item) }}</span>
-        </button>
+        <template v-for="(item, itemIndex) in group.items" :key="item.id">
+          <n-tooltip v-if="collapsed" trigger="hover" placement="right">
+            <template #trigger>
+              <button
+                type="button"
+                class="ops-menu-button workspace-nav__item is-collapsed-item"
+                :class="{
+                  'is-active': activeKey === item.id,
+                  'is-danger': catalog[item.id].danger,
+                }"
+                @click="selectItem(item)"
+              >
+                <n-icon><component :is="catalog[item.id].icon" /></n-icon>
+              </button>
+            </template>
+            {{ itemName(item) }}
+          </n-tooltip>
+          <button
+            v-else
+            type="button"
+            class="ops-menu-button workspace-nav__item"
+            :class="{
+              'is-active': activeKey === item.id,
+              'is-danger': catalog[item.id].danger,
+              'is-dragging':
+                dragState?.type === 'item' && dragState.itemId === item.id,
+            }"
+            :draggable="editing"
+            @click="selectItem(item)"
+            @dragstart.stop="editing && beginItemDrag($event, group.id, item.id)"
+            @dragover.prevent
+            @drop.stop="editing && dropItem($event, group.id, itemIndex)"
+          >
+            <n-icon v-if="editing" class="workspace-nav__handle"
+              ><ReorderFourOutline
+            /></n-icon>
+            <n-icon><component :is="catalog[item.id].icon" /></n-icon>
+            <n-input
+              v-if="editing"
+              :value="itemName(item)"
+              size="small"
+              @click.stop
+              @update:value="item.name = $event"
+            />
+            <span v-else>{{ itemName(item) }}</span>
+          </button>
+        </template>
         <div
           v-if="editing && group.items.length === 0"
           class="workspace-nav__empty"
@@ -607,6 +626,22 @@ defineExpose({ toggleEditing, editing });
 .workspace-nav__list {
   display: grid;
   gap: clamp(0px, .18vh, 2px);
+}
+.workspace-nav__divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--app-border);
+}
+.workspace-nav__item.is-collapsed-item {
+  justify-content: center;
+  padding: 6px 0;
+  border-radius: 8px;
+}
+.workspace-nav__item.is-collapsed-item .n-icon {
+  width: 32px;
+  height: 32px;
+  font-size: 17px;
+  border-radius: 8px;
 }
 .workspace-nav__item {
   position: relative;

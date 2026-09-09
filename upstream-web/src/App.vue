@@ -7,23 +7,47 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 const theme = themeStore();
 const isDarkMode = computed(() => theme.isDark);
 
-const themeOverrides = {
-  common: {
-    fontFamily:
-      '"Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
-    fontFamilyMono: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
-    primaryColor: "#0b746b",
-    primaryColorHover: "#0f887d",
-    primaryColorPressed: "#075e57",
-    primaryColorSuppl: "#249a8e",
-    infoColor: "#2f6f9f",
-    successColor: "#23865f",
-    warningColor: "#b87922",
-    errorColor: "#c34b5a",
-    borderRadius: "6px",
-    borderRadiusSmall: "5px",
-  },
-};
+const themeOverrides = computed(() => {
+  const dark = isDarkMode.value;
+  return {
+    common: {
+      fontFamily:
+        '"Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+      fontFamilyMono:
+        '"JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
+      primaryColor: dark ? "#00e5a3" : "#0b746b",
+      primaryColorHover: dark ? "#2bf0b6" : "#085f57",
+      primaryColorPressed: dark ? "#00c48c" : "#064e47",
+      primaryColorSuppl: dark ? "rgba(0, 229, 163, 0.2)" : "rgba(11, 116, 107, 0.2)",
+      infoColor: "#38bdf8",
+      infoColorHover: "#60a5fa",
+      successColor: "#10b981",
+      successColorHover: "#34d399",
+      warningColor: "#fbbf24",
+      warningColorHover: "#fcd34d",
+      errorColor: "#fb7185",
+      errorColorHover: "#f43f5e",
+      borderRadius: "8px",
+      borderRadiusSmall: "6px",
+      cardColor: dark ? "#0e1520" : "#ffffff",
+      modalColor: dark ? "#0e1520" : "#ffffff",
+      popoverColor: dark ? "#141f2e" : "#ffffff",
+      tableColor: dark ? "#0e1520" : "#ffffff",
+      borderColor: dark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0",
+    },
+    Button: {
+      borderRadiusMedium: "8px",
+      borderRadiusSmall: "6px",
+      fontWeight: "600",
+    },
+    Card: {
+      borderRadius: "12px",
+    },
+    Modal: {
+      borderRadius: "14px",
+    },
+  };
+});
 
 const locale = ref(null);
 const uiLocale = ref(null);
