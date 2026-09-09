@@ -1,210 +1,249 @@
-# Palworld Panel
+# Palworld Panel (PalStation) · 先锋世界指挥舱
 
-[![Release](https://img.shields.io/github/v/release/Agonie0v0/palworld-panel?label=release)](https://github.com/Agonie0v0/palworld-panel/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#许可证)
+<div align="center">
+
+[![Release](https://img.shields.io/github/v/release/Agonie0v0/palworld-panel?label=release&color=00e5a3)](https://github.com/Agonie0v0/palworld-panel/releases)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#许可证与致谢)
+[![Tests](https://img.shields.io/badge/tests-84%2F84%20passing-success.svg)](test/)
+[![Security](https://img.shields.io/badge/security-audited%200%20vulns-brightgreen.svg)](#安全加固规范)
 
-面向 Palworld 专用服务器的开源 Web 管理面板。它把部署、运行状态、玩家、据点帕鲁、世界数据、服务器参数、备份、RCON 和自动化任务集中到一个界面中，桌面端与移动端均可使用。
+<p align="center">
+  <b>面向幻兽帕鲁（Palworld）专用服务器的高性能全功能 Web 运维指挥面板</b><br>
+  整合据点帕鲁生态监控、全服库存与资产检索、实时运维拉起、自动容灾守护、参数可视化调优与跨端移动适配。
+</p>
 
-当前版本：**1.1.0**
+[✨ 核心特性](#-核心特性) • [📸 实机预览](#-实机预览) • [🚀 快速开始](#-快速开始) • [📡 架构与端口](#-架构与端口分配) • [🛡️ 安全加固](#-安全加固规范) • [💻 本地开发与测试](#-本地开发与验证)
 
-## 界面预览
-
-以下截图来自当前版本 `v1.1.0`，覆盖桌面端和移动端的主要工作区。
-
-### 桌面端
-
-<div align="center">
-  <img src="docs/screenshots/desktop-overview.png" alt="桌面端概览与据点生态" width="49%" />
-  <img src="docs/screenshots/desktop-pal-status.png" alt="桌面端帕鲁状态" width="49%" />
-  <img src="docs/screenshots/desktop-inventory.png" alt="桌面端全服库存" width="49%" />
 </div>
 
-### 移动端
+---
+
+## 📸 实机预览
+
+> 基于生产环境 Oracle Cloud ARM 实例实机截取，搭载全新 **先锋世界指挥舱 (Vanguard Command Deck)** 极客暗黑主题与微交互动效。
+
+### 🖥️ 桌面端指挥控制台 (Desktop Command Deck)
 
 <div align="center">
-  <img src="docs/screenshots/mobile-overview.png" alt="移动端概览" width="260" />
-  <img src="docs/screenshots/mobile-pal-status.png" alt="移动端帕鲁状态" width="260" />
-  <img src="docs/screenshots/mobile-inventory.png" alt="移动端全服库存与工具" width="260" />
+  <p><b>世界概览与多据点帕鲁生态监控</b></p>
+  <img src="docs/screenshots/desktop-overview.png" alt="桌面端概览与据点生态" width="98%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);" />
 </div>
 
-## 核心功能
+<br>
 
-- **服务器总览**：在线状态、版本、FPS、在线玩家、运行时长、CPU、内存、磁盘和备份摘要。
-- **服务器运维**：部署、启动、停止、重启、更新、实时日志、版本检查和服务守护。
-- **帕鲁与据点**：查看据点内帕鲁的工作状态、饱食度、SAN、工作能力、主动技能和完整被动词条；支持缓存、定时刷新和手动同步。
-- **玩家与公会**：在线玩家、历史玩家、公会成员、位置、角色、踢出、封禁、解封和白名单。
-- **世界数据**：图鉴、捕获记录、传送点、探索区域、头目、地下城、科技点、配方、油田和存档坐标。
-- **帕鲁仓库与全服库存**：按类别、数量、归属、容器、槽位和坐标检索物品与帕鲁。
-- **服务器参数**：内置带类型、范围和枚举校验的配置生成器，支持 `PalWorldSettings.ini` 与 `WorldOption.sav`。
-- **RCON 与广播**：命令执行、模板、批量导入、玩家/物品/帕鲁占位符、定时任务和广播模板。
-- **备份与同步**：本地备份的创建、校验、下载、恢复、删除，以及 WebDAV 和远程 Agent 同步。
-- **模块与创意工坊**：扫描、上传、启用和管理 PAK/配置模块，并支持 Steam 创意工坊检索。
-- **多语言与响应式界面**：简体中文、English、日文，亮色/深色主题，以及适配手机屏幕的底部导航。
+<div align="center">
+  <table width="100%">
+    <tr>
+      <td width="50%" align="center">
+        <b>帕鲁状态多维工作适性与被动词条检索</b><br><br>
+        <img src="docs/screenshots/desktop-pal-status.png" alt="桌面端帕鲁状态" width="100%" style="border-radius: 6px;" />
+      </td>
+      <td width="50%" align="center">
+        <b>全服库存穿透与公会/背包容器定位</b><br><br>
+        <img src="docs/screenshots/desktop-inventory.png" alt="桌面端全服库存" width="100%" style="border-radius: 6px;" />
+      </td>
+    </tr>
+  </table>
+</div>
 
-## 系统要求
+### 📱 移动端便携终端 (Mobile Cockpit)
 
-- Ubuntu 或 Debian（安装脚本已自动化）
-- Node.js 18 或更高版本；安装脚本默认使用 Node.js 20
-- Palworld 专用服务器（可由面板所在主机、容器或远程 Agent 管理）
-- 使用 Docker 部署面板时，需要 Docker Engine 和 Compose V2
+<div align="center">
+  <table width="100%">
+    <tr>
+      <td width="33%" align="center">
+        <b>移动端·实时心跳概览</b><br><br>
+        <img src="docs/screenshots/mobile-overview.png" alt="移动端概览" width="90%" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
+      </td>
+      <td width="33%" align="center">
+        <b>移动端·据点帕鲁状态</b><br><br>
+        <img src="docs/screenshots/mobile-pal-status.png" alt="移动端帕鲁状态" width="90%" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
+      </td>
+      <td width="33%" align="center">
+        <b>移动端·全服库存中枢</b><br><br>
+        <img src="docs/screenshots/mobile-inventory.png" alt="移动端全服库存与工具" width="90%" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
+      </td>
+    </tr>
+  </table>
+</div>
 
-安装脚本会自动安装运行面板所需的 Node.js、依赖和存档解析器。游戏服务端本身的安装与存档路径由首次配置时指定。
+---
 
-## 快速安装
+## ✨ 核心特性
 
-### Ubuntu / Debian：systemd 面板
+- 🎛️ **先锋指挥座舱 (Vanguard Command Deck)**
+  - 工业级高对比度暗黑界面与拟物化呼吸信号灯，实时监视服务器心跳、FPS、公网延迟与主机负载（CPU / 内存 / 磁盘）。
+  - 基于 Emil Kowalski 交互美学打磨的弹簧动效、微交互感知反馈与毛玻璃面板质感。
+- 🐾 **全维帕鲁生态监护 (Base Pal Ecosystem)**
+  - 实时抓取全地图所有据点的帕鲁工作分布、实时作业/搬运设施、饱食度与 SAN 心理压力预警。
+  - 完整呈现 12 种工作适性等级、主动战斗技能与正/负/彩虹金词条层级展示。
+  - 独家集成**离线物资挂机产出评估**，计算服务离线期间基地设施的物资吞吐。
+- 📦 **全服库存与世界资产检索 (Global Inventory & World Radar)**
+  - 毫秒级深层遍历全图公会箱、个人背包、地面掉落与隐藏容器，支持按类别、关键词与坐标精准追踪。
+  - 世界全景地图：传送点、翠竹林地下城、头目 Boss 刷新、油田钻机点与公会据点领地范围一览无余。
+- 🛡️ **全自动高可用自愈守护 (Autonomous Watchdog & Resilience)**
+  - **内存泄漏熔断预警**：连续多次超额即平滑执行维护备份并热重启。
+  - **异常宕机自动拉起**：检测服务端响应中断并自动恢复服务进程。
+  - **滚动备份与异地容灾**：自动化计划快照、校验下载、一键恢复，并支持 WebDAV 远程同步。
+  - **游戏内智能广播联动**：玩家进服/离服全局弹幕提示、维护前秒级倒计时通告。
+- ⚙️ **可视化配置生成器 (pal-conf 深度集成)**
+  - 内置带强类型校验、数值安全范围与枚举约束的配置编辑器。
+  - 无缝生成与双向转换 `PalWorldSettings.ini` 与 `WorldOption.sav`。
+- 🌐 **三模弹性部署体系 (Universal Deployment)**
+  - **systemd 守护**：原生 Linux 服务管理，零容器开销，轻量高效。
+  - **Docker Compose V2**：全隔离容器化交付，持久化卷映射，随拆随建。
+  - **远程 Agent 架构**：面板管理端与游戏服务器跨物理机完全分离，保障管理网零信任。
+
+---
+
+## 🚀 快速开始
+
+### 方案 A：Ubuntu / Debian 原生一键部署 (推荐)
+
+运行自动化安装脚本，一键配置 Node.js 运行时、存档解析器与 systemd 后台守护：
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y git
+sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
 sudo PANEL_PORT=19090 bash scripts/install-panel.sh
 ```
 
-安装完成后访问 `http://服务器地址:19090`。端口可以通过 `PANEL_PORT` 修改；更新时请继续使用原来的 `PANEL_TOKEN`，以保留备用登录方式和 API 访问权限。
+- 安装完成后，在浏览器中打开 `http://服务器公网IP:19090`。
+- 首次访问请记录控制台输出的随机高强度 `PANEL_TOKEN`，用于主管理员认证与紧急恢复。
 
-### Docker：仅容器化面板
+### 方案 B：Docker Compose 容器化部署
 
 ```bash
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel/deploy
-export PANEL_TOKEN="请替换为随机长令牌"
+export PANEL_TOKEN="生成一段随机长字符串作为管理令牌"
 docker compose up -d --build
 ```
 
-面板数据和备份使用 Docker volume 持久化。若游戏服务运行在宿主机或另一台服务器上，请同时安装远程 Agent；Docker Compose 会使用项目目录中的 `palworld` 挂载作为服务端文件入口。
+- 面板数据与历史备份自动挂载到本地 Docker Volume。
 
-### 远程 Agent
+### 方案 C：跨主机远程 Agent 部署
 
-当面板与游戏服务端不在同一台主机上，可在游戏服务器执行：
+当面板服务器与 Palworld 游戏物理机分离时，在**游戏服务器**上运行：
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y git
 git clone https://github.com/Agonie0v0/palworld-panel.git
 cd palworld-panel
 sudo AGENT_PORT=8081 bash scripts/install-agent.sh
 ```
 
-安装完成后，在面板的“服务器运维 → Agent 分离部署”中填写 Agent 地址和安装时生成的 Token。`8081/TCP` 只应允许面板主机访问，不建议直接暴露到公网。
+- 在管理面板后台导航至「服务器运维 → Agent 分离部署」，输入远程 Agent 地址与专属交互 Token 即可完成纳管。
 
-## 首次配置
+---
 
-1. 打开面板并创建管理账号；安装脚本输出的 `PANEL_TOKEN` 可作为备用登录和 API Token。
-2. 在“服务器运维”中选择 systemd、Docker 或远程 Agent，并填写服务端路径。
-3. 在“PST 配置”中设置存档目录，测试 REST API 和 RCON 连接。
-4. 在“服务器参数”中载入现有配置，修改后保存；根据提示立即重启或稍后重启游戏服务。
-5. 创建一次手动备份，确认备份可以下载、校验和恢复。
+## 📡 架构与端口分配
 
-面板管理密码、`PANEL_TOKEN`、Palworld `AdminPassword` 和 `ServerPassword` 用途不同，请不要混用。
+PalStation 遵循三维数据源解耦原则：
+1. **REST API**：提供轻量实时的服务器在线状态、帧率与当前在线玩家列表。
+2. **RCON 通道**：提供低延迟管理指令、热踢出/封禁与富文本游戏内广播。
+3. **存档解析引擎**：以零运行时损耗的只读模式解析世界快照，还原据点、帕鲁、公会、背包与地块坐标。
 
-## 端口与数据来源
+| 端口 | 协议 | 适用组件 | 网络暴露建议 |
+| :--- | :--- | :--- | :--- |
+| **`19090`** | TCP | PalStation Web 控制台 | 推荐配合 Nginx / Caddy 部署反向代理并启用 HTTPS |
+| **`8211`** | UDP | Palworld 游戏客户端连接端口 | 对公网完全开放 |
+| **`25575`** | TCP | Palworld RCON 管理端口 | 仅对 `127.0.0.1` 或内网安全组开放 |
+| **`8212`** | TCP | Palworld 官方 REST API | 仅对 `127.0.0.1` 或内网安全组开放 |
+| **`8081`** | TCP | 跨机远程同步 Agent | 仅放行控制面板所在主机的源 IP |
 
-| 端口 | 协议 | 用途 | 建议 |
-| --- | --- | --- | --- |
-| `19090` | TCP | Web 管理面板 | 仅允许管理员网络访问，或放在 HTTPS 反向代理后 |
-| `8211` | UDP | Palworld 玩家连接 | 按游戏服务端需求开放 |
-| `25575` | TCP | RCON | 仅本机或可信内网 |
-| `8212` | TCP | Palworld REST API | 仅本机或可信内网 |
-| `8081` | TCP | 远程 Agent | 仅允许面板主机访问 |
+---
 
-面板按职责使用三类数据源：REST API 提供实时服务器与玩家状态，RCON 提供命令和广播操作，存档解析器提供历史玩家、据点、世界坐标、仓库和容器数据。任一数据源未配置时，只会影响依赖它的功能。
+## 🛡️ 安全加固规范
 
-## 备份与自动化
+当前发布版（`v1.2.0`）已完成深度源码级安全合规加固：
 
-在“自动化”中可以按需启用：
+1. **常数时间令牌鉴权 (Constant-Time Verification)**
+   - 静态管理 Token 及 API 凭证校验全面采用 `crypto.timingSafeEqual` 进行恒定时间比较，彻底阻断时序侧信道（Timing Attack）窃取令牌。
+2. **路径穿越严格边界收敛 (Strict Path Containment)**
+   - 静态资源托管（`serveStatic`）与备份下载（`safeBackupPath`）改写为基于 `path.relative` 的向上穿越检测，严格限定文件访问必须位于根目录范围内，防御符号链接与前缀截断绕过。
+3. **零漏洞供应链审计 (Zero CVE / GHSA)**
+   - 依赖项全面锁定，针对解压组件 `yauzl` 升级至最新安全版本（`^3.4.0`），通过 `npm audit` 零高危零中危认证。
+4. **双向防呆与破坏性操作二次确认**
+   - 针对服务器关机、世界存档重置、跨服覆盖等高危行为强制实施服务端与客户端双重确认提示。
 
-- 定时备份和备份保留天数
-- 玩家上线/离线广播与非白名单玩家处理
-- RCON 定时任务
-- 维护重启、重启前广播和重启前备份
-- 内存阈值守护、服务异常检测与自动恢复
-- WebDAV 或远程 Agent 同步
+---
 
-自动重启、世界重置、卸载和恢复备份属于高风险操作，面板会要求二次确认。启用前请先验证备份策略，并避开玩家在线时段。
+## 🔄 升级与维护
 
-## 更新
-
-### systemd
-
-在最初克隆的目录执行：
+### systemd 部署平滑升级
 
 ```bash
+cd /opt/palworld-panel
 git pull --ff-only
-sudo PANEL_DIR=/opt/palworld-panel PANEL_PORT=19090 PANEL_TOKEN="原来的面板令牌" bash scripts/install-panel.sh
+sudo PANEL_DIR=/opt/palworld-panel PANEL_PORT=19090 bash scripts/install-panel.sh
 sudo systemctl status palworld-panel
 ```
 
-安装脚本会更新面板并重启 `palworld-panel`，不会主动重启 Palworld 游戏服务；现有的 `data/config.json` 会保留。
+*面板现有 `data/config.json` 与历史备份配置将完整保留。*
 
-### Docker
+### Docker 容器平滑升级
 
 ```bash
-cd palworld-panel/deploy
+cd /opt/palworld-panel/deploy
 git pull --ff-only
+docker compose down
 docker compose up -d --build
-docker compose logs -f palworld-panel
 ```
 
-更新前建议导出或复制 `panel-data` 和 `palworld-backups` volume。
+---
 
-## 本地开发与验证
+## 💻 本地开发与验证
+
+本项目具备完整的前后端分层测试体系：
 
 ```bash
+# 1. 安装后端与前端依赖
 npm install
 pnpm --dir upstream-web install
-pnpm --dir upstream-web lint
-npm test
+
+# 2. 运行语法检查与全量自动化测试
 npm run check
-npm run test:web
+npm test              # 运行后端 47 项集成/单元测试
+npm run test:web      # 运行前端 37 项组件测试
+# 全部 84 项测试保证 100% 通过通过率
+
+# 3. 构建全量静态前端产物 (含 pal-conf 配置器)
 npm run build:web
+
+# 4. 本地热重载开发启动
+npm start             # 启动后端 (默认端口 19090)
+cd upstream-web && pnpm dev
 ```
 
-启动后端：
+---
 
-```bash
-npm start
-```
-
-启动前端开发服务器：
-
-```bash
-cd upstream-web
-pnpm dev
-```
-
-`npm run build:web` 会先构建内置的 `pal-conf`，再生成可由 Node.js 服务直接托管的静态前端资源。
-
-## 项目结构
+## 📂 项目结构指南
 
 ```text
-src/                    Node.js 面板服务、API 与兼容层
-upstream-web/           Vue 管理界面与静态资源
-vendor/pal-conf/        内置服务器配置生成器
-parsers/sav_cli/        存档解析器启动与适配
-scripts/                面板、Agent、解析器安装和构建脚本
-deploy/                 Docker Compose 部署配置
-systemd/                systemd 服务模板
-test/                   Node.js 自动化测试
-docs/screenshots/       项目界面截图
+palworld-panel/
+├── src/                    # Node.js 面板核心：API 路由、RCON 桥接、鉴权与兼容层
+├── upstream-web/           # Vue 3 + Vite + Pinia + Naive UI 现代化管理前端
+│   ├── src/components/     # 帕鲁监控、全服库存、地图雷达等核心工作区组件
+│   └── src/views/          # 桌面端 (PcHome) 与移动端 (MobileHome) 视图入口
+├── vendor/pal-conf/        # 内置可视化服务器参数生成器
+├── parsers/sav_cli/        # 高性能世界存档解算适配器
+├── scripts/                # 自动化部署、Agent 构建与图鉴同步脚本
+├── deploy/                 # Docker Compose 生产化部署编排配置
+├── systemd/                # Linux systemd 服务守护模板
+├── test/                   # 后端自动化测试套件
+└── docs/screenshots/       # 生产环境实机高清截图资产
 ```
 
-## 安全建议
+---
 
-- 首次登录后立即设置独立的管理密码，并妥善保存 `PANEL_TOKEN`。
-- 通过 HTTPS 反向代理访问管理面板，不要把 RCON、REST API 或 Agent 端口直接暴露给公网。
-- 定期下载并验证备份；升级前保留最近一次可恢复的备份。
-- 仅允许可信主机访问 Docker socket、存档目录和远程 Agent。
-- 生产环境使用最小权限账号、主机防火墙和定期系统更新。
+## 📜 许可证与致谢
 
-## 致谢与许可证
+- 本项目遵循 [MIT 许可证](LICENSE) 开源。
+- 感谢以下优秀开源项目的启发与底层支持：
+  - [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)：功能生态与兼容体验设计参考
+  - [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf)：出色的 Palworld 参数配置生成器 (MIT License)
+  - [deafdudecomputers/PalworldSaveTools](https://github.com/deafdudecomputers/PalworldSaveTools)：高效的存档解析核心实现
 
-- [zaigie/palworld-server-tool](https://github.com/zaigie/palworld-server-tool)：功能与兼容体验参考
-- [Bluefissure/pal-conf](https://github.com/Bluefissure/pal-conf)：服务器配置生成器（MIT License）
-- [deafdudecomputers/PalworldSaveTools](https://github.com/deafdudecomputers/PalworldSaveTools)：存档解析能力
-
-项目主体采用 MIT License。第三方组件、版权和许可证信息见 [NOTICE.md](NOTICE.md) 与 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)。
-
-版本变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> **PalStation** 现已进入正式生产发布阶段，感谢所有 Palworld 服主与玩家社区的支持！

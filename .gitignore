@@ -7,4 +7,3 @@ backups/
 .env
 parsers/sav_cli/.venv/
 parsers/sav_cli/__pycache__/
-palstation_preview.jpg

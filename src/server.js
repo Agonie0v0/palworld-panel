@@ -221,6 +221,13 @@ function verifyPassword(password, salt, expected) {
   return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
+function safeTokenMatch(actual, expected) {
+  if (!actual || !expected) return false;
+  const actualBuffer = Buffer.from(String(actual));
+  const expectedBuffer = Buffer.from(String(expected));
+  return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
 function encodeBase64Url(value) {
   return Buffer.from(value).toString("base64url");
 }
@@ -361,7 +368,7 @@ async function authenticateRequest(req, config) {
   if (!header.startsWith("Bearer ")) return null;
   const token = header.slice(7);
   const staticToken = effectivePanelToken(config);
-  if (staticToken && staticToken !== "change-me" && token === staticToken) {
+  if (staticToken && staticToken !== "change-me" && safeTokenMatch(token, staticToken)) {
     return publicPrincipal({ id: "token", username: config.panel.adminUser || "admin", role: "admin", primary: true });
   }
 
@@ -1639,9 +1646,10 @@ async function sendBackupFile(req, res, config, name) {
 }
 
 function safeBackupPath(config, name) {
-  const file = path.resolve(config.server.backupDir, path.basename(name));
   const base = path.resolve(config.server.backupDir);
-  if (!file.startsWith(base)) throw new Error("Invalid backup name.");
+  const file = path.resolve(base, path.basename(String(name || "")));
+  const relative = path.relative(base, file);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Invalid backup name.");
   return file;
 }
 
@@ -3490,7 +3498,8 @@ async function serveStatic(req, res) {
     ? upstreamSourcePublicDir
     : publicDir;
   const filePath = path.join(assetRoot, safePath === "/" ? "index.html" : safePath);
-  if (!filePath.startsWith(assetRoot)) return sendError(res, 403, "Forbidden.");
+  const relative = path.relative(assetRoot, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return sendError(res, 403, "Forbidden.");
 
   try {
     const stat = await fsp.stat(filePath);

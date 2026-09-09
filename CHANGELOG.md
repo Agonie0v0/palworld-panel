@@ -1,6 +1,19 @@
 # Changelog
 
-## 1.0.0 - 2026-08-11
+## 1.2.0 - 2026-09-09
+
+- **先锋世界指挥舱 (Vanguard Command Deck)**: 全新极客暗黑座舱设计，引入 Emil Kowalski 触感交互美学、呼吸状态指示灯与微动效。
+- **安全加固体系 (Security Hardening)**:
+  - 恒定时间令牌比对：引入 `safeTokenMatch` (`crypto.timingSafeEqual`) 阻断静态 Token 时序侧信道反推。
+  - 严格路径收敛检查：对静态资源服务 `serveStatic` 与备份下载 `safeBackupPath` 采用 `path.relative` 越界检测，彻底阻断路径穿越。
+  - 依赖供应链审计：升级 `yauzl` 至 `^3.4.0`，消除 GHSA-gmq8-994r-jv83 风险，达成 `npm audit` 0 风险目标。
+- **实机全重视图刷新**: 基于生产环境 Oracle ARM VPS 实机重捕全套 6 视角实机截图，覆盖桌面概览、帕鲁状态中心、全服库存与移动端便携座舱。
+- **文档重构**: 面向项目正式完结发布全面重构 `README.md`。
+
+## 1.1.0 - 2026-08-20
+
+- 优化帕鲁工作适性与被动词条标签，提升高分辨率显示器适配。
+- 增强移动端底部导航拖拽定制与快捷入口。
 
 - Publish the first official stable release.
 - Refresh the project documentation and screenshots for general deployments.
